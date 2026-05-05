@@ -14,6 +14,7 @@ D:\military-doc\backend\src\main\java\com\military\doc\config\WebSecurityConfig.
 D:\military-doc\backend\src\main\java\com\military\doc\modules\project\service\ProjectStageService.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\entity\DocFile.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\review\controller\ReviewMeetingDocumentController.java
+D:\military-doc\backend\src\main\java\com\military\doc\modules\system\controller\SysRoleController.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\system\service\impl\SysUserServiceImpl.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\service\impl\DocCatalogServiceImpl.java
 D:\military-doc\backend\src\main\java\com\military\doc\common\exception\MyMetaObjectHandler.java
@@ -67,6 +68,7 @@ D:\military-doc\backend\src\main\java\com\military\doc\modules\document\service\
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\mapper\DocCatalogMapper.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\mapper\DocChangeImpactMapper.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\review\service\impl\ReviewMeetingOpinionFileServiceImpl.java
+D:\military-doc\backend\src\main\java\com\military\doc\modules\system\controller\SysUserController.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\entity\DocEffectiveBaseline.java
 D:\military-doc\backend\src\main\java\com\military\doc\modules\document\entity\DocCatalog.java
 D:\military-doc\backend\src\main\java\com\military\doc\MilitaryDocApplication.java

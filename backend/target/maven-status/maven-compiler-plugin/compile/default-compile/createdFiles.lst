@@ -1,6 +1,7 @@
 com\military\doc\config\MybatisPlusConfig.class
 com\military\doc\modules\document\service\impl\DocCatalogServiceImpl.class
 com\military\doc\modules\project\mapper\ProjectMapper.class
+com\military\doc\modules\system\controller\SysUserController.class
 com\military\doc\modules\system\entity\SysUser.class
 com\military\doc\modules\document\controller\DocEffectiveBaselineController.class
 com\military\doc\modules\document\entity\DocChangeImpact.class
@@ -25,6 +26,7 @@ com\military\doc\modules\review\service\impl\ReviewMeetingServiceImpl.class
 com\military\doc\modules\document\service\DocEffectiveBaselineService.class
 com\military\doc\modules\review\entity\ReviewMeeting.class
 com\military\doc\modules\review\service\impl\ReviewExpertOpinionFileServiceImpl.class
+com\military\doc\modules\system\controller\SysRoleController.class
 com\military\doc\modules\project\service\impl\ProjectServiceImpl.class
 com\military\doc\modules\document\mapper\DocEffectiveBaselineMapper.class
 com\military\doc\modules\document\mapper\DocFileMapper.class

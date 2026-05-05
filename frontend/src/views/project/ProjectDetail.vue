@@ -8,15 +8,15 @@
 
     <el-descriptions v-if="project" :column="2" border class="info-card">
       <el-descriptions-item label="项目编号">{{ project.projectCode }}</el-descriptions-item>
-      <el-descriptions-item label="项目类型">{{ project.projectType }}</el-descriptions-item>
+      <el-descriptions-item label="项目类型">{{ typeLabel(project.projectType) }}</el-descriptions-item>
       <el-descriptions-item label="项目名称">{{ project.projectName }}</el-descriptions-item>
       <el-descriptions-item label="密级">
         <el-tag :type="project.securityLevel === 'TOP_SECRET' ? 'danger' : 'warning'" size="small">
-          {{ project.securityLevel }}
+          {{ securityLabel(project.securityLevel) }}
         </el-tag>
       </el-descriptions-item>
       <el-descriptions-item label="状态">
-        <el-tag size="small">{{ project.status }}</el-tag>
+        <el-tag size="small">{{ statusLabel(project.status) }}</el-tag>
       </el-descriptions-item>
       <el-descriptions-item label="负责人">{{ project.ownerUserId || '-' }}</el-descriptions-item>
       <el-descriptions-item label="开始日期">{{ project.startDate || '-' }}</el-descriptions-item>
@@ -36,6 +36,27 @@ import { getProject, type ProjectItem } from '@/api/project'
 
 const route = useRoute()
 const project = ref<ProjectItem | null>(null)
+
+function typeLabel(type: string) {
+  const map: Record<string, string> = {
+    MODEL: '型号项目', PRE_RESEARCH: '预研项目', TECH_IMPROVE: '技改项目'
+  }
+  return map[type] || type
+}
+
+function securityLabel(level: string) {
+  const map: Record<string, string> = {
+    PUBLIC: '公开', INTERNAL: '内部', SECRET: '秘密', CONFIDENTIAL: '机密', TOP_SECRET: '绝密'
+  }
+  return map[level] || level
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    DRAFT: '草稿', IN_PROGRESS: '进行中', COMPLETED: '已完成', ARCHIVED: '已归档'
+  }
+  return map[status] || status
+}
 
 onMounted(async () => {
   const id = Number(route.params.id)

@@ -17,17 +17,21 @@
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="projectCode" label="项目编号" width="140" />
       <el-table-column prop="projectName" label="项目名称" min-width="180" />
-      <el-table-column prop="projectType" label="类型" width="100" />
+      <el-table-column prop="projectType" label="类型" width="100">
+        <template #default="{ row }">
+          {{ typeLabel(row.projectType) }}
+        </template>
+      </el-table-column>
       <el-table-column prop="securityLevel" label="密级" width="80">
         <template #default="{ row }">
           <el-tag :type="row.securityLevel === 'TOP_SECRET' ? 'danger' : 'warning'" size="small">
-            {{ row.securityLevel }}
+            {{ securityLabel(row.securityLevel) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusTag(row.status)" size="small">{{ row.status }}</el-tag>
+          <el-tag :type="statusTag(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="startDate" label="开始日期" width="120" />
@@ -169,6 +173,27 @@ function statusTag(status: string) {
     DRAFT: 'info', IN_PROGRESS: 'primary', COMPLETED: 'success', ARCHIVED: 'warning'
   }
   return map[status] || 'info'
+}
+
+function typeLabel(type: string) {
+  const map: Record<string, string> = {
+    MODEL: '型号项目', PRE_RESEARCH: '预研项目', TECH_IMPROVE: '技改项目'
+  }
+  return map[type] || type
+}
+
+function securityLabel(level: string) {
+  const map: Record<string, string> = {
+    PUBLIC: '公开', INTERNAL: '内部', SECRET: '秘密', CONFIDENTIAL: '机密', TOP_SECRET: '绝密'
+  }
+  return map[level] || level
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    DRAFT: '草稿', IN_PROGRESS: '进行中', COMPLETED: '已完成', ARCHIVED: '已归档'
+  }
+  return map[status] || status
 }
 
 async function fetchData() {
