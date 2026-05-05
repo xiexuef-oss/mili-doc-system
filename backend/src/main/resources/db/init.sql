@@ -378,9 +378,9 @@ CREATE INDEX IF NOT EXISTS idx_review_meeting_doc_meeting ON review_meeting_docu
 -- 初始数据
 -- ============================================================
 
--- 默认管理员用户 (密码: admin123, BCrypt加密)
+-- 默认管理员用户 (密码: 303319, BCrypt加密)
 INSERT INTO sys_user (id, username, password, real_name, email, status, created_by, created_at, updated_by, updated_at)
-VALUES (1, 'admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '系统管理员', 'admin@military-doc.local', 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
+VALUES (1, 'admin', '$2b$12$sLNAHfFWOJkCDCUVCPwN7uabFwhA8u63OftRNcAMv5x0ZD/xNmCh.', '系统管理员', 'admin@military-doc.local', 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- 默认角色
