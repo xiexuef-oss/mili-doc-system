@@ -45,6 +45,18 @@ const router = createRouter({
           name: 'MeetingList',
           component: () => import('@/views/review/MeetingList.vue'),
           meta: { title: '评审会议' }
+        },
+        {
+          path: 'users',
+          name: 'UserList',
+          component: () => import('@/views/system/UserList.vue'),
+          meta: { title: '用户管理' }
+        },
+        {
+          path: 'roles',
+          name: 'RoleList',
+          component: () => import('@/views/system/RoleList.vue'),
+          meta: { title: '角色管理' }
         }
       ]
     }

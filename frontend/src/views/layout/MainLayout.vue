@@ -27,6 +27,14 @@
           <el-icon><Calendar /></el-icon>
           <span>评审会议</span>
         </el-menu-item>
+        <el-menu-item index="/users">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
+        <el-menu-item index="/roles">
+          <el-icon><Setting /></el-icon>
+          <span>角色管理</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <span class="user-info">{{ user?.realName || user?.username }}</span>
@@ -59,6 +67,8 @@ const activeMenu = computed(() => {
   if (path.startsWith('/documents')) return '/documents'
   if (path.startsWith('/catalogs')) return '/catalogs'
   if (path.startsWith('/meetings')) return '/meetings'
+  if (path.startsWith('/users')) return '/users'
+  if (path.startsWith('/roles')) return '/roles'
   return '/projects'
 })
 
