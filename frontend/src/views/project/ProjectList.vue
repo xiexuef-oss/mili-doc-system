@@ -72,9 +72,7 @@
           <el-col :span="12">
             <el-form-item label="项目类型" prop="projectType">
               <el-select v-model="form.projectType" style="width: 100%">
-                <el-option label="型号项目" value="MODEL" />
-                <el-option label="预研项目" value="PRE_RESEARCH" />
-                <el-option label="技改项目" value="TECH_IMPROVE" />
+                <el-option v-for="t in projectTypes" :key="t.dictCode" :label="t.dictName" :value="t.dictCode" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -135,8 +133,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProjects, createProject, updateProject, type ProjectItem } from '@/api/project'
+import { getDictItems, type DictItem } from '@/api/dict'
 
 const loading = ref(false)
+const projectTypes = ref<DictItem[]>([])
 const saving = ref(false)
 const projects = ref<ProjectItem[]>([])
 const total = ref(0)
@@ -176,10 +176,15 @@ function statusTag(status: string) {
 }
 
 function typeLabel(type: string) {
-  const map: Record<string, string> = {
-    MODEL: '型号项目', PRE_RESEARCH: '预研项目', TECH_IMPROVE: '技改项目'
-  }
-  return map[type] || type
+  const found = projectTypes.value.find(t => t.dictCode === type)
+  return found?.dictName || type
+}
+
+async function fetchProjectTypes() {
+  try {
+    const res = await getDictItems('PROJECT_TYPE')
+    projectTypes.value = res.data.data
+  } catch { /* handled */ }
 }
 
 function securityLabel(level: string) {
@@ -247,7 +252,10 @@ async function handleSave() {
   }
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchProjectTypes()
+  fetchData()
+})
 </script>
 
 <style scoped>

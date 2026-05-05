@@ -57,6 +57,12 @@ const router = createRouter({
           name: 'RoleList',
           component: () => import('@/views/system/RoleList.vue'),
           meta: { title: '角色管理' }
+        },
+        {
+          path: 'dicts',
+          name: 'DictList',
+          component: () => import('@/views/system/DictList.vue'),
+          meta: { title: '字典配置' }
         }
       ]
     }

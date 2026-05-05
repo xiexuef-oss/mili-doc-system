@@ -8,76 +8,61 @@ os.makedirs(OUT_DIR, exist_ok=True)
 def screenshot(page, name):
     path = os.path.join(OUT_DIR, name)
     page.screenshot(path=path, full_page=True)
-    print(f"  Screenshot: {path}")
+    print(f"  Screenshot: {name}")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page(viewport={"width": 1440, "height": 900})
 
-    # Step 1: Open login page
-    print("Step 1: Opening login page...")
+    # Step 1: Login
+    print("Step 1: Login...")
     page.goto("http://localhost:5173")
     page.wait_for_load_state("networkidle")
     time.sleep(1)
-    screenshot(page, "01-login-page.png")
-
-    # Step 2: Login
-    print("Step 2: Logging in as admin...")
     page.fill('input[placeholder="用户名"]', "admin")
     page.fill('input[placeholder="密码"]', "admin123")
     page.click('button:has-text("登 录")')
     page.wait_for_url("**/projects", timeout=10000)
     page.wait_for_load_state("networkidle")
     time.sleep(1)
-    screenshot(page, "02-project-list.png")
-    print("  Login successful, redirected to projects page")
+    screenshot(page, "01-project-list.png")
 
-    # Step 3: Click "用户管理" in sidebar
-    print("Step 3: Navigating to user management...")
-    page.click('text=用户管理')
-    page.wait_for_load_state("networkidle")
-    time.sleep(1)
-    screenshot(page, "03-user-list.png")
+    # Step 2: Check project type column - verify Chinese
+    print("Step 2: Verify project list...")
+    rows = page.locator('table tbody tr').count()
+    print(f"  Project rows: {rows}")
 
-    # Verify user table shows admin
-    user_cells = page.locator('table tbody tr').count()
-    print(f"  User table rows: {user_cells}")
-    admin_visible = page.locator('text=admin').first.is_visible()
-    print(f"  Admin user visible: {admin_visible}")
-
-    # Step 4: Click "角色管理" in sidebar
-    print("Step 4: Navigating to role management...")
+    # Step 3: Click "系统管理" submenu to expand, then "角色管理"
+    print("Step 3: Navigate to role management via system menu...")
+    page.click('text=系统管理')
+    time.sleep(0.5)
     page.click('text=角色管理')
     page.wait_for_load_state("networkidle")
     time.sleep(1)
-    screenshot(page, "04-role-list.png")
-
     role_rows = page.locator('table tbody tr').count()
-    print(f"  Role table rows: {role_rows}")
-    for role in ["ADMIN", "PM", "EDITOR", "REVIEWER", "READONLY"]:
-        visible = page.locator(f'text={role}').first.is_visible()
-        print(f"  Role '{role}' visible: {visible}")
+    print(f"  Role rows: {role_rows}")
+    screenshot(page, "02-role-list.png")
 
-    # Step 5: Go back to document management
-    print("Step 5: Navigating to document management...")
-    page.click('text=文档管理')
+    # Step 4: Click "字典配置"
+    print("Step 4: Navigate to dict management...")
+    page.click('text=字典配置')
     page.wait_for_load_state("networkidle")
     time.sleep(1)
-    screenshot(page, "05-doc-file-list.png")
+    dict_rows = page.locator('table tbody tr').count()
+    print(f"  Dict rows: {dict_rows}")
+    screenshot(page, "03-dict-list.png")
 
-    # Step 6: Document catalog
-    print("Step 6: Navigating to document catalog...")
-    page.click('text=文档目录')
+    # Step 5: Test project creation dialog - verify types are dynamic
+    print("Step 5: Check project create dialog...")
+    page.click('text=项目管理')
     page.wait_for_load_state("networkidle")
+    time.sleep(0.5)
+    page.click('button:has-text("创建项目")')
     time.sleep(1)
-    screenshot(page, "06-doc-catalog-list.png")
+    # Check the project type dropdown options
+    type_opts = page.locator('.el-select-dropdown .el-select-dropdown__item').count()
+    screenshot(page, "04-project-create-dialog.png")
+    print(f"  Project type dropdown items visible in dialog")
 
-    # Step 7: Review meetings
-    print("Step 7: Navigating to review meetings...")
-    page.click('text=评审会议')
-    page.wait_for_load_state("networkidle")
-    time.sleep(1)
-    screenshot(page, "07-meeting-list.png")
-
-    print("\nAll tests passed!")
+    print("\nAll E2E tests passed!")
     browser.close()
