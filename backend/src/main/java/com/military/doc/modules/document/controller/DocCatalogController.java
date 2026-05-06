@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/doc-catalogs")
@@ -84,5 +85,43 @@ public class DocCatalogController {
     public Result<Void> delete(@PathVariable Long id) {
         docCatalogService.removeById(id);
         return Result.success();
+    }
+
+    @PostMapping("/{id}/issue")
+    @Operation(summary = "下发文档目录（DRAFT → ISSUED）")
+    public Result<DocCatalog> issue(@PathVariable Long id, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        DocCatalog catalog = docCatalogService.getById(id);
+        if (catalog == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        if (!"DRAFT".equals(catalog.getStatus())) {
+            return Result.error("STATUS_ERROR", "仅草稿状态的目录可下发");
+        }
+        catalog.setStatus("ISSUED");
+        catalog.setUpdatedBy(userId);
+        docCatalogService.updateById(catalog);
+        return Result.success(catalog);
+    }
+
+    @PostMapping("/{id}/change")
+    @Operation(summary = "变更已下发目录（ISSUED → CHANGED），需填写变更理由")
+    public Result<DocCatalog> change(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        DocCatalog catalog = docCatalogService.getById(id);
+        if (catalog == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        if (!"ISSUED".equals(catalog.getStatus())) {
+            return Result.error("STATUS_ERROR", "仅已下发状态的目录可变更");
+        }
+        String reason = body.get("changeReason");
+        if (reason == null || reason.isBlank()) {
+            return Result.error("PARAM_ERROR", "变更理由不能为空");
+        }
+        catalog.setStatus("CHANGED");
+        catalog.setChangeReason(reason);
+        catalog.setUpdatedBy(userId);
+        docCatalogService.updateById(catalog);
+        return Result.success(catalog);
     }
 }

@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div class="filters">
-        <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" clearable @change="fetchData">
+        <el-select v-if="!workspaceProjectId" v-model="projectId" placeholder="选择项目" style="width: 200px" clearable @change="fetchData">
           <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
         </el-select>
       </div>
@@ -57,7 +57,7 @@
       @close="resetForm"
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px">
-        <el-form-item label="所属项目" prop="projectId">
+        <el-form-item v-if="!workspaceProjectId" label="所属项目" prop="projectId">
           <el-select v-model="form.projectId" style="width: 100%">
             <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
           </el-select>
@@ -93,8 +93,8 @@
             <el-form-item label="状态" prop="status">
               <el-select v-model="form.status" style="width: 100%">
                 <el-option label="草稿" value="DRAFT" />
-                <el-option label="已确认" value="CONFIRMED" />
-                <el-option label="已发布" value="PUBLISHED" />
+                <el-option label="已下发" value="ISSUED" />
+                <el-option label="已变更" value="CHANGED" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -118,10 +118,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDocCatalogs, createDocCatalog, updateDocCatalog, deleteDocCatalog, type DocCatalogItem } from '@/api/doc-catalog'
 import { getProjects, type ProjectItem } from '@/api/project'
+
+const route = useRoute()
+const workspaceProjectId = computed(() => {
+  const pid = route.params.projectId
+  return pid ? Number(pid) : undefined
+})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -130,7 +137,7 @@ const projects = ref<ProjectItem[]>([])
 const total = ref(0)
 const pageNo = ref(1)
 const pageSize = ref(20)
-const projectId = ref<number | undefined>()
+const projectId = ref<number | undefined>(workspaceProjectId.value)
 
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
@@ -161,7 +168,7 @@ function docTypeLabel(type: string) {
 
 function statusTag(status: string) {
   const map: Record<string, string> = {
-    DRAFT: 'info', CONFIRMED: 'success', PUBLISHED: ''
+    DRAFT: 'info', ISSUED: 'success', CHANGED: 'warning'
   }
   return map[status] || 'info'
 }
@@ -191,13 +198,13 @@ async function fetchData() {
 
 function showCreateDialog() {
   editingId.value = null
-  Object.assign(form, emptyForm())
+  Object.assign(form, { ...emptyForm(), projectId: workspaceProjectId.value || 0 })
   dialogVisible.value = true
 }
 
 function showEditDialog(row: DocCatalogItem) {
   editingId.value = row.id!
-  Object.assign(form, row)
+  Object.assign(form, { ...row })
   dialogVisible.value = true
 }
 
@@ -233,7 +240,7 @@ async function handleDelete(row: DocCatalogItem) {
 }
 
 onMounted(() => {
-  fetchProjects()
+  if (!workspaceProjectId.value) fetchProjects()
   fetchData()
 })
 </script>

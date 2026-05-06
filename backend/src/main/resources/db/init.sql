@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS sys_user_role (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_user_role ON sys_user_role(user_id, role_id);
 
+-- 角色权限关联表
+CREATE TABLE IF NOT EXISTS sys_role_permission (
+    id              BIGSERIAL PRIMARY KEY,
+    role_id         BIGINT NOT NULL,
+    permission_id   BIGINT NOT NULL,
+    created_by      BIGINT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_role_perm ON sys_role_permission(role_id, permission_id);
+
 -- ============================================================
 -- 项目管理模块 (Project)
 -- ============================================================
@@ -163,6 +173,7 @@ CREATE TABLE IF NOT EXISTS doc_catalog (
     meeting_usage       VARCHAR(64),
     usage_source        VARCHAR(128),
     usage_adjust_reason VARCHAR(512),
+    change_reason       VARCHAR(512),
     responsible_user_id BIGINT,
     status              VARCHAR(32)  DEFAULT 'DRAFT',
     created_by          BIGINT,
@@ -353,6 +364,76 @@ CREATE TABLE IF NOT EXISTS review_meeting_opinion_file (
 );
 
 -- ============================================================
+-- 模版库模块 (Template)
+-- ============================================================
+
+-- 文档模版表
+CREATE TABLE IF NOT EXISTS doc_template (
+    id                    BIGSERIAL PRIMARY KEY,
+    template_name         VARCHAR(256) NOT NULL,
+    template_code         VARCHAR(64),
+    template_type         VARCHAR(64),
+    applicable_project_type VARCHAR(128),
+    description           TEXT,
+    file_object_id        VARCHAR(256),
+    file_name             VARCHAR(256),
+    file_size             BIGINT,
+    file_type             VARCHAR(32),
+    variables             TEXT,
+    status                VARCHAR(32) DEFAULT 'ACTIVE',
+    created_by            BIGINT,
+    created_at            TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    updated_by            BIGINT,
+    updated_at            TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    deleted               SMALLINT    DEFAULT 0
+);
+
+-- ============================================================
+-- 标准库模块 (Standard)
+-- ============================================================
+
+-- 标准表
+CREATE TABLE IF NOT EXISTS standard (
+    id              BIGSERIAL PRIMARY KEY,
+    standard_code   VARCHAR(128) NOT NULL,
+    standard_name   VARCHAR(256) NOT NULL,
+    standard_type   VARCHAR(32),
+    category        VARCHAR(64),
+    version         VARCHAR(32),
+    publish_date    DATE,
+    effective_date  DATE,
+    description     TEXT,
+    file_object_id  VARCHAR(256),
+    file_name       VARCHAR(256),
+    file_size       BIGINT,
+    file_type       VARCHAR(32),
+    status          VARCHAR(32) DEFAULT 'ACTIVE',
+    created_by      BIGINT,
+    created_at      TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT    DEFAULT 0
+);
+
+-- 标准条款表
+CREATE TABLE IF NOT EXISTS standard_clause (
+    id              BIGSERIAL PRIMARY KEY,
+    standard_id     BIGINT NOT NULL,
+    clause_number   VARCHAR(32),
+    clause_title    VARCHAR(256),
+    clause_content  TEXT,
+    parent_id       BIGINT DEFAULT 0,
+    order_num       INT    DEFAULT 0,
+    keywords        VARCHAR(512),
+    created_by      BIGINT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT  DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_standard_clause_sid ON standard_clause(standard_id) WHERE deleted = 0;
+
+-- ============================================================
 -- 索引
 -- ============================================================
 
@@ -360,6 +441,26 @@ CREATE TABLE IF NOT EXISTS review_meeting_opinion_file (
 CREATE INDEX IF NOT EXISTS idx_project_status ON project(status) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_project_member_project ON project_member(project_id) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_project_stage_project ON project_stage(project_id) WHERE deleted = 0;
+
+-- 项目输入文件表 (任务书/合同/质量程序等)
+CREATE TABLE IF NOT EXISTS project_input_file (
+    id              BIGSERIAL PRIMARY KEY,
+    project_id      BIGINT NOT NULL,
+    file_name       VARCHAR(256) NOT NULL,
+    file_object_id  VARCHAR(256),
+    file_size       BIGINT,
+    file_type       VARCHAR(32),
+    input_type      VARCHAR(64) NOT NULL,
+    description     VARCHAR(512),
+    uploaded_by     BIGINT,
+    uploaded_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT  DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pif_project ON project_input_file(project_id) WHERE deleted = 0;
 
 -- 文档相关索引
 CREATE INDEX IF NOT EXISTS idx_doc_catalog_project ON doc_catalog(project_id) WHERE deleted = 0;
@@ -396,4 +497,42 @@ ON CONFLICT DO NOTHING;
 -- 管理员角色关联
 INSERT INTO sys_user_role (user_id, role_id, created_by, created_at)
 VALUES (1, 1, 1, CURRENT_TIMESTAMP)
+ON CONFLICT DO NOTHING;
+
+-- 默认权限
+INSERT INTO sys_permission (id, permission_code, permission_name, resource_type, path, parent_id, order_num, created_by, created_at, updated_by, updated_at)
+VALUES
+    (1,  'project',           '项目管理',   'MENU', '/projects',  0,  1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (2,  'project:create',    '创建项目',   'BTN',  NULL,         1,  1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (3,  'project:edit',      '编辑项目',   'BTN',  NULL,         1,  2, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (4,  'project:delete',    '删除项目',   'BTN',  NULL,         1,  3, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (5,  'document',          '文档管理',   'MENU', '/documents', 0,  2, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (6,  'document:create',   '创建文档',   'BTN',  NULL,         5,  1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (7,  'document:edit',     '编辑文档',   'BTN',  NULL,         5,  2, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (8,  'document:delete',   '删除文档',   'BTN',  NULL,         5,  3, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (9,  'catalog',           '文档目录',   'MENU', '/catalogs',  0,  3, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (10, 'catalog:create',    '创建目录',   'BTN',  NULL,         9,  1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (11, 'catalog:edit',      '编辑目录',   'BTN',  NULL,         9,  2, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (12, 'catalog:delete',    '删除目录',   'BTN',  NULL,         9,  3, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (13, 'meeting',           '评审会议',   'MENU', '/meetings',  0,  4, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (14, 'meeting:create',    '创建会议',   'BTN',  NULL,         13, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (15, 'meeting:edit',      '编辑会议',   'BTN',  NULL,         13, 2, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (16, 'meeting:delete',    '删除会议',   'BTN',  NULL,         13, 3, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (17, 'system:user',       '用户管理',   'MENU', '/users',     0,  5, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (18, 'system:user:crud',  '用户CRUD',   'BTN',  NULL,         17, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (19, 'system:role',       '角色管理',   'MENU', '/roles',     0,  6, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (20, 'system:role:crud',  '角色CRUD',   'BTN',  NULL,         19, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (21, 'system:dict',       '字典配置',   'MENU', '/dicts',     0,  7, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (22, 'system:dict:crud',  '字典CRUD',   'BTN',  NULL,         21, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (23, 'system:perm',       '权限管理',   'MENU', '/permissions',0, 8, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (24, 'system:perm:crud',  '权限CRUD',   'BTN',  NULL,         23, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (25, 'template',          '模版管理',   'MENU', '/templates',  0,  9, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (26, 'template:crud',     '模版CRUD',   'BTN',  NULL,         25, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (27, 'standard',          '标准库',     'MENU', '/standards',  0, 10, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (28, 'standard:crud',     '标准CRUD',   'BTN',  NULL,         27, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
+ON CONFLICT DO NOTHING;
+
+-- 管理员角色授予所有权限
+INSERT INTO sys_role_permission (role_id, permission_id, created_by, created_at)
+SELECT 1, id, 1, CURRENT_TIMESTAMP FROM sys_permission
 ON CONFLICT DO NOTHING;

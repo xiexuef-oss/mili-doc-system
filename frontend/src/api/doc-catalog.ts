@@ -11,6 +11,7 @@ export interface DocCatalogItem {
   meetingUsage?: string
   usageSource?: string
   usageAdjustReason?: string
+  changeReason?: string
   responsibleUserId?: number
   status: string
 }
@@ -42,4 +43,12 @@ export function updateDocCatalog(id: number, data: DocCatalogItem) {
 
 export function deleteDocCatalog(id: number) {
   return api.delete(`/doc-catalogs/${id}`)
+}
+
+export function issueDocCatalog(id: number) {
+  return api.post(`/doc-catalogs/${id}/issue`)
+}
+
+export function changeDocCatalog(id: number, changeReason: string) {
+  return api.post(`/doc-catalogs/${id}/change`, { changeReason })
 }

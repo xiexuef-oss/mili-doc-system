@@ -16,36 +16,92 @@ const router = createRouter({
       component: () => import('@/views/layout/MainLayout.vue'),
       redirect: '/projects',
       children: [
+        // 项目管理
         {
           path: 'projects',
           name: 'ProjectList',
           component: () => import('@/views/project/ProjectList.vue'),
           meta: { title: '项目管理' }
         },
+        // 项目工作台 (7 tabs)
         {
-          path: 'projects/:id',
-          name: 'ProjectDetail',
-          component: () => import('@/views/project/ProjectDetail.vue'),
-          meta: { title: '项目详情' }
+          path: 'projects/:projectId',
+          name: 'ProjectWorkspace',
+          component: () => import('@/views/project/ProjectWorkspace.vue'),
+          meta: { title: '项目工作台' },
+          redirect: (to: any) => ({ name: 'ProjectOverview', params: { projectId: to.params.projectId } }),
+          children: [
+            {
+              path: 'overview',
+              name: 'ProjectOverview',
+              component: () => import('@/views/project/ProjectDetail.vue'),
+              meta: { title: '项目概览' }
+            },
+            {
+              path: 'stages',
+              name: 'ProjectStages',
+              component: () => import('@/views/project/ProjectStageList.vue'),
+              meta: { title: '阶段管理' }
+            },
+            {
+              path: 'catalog',
+              name: 'ProjectCatalog',
+              component: () => import('@/views/document/DocCatalogList.vue'),
+              meta: { title: '文档目录' }
+            },
+            {
+              path: 'documents',
+              name: 'ProjectDocuments',
+              component: () => import('@/views/document/DocFileList.vue'),
+              meta: { title: '文档管理' }
+            },
+            {
+              path: 'reviews',
+              name: 'ProjectReviews',
+              component: () => import('@/views/review/MeetingList.vue'),
+              meta: { title: '评审管理' }
+            },
+            {
+              path: 'members',
+              name: 'ProjectMembers',
+              component: () => import('@/views/project/ProjectMemberList.vue'),
+              meta: { title: '项目成员' }
+            },
+            {
+              path: 'input-files',
+              name: 'ProjectInputFiles',
+              component: () => import('@/views/project/ProjectInputFileList.vue'),
+              meta: { title: '输入文件' }
+            }
+          ]
+        },
+        // 模版库
+        {
+          path: 'templates',
+          name: 'TemplateList',
+          component: () => import('@/views/template/TemplateList.vue'),
+          meta: { title: '模版管理' }
         },
         {
-          path: 'documents',
-          name: 'DocFileList',
-          component: () => import('@/views/document/DocFileList.vue'),
-          meta: { title: '文档管理' }
+          path: 'templates/create',
+          name: 'TemplateEditor',
+          component: () => import('@/views/template/TemplateEditor.vue'),
+          meta: { title: '从模版创建文档' }
+        },
+        // 标准库
+        {
+          path: 'standards',
+          name: 'StandardList',
+          component: () => import('@/views/standard/StandardList.vue'),
+          meta: { title: '标准库' }
         },
         {
-          path: 'catalogs',
-          name: 'DocCatalogList',
-          component: () => import('@/views/document/DocCatalogList.vue'),
-          meta: { title: '文档目录' }
+          path: 'standards/:id',
+          name: 'StandardDetail',
+          component: () => import('@/views/standard/StandardDetail.vue'),
+          meta: { title: '标准详情' }
         },
-        {
-          path: 'meetings',
-          name: 'MeetingList',
-          component: () => import('@/views/review/MeetingList.vue'),
-          meta: { title: '评审会议' }
-        },
+        // 系统管理
         {
           path: 'users',
           name: 'UserList',
@@ -63,6 +119,67 @@ const router = createRouter({
           name: 'DictList',
           component: () => import('@/views/system/DictList.vue'),
           meta: { title: '字典配置' }
+        },
+        {
+          path: 'permissions',
+          name: 'PermissionList',
+          component: () => import('@/views/system/PermissionList.vue'),
+          meta: { title: '权限管理' }
+        },
+        // Sub-feature routes (not in sidebar, accessed from detail drawers)
+        {
+          path: 'projects/:projectId/transitions',
+          name: 'StageTransitionList',
+          component: () => import('@/views/project/StageTransitionList.vue'),
+          meta: { title: '阶段转阶段检查' }
+        },
+        {
+          path: 'documents/:docFileId/versions',
+          name: 'DocVersionList',
+          component: () => import('@/views/document/DocVersionList.vue'),
+          meta: { title: '文档版本管理' }
+        },
+        {
+          path: 'doc-sessions',
+          name: 'DocEditSessionList',
+          component: () => import('@/views/document/DocEditSessionList.vue'),
+          meta: { title: '文档编辑会话' }
+        },
+        {
+          path: 'doc-locks',
+          name: 'DocEditLockList',
+          component: () => import('@/views/document/DocEditLockList.vue'),
+          meta: { title: '文档编辑锁定' }
+        },
+        {
+          path: 'doc-baselines',
+          name: 'DocEffectiveBaselineList',
+          component: () => import('@/views/document/DocEffectiveBaselineList.vue'),
+          meta: { title: '文档生效基线' }
+        },
+        {
+          path: 'doc-change-impacts',
+          name: 'DocChangeImpactList',
+          component: () => import('@/views/document/DocChangeImpactList.vue'),
+          meta: { title: '变更影响分析' }
+        },
+        {
+          path: 'meetings/:meetingId/documents',
+          name: 'ReviewMeetingDocumentList',
+          component: () => import('@/views/review/ReviewMeetingDocumentList.vue'),
+          meta: { title: '评审文档管理' }
+        },
+        {
+          path: 'meetings/:meetingId/expert-opinions',
+          name: 'ReviewExpertOpinionList',
+          component: () => import('@/views/review/ReviewExpertOpinionList.vue'),
+          meta: { title: '专家意见管理' }
+        },
+        {
+          path: 'meetings/:meetingId/opinions',
+          name: 'ReviewMeetingOpinionList',
+          component: () => import('@/views/review/ReviewMeetingOpinionList.vue'),
+          meta: { title: '会议意见汇总' }
         }
       ]
     }

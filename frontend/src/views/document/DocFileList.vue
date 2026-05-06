@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div class="filters">
-        <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" clearable @change="fetchData">
+        <el-select v-if="!workspaceProjectId" v-model="projectId" placeholder="选择项目" style="width: 200px" clearable @change="fetchData">
           <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
         </el-select>
         <el-select v-model="statusFilter" placeholder="文档状态" style="width: 140px" clearable @change="fetchData">
@@ -62,7 +62,7 @@
       @close="resetForm"
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
-        <el-form-item label="所属项目" prop="projectId">
+        <el-form-item v-if="!workspaceProjectId" label="所属项目" prop="projectId">
           <el-select v-model="form.projectId" style="width: 100%">
             <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
           </el-select>
@@ -113,10 +113,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDocFiles, createDocFile, updateDocFile, deleteDocFile, type DocFileItem } from '@/api/doc-file'
 import { getProjects, type ProjectItem } from '@/api/project'
+
+const route = useRoute()
+const workspaceProjectId = computed(() => {
+  const pid = route.params.projectId
+  return pid ? Number(pid) : undefined
+})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -125,7 +132,7 @@ const projects = ref<ProjectItem[]>([])
 const total = ref(0)
 const pageNo = ref(1)
 const pageSize = ref(20)
-const projectId = ref<number | undefined>()
+const projectId = ref<number | undefined>(workspaceProjectId.value)
 const statusFilter = ref('')
 
 const dialogVisible = ref(false)
@@ -187,7 +194,13 @@ async function fetchData() {
 
 function showCreateDialog() {
   editingId.value = null
-  Object.assign(form, emptyForm())
+  Object.assign(form, { ...emptyForm(), projectId: workspaceProjectId.value || 0 })
+  dialogVisible.value = true
+}
+
+function showEditDialog(row: DocFileItem) {
+  editingId.value = row.id!
+  Object.assign(form, { ...row })
   dialogVisible.value = true
 }
 
@@ -229,7 +242,7 @@ async function handleDelete(row: DocFileItem) {
 }
 
 onMounted(() => {
-  fetchProjects()
+  if (!workspaceProjectId.value) fetchProjects()
   fetchData()
 })
 </script>

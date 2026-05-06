@@ -15,17 +15,13 @@
           <el-icon><Folder /></el-icon>
           <span>项目管理</span>
         </el-menu-item>
-        <el-menu-item index="/documents">
-          <el-icon><Document /></el-icon>
-          <span>文档管理</span>
+        <el-menu-item index="/templates">
+          <el-icon><Files /></el-icon>
+          <span>模版库</span>
         </el-menu-item>
-        <el-menu-item index="/catalogs">
-          <el-icon><Grid /></el-icon>
-          <span>文档目录</span>
-        </el-menu-item>
-        <el-menu-item index="/meetings">
-          <el-icon><Calendar /></el-icon>
-          <span>评审会议</span>
+        <el-menu-item index="/standards">
+          <el-icon><Collection /></el-icon>
+          <span>标准库</span>
         </el-menu-item>
         <el-sub-menu index="system">
           <template #title>
@@ -43,6 +39,10 @@
           <el-menu-item index="/dicts">
             <el-icon><Menu /></el-icon>
             <span>字典配置</span>
+          </el-menu-item>
+          <el-menu-item index="/permissions">
+            <el-icon><Lock /></el-icon>
+            <span>权限管理</span>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -74,12 +74,12 @@ const user = getUser()
 const activeMenu = computed(() => {
   const path = route.path
   if (path.startsWith('/projects')) return '/projects'
-  if (path.startsWith('/documents')) return '/documents'
-  if (path.startsWith('/catalogs')) return '/catalogs'
-  if (path.startsWith('/meetings')) return '/meetings'
+  if (path.startsWith('/templates')) return '/templates'
+  if (path.startsWith('/standards')) return '/standards'
   if (path.startsWith('/users')) return '/users'
   if (path.startsWith('/roles')) return '/roles'
   if (path.startsWith('/dicts')) return '/dicts'
+  if (path.startsWith('/permissions')) return '/permissions'
   return '/projects'
 })
 

@@ -20,9 +20,10 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="showEditDialog(row)">编辑</el-button>
+          <el-button link type="warning" @click="showRoleDialog(row)">分配角色</el-button>
           <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -39,6 +40,7 @@
       />
     </div>
 
+    <!-- 创建/编辑用户对话框 -->
     <el-dialog
       v-model="dialogVisible"
       :title="editingId ? '编辑用户' : '创建用户'"
@@ -79,13 +81,35 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 分配角色对话框 -->
+    <el-dialog
+      v-model="roleDialogVisible"
+      title="分配角色"
+      width="480px"
+    >
+      <el-checkbox-group v-model="checkedRoleIds">
+        <div v-for="role in allRoles" :key="role.id" class="role-item">
+          <el-checkbox :value="role.id" :label="role.id">
+            <span class="role-label">{{ role.roleName }}</span>
+            <span class="role-code">{{ role.roleCode }}</span>
+          </el-checkbox>
+        </div>
+      </el-checkbox-group>
+      <el-empty v-if="allRoles.length === 0" description="暂无角色" />
+      <template #footer>
+        <el-button @click="roleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingRoles" @click="handleSaveRoles">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUsers, createUser, updateUser, deleteUser, type UserItem } from '@/api/user'
+import { getUsers, createUser, updateUser, deleteUser, getUserRoles, setUserRoles, type UserItem } from '@/api/user'
+import { getRoles, type RoleItem } from '@/api/role'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -176,6 +200,38 @@ async function handleDelete(row: UserItem) {
   } catch { /* cancelled or error */ }
 }
 
+// 角色分配
+const roleDialogVisible = ref(false)
+const savingRoles = ref(false)
+const checkedRoleIds = ref<number[]>([])
+const allRoles = ref<RoleItem[]>([])
+const currentRoleUserId = ref<number>(0)
+
+async function showRoleDialog(row: UserItem) {
+  currentRoleUserId.value = row.id!
+  checkedRoleIds.value = []
+  try {
+    const [rolesRes, userRolesRes] = await Promise.all([
+      getRoles({ pageSize: 100 }),
+      getUserRoles(row.id!)
+    ])
+    allRoles.value = rolesRes.data.data.records
+    checkedRoleIds.value = userRolesRes.data.data
+  } catch { /* ignore */ }
+  roleDialogVisible.value = true
+}
+
+async function handleSaveRoles() {
+  savingRoles.value = true
+  try {
+    await setUserRoles(currentRoleUserId.value, checkedRoleIds.value)
+    ElMessage.success('角色分配成功')
+    roleDialogVisible.value = false
+  } finally {
+    savingRoles.value = false
+  }
+}
+
 onMounted(fetchData)
 </script>
 
@@ -184,4 +240,8 @@ onMounted(fetchData)
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .filters { display: flex; gap: 12px; }
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
+.role-item { padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+.role-item:last-child { border-bottom: none; }
+.role-label { font-weight: 500; }
+.role-code { color: #909399; font-size: 12px; margin-left: 8px; }
 </style>

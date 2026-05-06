@@ -19,6 +19,7 @@ public class DocCatalog {
     private String meetingUsage;
     private String usageSource;
     private String usageAdjustReason;
+    private String changeReason;
     private Long responsibleUserId;
     private String status;
 

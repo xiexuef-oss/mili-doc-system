@@ -33,3 +33,11 @@ export function updateUser(id: number, data: UserItem) {
 export function deleteUser(id: number) {
   return api.delete(`/users/${id}`)
 }
+
+export function getUserRoles(userId: number) {
+  return api.get(`/users/${userId}/roles`)
+}
+
+export function setUserRoles(userId: number, roleIds: number[]) {
+  return api.put(`/users/${userId}/roles`, roleIds)
+}
