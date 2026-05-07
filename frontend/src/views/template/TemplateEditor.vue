@@ -90,7 +90,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, DocumentAdd } from '@element-plus/icons-vue'
-import { getTemplateList, type TemplateItem } from '@/api/template'
+import { getTemplateList, generateFromTemplate, type TemplateItem } from '@/api/template'
 import { getProjects, type ProjectItem } from '@/api/project'
 
 const router = useRouter()
@@ -127,18 +127,13 @@ function handleNext() {
 async function handleGenerate() {
   generating.value = true
   try {
-    // In the full implementation, this would call an AI generation API
-    // For now, create a basic document entry
-    const api = await import('@/api/doc-file')
-    await api.createDocFile({
-      docName: (selectedTemplate.value?.templateName || '新文档') + '-' + new Date().toLocaleDateString(),
-      projectId: selectedProjectId.value!,
-      docType: selectedTemplate.value?.templateType || 'OTHER',
-      status: 'DRAFT',
-      securityLevel: 'INTERNAL'
-    } as any)
-    ElMessage.success('文档已生成，跳转到文档管理页面')
-    router.push('/documents')
+    await generateFromTemplate(
+      selectedTemplateId.value!,
+      selectedProjectId.value!,
+      variableValues.value
+    )
+    ElMessage.success('文档已生成，跳转到项目文档页面')
+    router.push(`/projects/${selectedProjectId.value}/documents`)
   } catch {
     ElMessage.error('生成失败')
   } finally {

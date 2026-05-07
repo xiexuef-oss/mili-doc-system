@@ -43,6 +43,18 @@ export function uploadTemplateFile(id: number, file: File) {
   })
 }
 
+export function batchUploadTemplateFiles(files: File[]) {
+  const form = new FormData()
+  files.forEach(f => form.append('files', f))
+  return api.post('/templates/batch-upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export function generateFromTemplate(templateId: number, projectId: number, variables: Record<string, string>) {
+  return api.post(`/templates/${templateId}/generate`, { projectId, variables })
+}
+
 export function getTemplateDownloadUrl(id: number) {
   return api.get(`/templates/${id}/download-url`)
 }

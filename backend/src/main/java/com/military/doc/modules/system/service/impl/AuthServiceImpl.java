@@ -3,6 +3,7 @@ package com.military.doc.modules.system.service.impl;
 import com.military.doc.common.exception.BusinessException;
 import com.military.doc.common.security.JwtTokenProvider;
 import com.military.doc.modules.system.entity.SysUser;
+import com.military.doc.modules.system.mapper.SysUserMapper;
 import com.military.doc.modules.system.service.AuthService;
 import com.military.doc.modules.system.service.SysUserService;
 import com.military.doc.modules.system.vo.LoginRequest;
@@ -16,6 +17,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private SysUserService sysUserService;
+
+    @Autowired
+    private SysUserMapper sysUserMapper;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -45,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
         response.setUserId(user.getId());
         response.setUsername(user.getUsername());
         response.setRealName(user.getRealName());
+        response.setRoles(sysUserMapper.selectRoleCodesByUserId(user.getId()));
         return response;
     }
 }

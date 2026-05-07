@@ -14,7 +14,7 @@ public class ReviewExpertOpinionFile {
     private Long expertUserId;
     private String expertGroupName;
     private Long docFileId;
-    private Long fileObjectId;
+    private String fileObjectId;
     private String problemLevel;
     private LocalDateTime uploadedAt;
 

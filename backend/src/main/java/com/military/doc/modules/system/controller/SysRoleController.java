@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.system.entity.SysRole;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.military.doc.modules.system.entity.SysRolePermission;
 import com.military.doc.modules.system.mapper.SysRoleMapper;
 import com.military.doc.modules.system.mapper.SysRolePermissionMapper;
@@ -28,6 +29,7 @@ public class SysRoleController {
 
     @PostMapping
     @Operation(summary = "创建角色")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysRole> create(@RequestBody SysRole role) {
         if (role.getStatus() == null) {
             role.setStatus("ACTIVE");
@@ -59,6 +61,7 @@ public class SysRoleController {
 
     @PutMapping("/{id}")
     @Operation(summary = "更新角色")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysRole> update(@PathVariable Long id, @RequestBody SysRole role) {
         role.setId(id);
         sysRoleMapper.updateById(role);
@@ -67,6 +70,7 @@ public class SysRoleController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除角色")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
         sysRoleMapper.deleteById(id);
         return Result.success();

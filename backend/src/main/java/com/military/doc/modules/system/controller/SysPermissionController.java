@@ -7,6 +7,7 @@ import com.military.doc.modules.system.mapper.SysPermissionMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class SysPermissionController {
 
     @PostMapping
     @Operation(summary = "创建权限")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysPermission> create(@RequestBody SysPermission perm) {
         sysPermissionMapper.insert(perm);
         return Result.success(perm);
@@ -50,6 +52,7 @@ public class SysPermissionController {
 
     @PutMapping("/{id}")
     @Operation(summary = "更新权限")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysPermission> update(@PathVariable Long id, @RequestBody SysPermission perm) {
         perm.setId(id);
         sysPermissionMapper.updateById(perm);
@@ -58,6 +61,7 @@ public class SysPermissionController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除权限")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
         sysPermissionMapper.deleteById(id);
         return Result.success();

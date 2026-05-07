@@ -64,6 +64,14 @@ export function uploadStandardFile(id: number, file: File) {
   })
 }
 
+export function batchUploadStandardFiles(files: File[]) {
+  const form = new FormData()
+  files.forEach(f => form.append('files', f))
+  return api.post('/standards/batch-upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export function getStandardDownloadUrl(id: number) {
   return api.get(`/standards/${id}/download-url`)
 }

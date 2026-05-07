@@ -47,6 +47,18 @@ public class StandardController {
         ));
     }
 
+    @PostMapping("/batch-upload")
+    @Operation(summary = "批量上传标准文件并自动解析")
+    public Result<List<Standard>> batchUpload(@RequestParam("files") List<MultipartFile> files) {
+        List<Standard> standards = files.stream().map(file -> {
+            StandardParseService.StandardParseResult result = standardParseService.parse(file);
+            Standard standard = result.standard();
+            standardMapper.insert(standard);
+            return standard;
+        }).toList();
+        return Result.success(standards);
+    }
+
     @GetMapping
     @Operation(summary = "分页查询标准")
     public Result<Page<Standard>> list(
@@ -111,7 +123,7 @@ public class StandardController {
             return Result.error("NOT_FOUND", "标准不存在");
         }
         if (standard.getFileObjectId() != null) {
-            fileStorageService.delete(standard.getFileObjectId());
+            try { fileStorageService.delete(standard.getFileObjectId()); } catch (Exception ignored) {}
         }
         standard.setFileObjectId(objectId);
         standard.setFileName(file.getOriginalFilename());

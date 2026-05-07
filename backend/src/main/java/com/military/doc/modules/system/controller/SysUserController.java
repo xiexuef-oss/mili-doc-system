@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.system.entity.SysUser;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.military.doc.modules.system.entity.SysUserRole;
 import com.military.doc.modules.system.mapper.SysUserRoleMapper;
 import com.military.doc.modules.system.service.SysUserService;
@@ -29,6 +30,7 @@ public class SysUserController {
 
     @PostMapping
     @Operation(summary = "创建用户")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysUser> create(@RequestBody SysUser user) {
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             user.setPassword(new BCryptPasswordEncoder().encode(user.getPassword()));
@@ -71,6 +73,7 @@ public class SysUserController {
 
     @PutMapping("/{id}")
     @Operation(summary = "更新用户")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysUser> update(@PathVariable Long id, @RequestBody SysUser user) {
         user.setId(id);
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
@@ -86,6 +89,7 @@ public class SysUserController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除用户")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
         sysUserService.removeById(id);
         return Result.success();

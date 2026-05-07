@@ -6,6 +6,12 @@ export interface UserInfo {
   username: string
   realName: string
   token: string
+  roles?: string[]
+}
+
+export function isAdmin(): boolean {
+  const user = getUser()
+  return user?.roles?.includes('ADMIN') ?? false
 }
 
 export function getToken(): string | null {

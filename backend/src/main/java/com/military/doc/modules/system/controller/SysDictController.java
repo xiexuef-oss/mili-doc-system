@@ -8,6 +8,7 @@ import com.military.doc.modules.system.mapper.SysDictMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,6 +46,7 @@ public class SysDictController {
 
     @PostMapping
     @Operation(summary = "创建字典项")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysDict> create(@RequestBody SysDict dict) {
         if (dict.getStatus() == null) {
             dict.setStatus("ACTIVE");
@@ -69,6 +71,7 @@ public class SysDictController {
 
     @PutMapping("/{id}")
     @Operation(summary = "更新字典项")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<SysDict> update(@PathVariable Long id, @RequestBody SysDict dict) {
         dict.setId(id);
         sysDictMapper.updateById(dict);
@@ -77,6 +80,7 @@ public class SysDictController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除字典项")
+    @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
         sysDictMapper.deleteById(id);
         return Result.success();

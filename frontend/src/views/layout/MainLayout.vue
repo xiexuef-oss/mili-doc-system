@@ -23,7 +23,11 @@
           <el-icon><Collection /></el-icon>
           <span>标准库</span>
         </el-menu-item>
-        <el-sub-menu index="system">
+        <el-menu-item index="/knowledge">
+          <el-icon><Reading /></el-icon>
+          <span>知识库</span>
+        </el-menu-item>
+        <el-sub-menu v-if="isAdmin()" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系统管理</span>
@@ -65,7 +69,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getUser, removeToken } from '@/utils/auth'
+import { getUser, removeToken, isAdmin } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -76,6 +80,7 @@ const activeMenu = computed(() => {
   if (path.startsWith('/projects')) return '/projects'
   if (path.startsWith('/templates')) return '/templates'
   if (path.startsWith('/standards')) return '/standards'
+  if (path.startsWith('/knowledge')) return '/knowledge'
   if (path.startsWith('/users')) return '/users'
   if (path.startsWith('/roles')) return '/roles'
   if (path.startsWith('/dicts')) return '/dicts'

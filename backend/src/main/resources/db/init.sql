@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS doc_version (
     version_no          VARCHAR(32) NOT NULL,
     source_type         VARCHAR(32),
     base_version_id     BIGINT,
-    file_object_id      BIGINT,
+    file_object_id      VARCHAR(256),
     version_status      VARCHAR(32) DEFAULT 'DRAFT',
     optimistic_version  INT         DEFAULT 1,
     submit_user_id      BIGINT,
@@ -352,7 +352,7 @@ CREATE TABLE IF NOT EXISTS review_expert_opinion_file (
     expert_user_id    BIGINT,
     expert_group_name VARCHAR(128),
     doc_file_id       BIGINT,
-    file_object_id    BIGINT,
+    file_object_id    VARCHAR(256),
     problem_level     VARCHAR(32),
     uploaded_at       TIMESTAMP,
     created_by        BIGINT,
@@ -368,7 +368,7 @@ CREATE TABLE IF NOT EXISTS review_meeting_opinion_file (
     meeting_id      BIGINT NOT NULL,
     doc_file_id     BIGINT,
     opinion_type    VARCHAR(32),
-    file_object_id  BIGINT,
+    file_object_id  VARCHAR(256),
     status          VARCHAR(32) DEFAULT 'DRAFT',
     uploaded_by     BIGINT,
     uploaded_at     TIMESTAMP,
@@ -547,6 +547,32 @@ VALUES
     (27, 'standard',          '标准库',     'MENU', '/standards',  0, 10, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
     (28, 'standard:crud',     '标准CRUD',   'BTN',  NULL,         27, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
+
+-- 知识库
+CREATE TABLE IF NOT EXISTS knowledge_base (
+    id              BIGSERIAL PRIMARY KEY,
+    title           VARCHAR(256) NOT NULL,
+    content         TEXT,
+    category        VARCHAR(64),
+    tags            VARCHAR(512),
+    file_object_id  VARCHAR(256),
+    file_name       VARCHAR(256),
+    file_size       BIGINT,
+    file_type       VARCHAR(32),
+    status          VARCHAR(32) DEFAULT 'ACTIVE',
+    created_by      BIGINT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted         INTEGER   DEFAULT 0
+);
+COMMENT ON TABLE knowledge_base IS '知识库';
+COMMENT ON COLUMN knowledge_base.title IS '标题';
+COMMENT ON COLUMN knowledge_base.content IS '内容';
+COMMENT ON COLUMN knowledge_base.category IS '分类';
+COMMENT ON COLUMN knowledge_base.tags IS '标签（逗号分隔）';
+CREATE INDEX idx_kb_category ON knowledge_base(category);
+CREATE INDEX idx_kb_status ON knowledge_base(status);
 
 -- 初始字典数据
 INSERT INTO sys_dict (id, dict_type, dict_code, dict_name, order_num, status, created_by, created_at, updated_by, updated_at)

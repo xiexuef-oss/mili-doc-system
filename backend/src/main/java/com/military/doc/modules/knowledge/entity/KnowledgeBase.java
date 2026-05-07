@@ -1,25 +1,24 @@
-package com.military.doc.modules.document.entity;
+package com.military.doc.modules.knowledge.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doc_version")
-public class DocVersion {
+@TableName("knowledge_base")
+public class KnowledgeBase {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long docFileId;
-    private String versionNo;
-    private String sourceType;
-    private Long baseVersionId;
+    private String title;
+    private String content;
+    private String category;
+    private String tags;
     private String fileObjectId;
-    private String versionStatus;
-    private Integer optimisticVersion;
-    private Long submitUserId;
-    private LocalDateTime submitTime;
-    private String changeSummary;
+    private String fileName;
+    private Long fileSize;
+    private String fileType;
+    private String status;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

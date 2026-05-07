@@ -29,7 +29,7 @@ import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const loading = ref(false)
-const form = reactive({ username: 'admin', password: 'admin123' })
+const form = reactive({ username: 'admin', password: '303319' })
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
@@ -45,7 +45,8 @@ async function handleLogin() {
       userId: data.userId,
       username: data.username,
       realName: data.realName,
-      token: data.token
+      token: data.token,
+      roles: data.roles || []
     })
     ElMessage.success('登录成功')
     router.push('/')

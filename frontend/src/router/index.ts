@@ -101,6 +101,13 @@ const router = createRouter({
           component: () => import('@/views/standard/StandardDetail.vue'),
           meta: { title: '标准详情' }
         },
+        // 知识库
+        {
+          path: 'knowledge',
+          name: 'KnowledgeBaseList',
+          component: () => import('@/views/knowledge/KnowledgeBaseList.vue'),
+          meta: { title: '知识库' }
+        },
         // 系统管理
         {
           path: 'users',

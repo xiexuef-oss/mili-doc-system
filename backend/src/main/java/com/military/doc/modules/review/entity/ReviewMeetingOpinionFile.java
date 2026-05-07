@@ -13,7 +13,7 @@ public class ReviewMeetingOpinionFile {
     private Long meetingId;
     private Long docFileId;
     private String opinionType;
-    private Long fileObjectId;
+    private String fileObjectId;
     private String status;
     private Long uploadedBy;
     private LocalDateTime uploadedAt;

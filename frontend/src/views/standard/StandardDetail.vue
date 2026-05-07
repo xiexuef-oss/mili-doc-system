@@ -97,7 +97,7 @@ async function fetchClauses() {
 async function handleDownload() {
   try {
     const res = await getStandardDownloadUrl(id)
-    window.open('/api/v1' + res.data.data, '_blank')
+    window.open(res.data.data, '_blank')
   } catch { /* ignore */ }
 }
 

@@ -146,7 +146,7 @@ async function handleUpload() {
 async function handleDownload(row: any) {
   try {
     const res = await api.get(`/projects/${projectId.value}/input-files/${row.id}/download-url`)
-    window.open('/api/v1' + res.data.data, '_blank')
+    window.open(res.data.data, '_blank')
   } catch { /* ignore */ }
 }
 

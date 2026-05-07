@@ -11,6 +11,7 @@
         </el-select>
       </div>
       <el-button type="primary" @click="showCreateDialog">添加标准</el-button>
+      <el-button type="success" @click="showBatchUpload">批量上传</el-button>
     </div>
 
     <el-table :data="standards" v-loading="loading" style="width: 100%">
@@ -164,6 +165,31 @@
       </template>
     </el-dialog>
 
+    <!-- 批量上传对话框 -->
+    <el-dialog v-model="batchUploadVisible" title="批量上传标准文件" width="520px">
+      <el-upload
+        ref="batchUploadRef"
+        drag
+        multiple
+        :auto-upload="false"
+        :on-change="handleBatchFileChange"
+        :on-remove="handleBatchFileRemove"
+        accept=".pdf,.doc,.docx"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖拽文件到此处或<em>点击选择多个文件</em></div>
+        <template #tip>
+          <div class="el-upload__tip">支持同时选择多个 .pdf/.doc/.docx 文件，系统将自动解析标准元数据</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="batchUploadVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchUploading" :disabled="batchFiles.length === 0" @click="handleBatchUpload">
+          上传 {{ batchFiles.length > 0 ? `(${batchFiles.length} 个文件)` : '' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 条款浏览抽屉 -->
     <el-drawer
       v-model="clauseDrawerVisible"
@@ -237,7 +263,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Upload, UploadFilled } from '@element-plus/icons-vue'
 import {
   getStandardList, createStandard, updateStandard, deleteStandard,
-  uploadStandardFile, parseStandardFile, getStandardDownloadUrl, getStandardTypes, getStandardCategories,
+  uploadStandardFile, batchUploadStandardFiles, parseStandardFile, getStandardDownloadUrl, getStandardTypes, getStandardCategories,
   getStandardClauses, createStandardClause, updateStandardClause, deleteStandardClause, searchStandardClauses,
   type StandardItem, type StandardClauseItem
 } from '@/api/standard'
@@ -406,10 +432,42 @@ async function handleUpload() {
   }
 }
 
+// 批量上传
+const batchUploadVisible = ref(false)
+const batchUploading = ref(false)
+const batchFiles = ref<File[]>([])
+
+function showBatchUpload() {
+  batchFiles.value = []
+  batchUploadVisible.value = true
+}
+
+function handleBatchFileChange(file: any) {
+  batchFiles.value.push(file.raw)
+}
+
+function handleBatchFileRemove(file: any) {
+  const idx = batchFiles.value.indexOf(file.raw)
+  if (idx >= 0) batchFiles.value.splice(idx, 1)
+}
+
+async function handleBatchUpload() {
+  if (batchFiles.value.length === 0) return
+  batchUploading.value = true
+  try {
+    await batchUploadStandardFiles(batchFiles.value)
+    ElMessage.success(`批量上传成功，共创建 ${batchFiles.value.length} 条标准记录`)
+    batchUploadVisible.value = false
+    fetchData()
+  } finally {
+    batchUploading.value = false
+  }
+}
+
 async function handleDownload(row: StandardItem) {
   try {
     const res = await getStandardDownloadUrl(row.id!)
-    window.open('/api/v1' + res.data.data, '_blank')
+    window.open(res.data.data, '_blank')
   } catch { /* ignore */ }
 }
 

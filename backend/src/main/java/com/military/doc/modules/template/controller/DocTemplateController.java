@@ -6,6 +6,8 @@ import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.template.entity.DocTemplate;
 import com.military.doc.modules.template.mapper.DocTemplateMapper;
+import com.military.doc.modules.template.service.TemplateGenerateService;
+import com.military.doc.modules.document.entity.DocFile;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/templates")
@@ -24,6 +27,9 @@ public class DocTemplateController {
 
     @Autowired
     private FileStorageService fileStorageService;
+
+    @Autowired
+    private TemplateGenerateService templateGenerateService;
 
     @GetMapping
     @Operation(summary = "分页查询模版")
@@ -52,6 +58,35 @@ public class DocTemplateController {
     @Operation(summary = "获取模版详情")
     public Result<DocTemplate> getById(@PathVariable Long id) {
         return Result.success(docTemplateMapper.selectById(id));
+    }
+
+    @PostMapping("/batch-upload")
+    @Operation(summary = "批量上传模版文件")
+    public Result<List<DocTemplate>> batchUpload(@RequestParam("files") List<MultipartFile> files) {
+        List<DocTemplate> templates = files.stream().map(file -> {
+            String objectId = fileStorageService.upload(file);
+            DocTemplate template = new DocTemplate();
+            template.setTemplateName(stripExtension(file.getOriginalFilename()));
+            template.setTemplateCode("");
+            template.setTemplateType("");
+            template.setStatus("ACTIVE");
+            template.setFileObjectId(objectId);
+            template.setFileName(file.getOriginalFilename());
+            template.setFileSize(file.getSize());
+            template.setFileType(getExtension(file.getOriginalFilename()));
+            docTemplateMapper.insert(template);
+            return template;
+        }).toList();
+        return Result.success(templates);
+    }
+
+    @PostMapping("/{id}/generate")
+    @Operation(summary = "从模版生成文档")
+    public Result<DocFile> generate(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        Long projectId = Long.valueOf(request.get("projectId").toString());
+        @SuppressWarnings("unchecked")
+        Map<String, String> variables = (Map<String, String>) request.get("variables");
+        return Result.success(templateGenerateService.generate(id, projectId, variables));
     }
 
     @PostMapping
@@ -88,7 +123,7 @@ public class DocTemplateController {
             return Result.error("NOT_FOUND", "模版不存在");
         }
         if (template.getFileObjectId() != null) {
-            fileStorageService.delete(template.getFileObjectId());
+            try { fileStorageService.delete(template.getFileObjectId()); } catch (Exception ignored) {}
         }
         template.setFileObjectId(objectId);
         template.setFileName(file.getOriginalFilename());
@@ -120,5 +155,11 @@ public class DocTemplateController {
         if (filename == null) return "";
         int i = filename.lastIndexOf('.');
         return i >= 0 ? filename.substring(i) : "";
+    }
+
+    private String stripExtension(String filename) {
+        if (filename == null) return "";
+        int i = filename.lastIndexOf('.');
+        return i >= 0 ? filename.substring(0, i) : filename;
     }
 }
