@@ -204,12 +204,6 @@ function showEditDialog(row: DocFileItem) {
   dialogVisible.value = true
 }
 
-function showEditDialog(row: DocFileItem) {
-  editingId.value = row.id!
-  Object.assign(form, row)
-  dialogVisible.value = true
-}
-
 function resetForm() {
   formRef.value?.resetFields()
 }

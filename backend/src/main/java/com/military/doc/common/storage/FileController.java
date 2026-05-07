@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.io.InputStream;
 
 @RestController
@@ -18,6 +20,13 @@ public class FileController {
 
     @Autowired
     private FileStorageService fileStorageService;
+
+    @PostMapping("/upload")
+    @Operation(summary = "上传文件")
+    public Result<String> upload(@RequestParam("file") MultipartFile file) {
+        String objectId = fileStorageService.upload(file);
+        return Result.success(objectId);
+    }
 
     @GetMapping("/download/{objectId}")
     @Operation(summary = "下载文件")

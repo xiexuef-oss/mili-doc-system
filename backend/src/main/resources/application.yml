@@ -37,6 +37,7 @@ jwt:
   expiration: 86400000
 
 minio:
+  enabled: true
   endpoint: http://localhost:9000
   accessKey: minioadmin
   secretKey: minioadmin

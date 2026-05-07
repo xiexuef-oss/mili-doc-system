@@ -12,17 +12,17 @@ export interface ReviewMeetingOpinionItem {
 }
 
 export function getReviewMeetingOpinions(meetingId: number) {
-  return api.get(`/review-meeting-opinion-files/meeting/${meetingId}`)
+  return api.get(`/review-meeting-opinions/meeting/${meetingId}`)
 }
 
 export function createReviewMeetingOpinion(data: ReviewMeetingOpinionItem) {
-  return api.post('/review-meeting-opinion-files', data)
+  return api.post('/review-meeting-opinions', data)
 }
 
 export function updateReviewMeetingOpinion(id: number, data: ReviewMeetingOpinionItem) {
-  return api.put(`/review-meeting-opinion-files/${id}`, data)
+  return api.put(`/review-meeting-opinions/${id}`, data)
 }
 
 export function deleteReviewMeetingOpinion(id: number) {
-  return api.delete(`/review-meeting-opinion-files/${id}`)
+  return api.delete(`/review-meeting-opinions/${id}`)
 }
