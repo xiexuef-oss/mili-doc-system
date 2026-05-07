@@ -59,7 +59,7 @@ function statusLabel(status: string) {
 }
 
 onMounted(async () => {
-  const id = Number(route.params.id)
+  const id = Number(route.params.projectId)
   try {
     const res = await getProject(id)
     project.value = res.data.data

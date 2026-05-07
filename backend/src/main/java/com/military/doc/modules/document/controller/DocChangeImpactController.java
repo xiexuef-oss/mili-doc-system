@@ -81,4 +81,11 @@ public class DocChangeImpactController {
         impactService.updateById(impact);
         return Result.success(impact);
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除变更影响记录")
+    public Result<Void> delete(@PathVariable Long id) {
+        impactService.removeById(id);
+        return Result.success();
+    }
 }

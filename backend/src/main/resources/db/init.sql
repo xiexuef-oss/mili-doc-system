@@ -80,6 +80,22 @@ CREATE TABLE IF NOT EXISTS sys_role_permission (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_role_perm ON sys_role_permission(role_id, permission_id);
 
+-- 字典表
+CREATE TABLE IF NOT EXISTS sys_dict (
+    id              BIGSERIAL PRIMARY KEY,
+    dict_type       VARCHAR(64)  NOT NULL,
+    dict_code       VARCHAR(128) NOT NULL,
+    dict_name       VARCHAR(128) NOT NULL,
+    order_num       INT          DEFAULT 0,
+    status          VARCHAR(32)  DEFAULT 'ACTIVE',
+    created_by      BIGINT,
+    created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT     DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_dict_type_code ON sys_dict(dict_type, dict_code) WHERE deleted = 0;
+
 -- ============================================================
 -- 项目管理模块 (Project)
 -- ============================================================
@@ -530,6 +546,25 @@ VALUES
     (26, 'template:crud',     '模版CRUD',   'BTN',  NULL,         25, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
     (27, 'standard',          '标准库',     'MENU', '/standards',  0, 10, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
     (28, 'standard:crud',     '标准CRUD',   'BTN',  NULL,         27, 1, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
+ON CONFLICT DO NOTHING;
+
+-- 初始字典数据
+INSERT INTO sys_dict (id, dict_type, dict_code, dict_name, order_num, status, created_by, created_at, updated_by, updated_at)
+VALUES
+    (1,  'PROJECT_TYPE', 'MODEL',         '型号项目',   1, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (2,  'PROJECT_TYPE', 'PRE_RESEARCH',  '预研项目',   2, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (3,  'PROJECT_TYPE', 'TECH_IMPROVE',  '技改项目',   3, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (4,  'PROJECT_TYPE', 'BATCH_GUARANTEE','批产保障',  4, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (5,  'PROJECT_TYPE', 'OTHER',         '其他',       5, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (6,  'SECURITY_LEVEL', 'PUBLIC',      '公开',       1, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (7,  'SECURITY_LEVEL', 'INTERNAL',    '内部',       2, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (8,  'SECURITY_LEVEL', 'SECRET',      '秘密',       3, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (9,  'SECURITY_LEVEL', 'CONFIDENTIAL','机密',       4, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (10, 'SECURITY_LEVEL', 'TOP_SECRET',  '绝密',       5, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (11, 'PROJECT_STATUS', 'DRAFT',       '草稿',       1, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (12, 'PROJECT_STATUS', 'IN_PROGRESS', '进行中',     2, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (13, 'PROJECT_STATUS', 'COMPLETED',   '已完成',     3, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
+    (14, 'PROJECT_STATUS', 'ARCHIVED',    '已归档',     4, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- 管理员角色授予所有权限

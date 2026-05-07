@@ -12,23 +12,39 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service("minioFileStorageService")
-@ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true")
 public class MinioFileStorageService implements FileStorageService {
 
-    private final MinioClient client;
+    private final String endpoint;
+    private final String accessKey;
+    private final String secretKey;
     private final String bucket;
+    private volatile MinioClient client;
 
     public MinioFileStorageService(
             @Value("${minio.endpoint}") String endpoint,
             @Value("${minio.accessKey}") String accessKey,
             @Value("${minio.secretKey}") String secretKey,
             @Value("${minio.bucket}") String bucket) {
+        this.endpoint = endpoint;
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
         this.bucket = bucket;
-        this.client = MinioClient.builder()
-                .endpoint(endpoint)
-                .credentials(accessKey, secretKey)
-                .build();
-        ensureBucket();
+    }
+
+    private MinioClient getClient() {
+        if (client == null) {
+            synchronized (this) {
+                if (client == null) {
+                    client = MinioClient.builder()
+                            .endpoint(endpoint)
+                            .credentials(accessKey, secretKey)
+                            .build();
+                    ensureBucket();
+                }
+            }
+        }
+        return client;
     }
 
     private void ensureBucket() {
@@ -48,7 +64,7 @@ public class MinioFileStorageService implements FileStorageService {
         String ext = getExtension(file.getOriginalFilename());
         String objectName = objectId + ext;
         try (InputStream is = file.getInputStream()) {
-            client.putObject(PutObjectArgs.builder()
+            getClient().putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectName)
                     .stream(is, file.getSize(), -1)
@@ -63,7 +79,7 @@ public class MinioFileStorageService implements FileStorageService {
     @Override
     public InputStream download(String objectId) {
         try {
-            return client.getObject(GetObjectArgs.builder()
+            return getClient().getObject(GetObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectId)
                     .build());
@@ -75,7 +91,7 @@ public class MinioFileStorageService implements FileStorageService {
     @Override
     public void delete(String objectId) {
         try {
-            client.removeObject(RemoveObjectArgs.builder()
+            getClient().removeObject(RemoveObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectId)
                     .build());
@@ -87,7 +103,7 @@ public class MinioFileStorageService implements FileStorageService {
     @Override
     public String getAccessUrl(String objectId) {
         try {
-            return client.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            return getClient().getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .bucket(bucket)
                     .object(objectId)
                     .method(Method.GET)

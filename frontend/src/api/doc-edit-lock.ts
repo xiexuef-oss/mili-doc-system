@@ -11,17 +11,17 @@ export interface DocEditLockItem {
 }
 
 export function getDocEditLocks(docFileId?: number) {
-  return api.get('/doc-edit-locks', { params: { docFileId } })
+  return api.get(`/doc-locks/doc-file/${docFileId}`)
 }
 
 export function createDocEditLock(data: DocEditLockItem) {
-  return api.post('/doc-edit-locks', data)
+  return api.post('/doc-locks/lock', data)
 }
 
 export function updateDocEditLock(id: number, data: DocEditLockItem) {
-  return api.put(`/doc-edit-locks/${id}`, data)
+  return api.put(`/doc-locks/${id}/unlock`, data)
 }
 
 export function deleteDocEditLock(id: number) {
-  return api.delete(`/doc-edit-locks/${id}`)
+  return api.delete(`/doc-locks/${id}`)
 }

@@ -12,13 +12,17 @@ export interface DocEditSessionItem {
 }
 
 export function getDocEditSessions(docFileId?: number) {
-  return api.get('/doc-edit-sessions', { params: { docFileId } })
+  return api.get(`/doc-edit-sessions/doc-file/${docFileId}`)
 }
 
 export function createDocEditSession(data: DocEditSessionItem) {
-  return api.post('/doc-edit-sessions', data)
+  return api.post('/doc-edit-sessions/open', data)
 }
 
-export function updateDocEditSession(id: number, data: DocEditSessionItem) {
-  return api.put(`/doc-edit-sessions/${id}`, data)
+export function submitDocEditSession(id: number, data: DocEditSessionItem) {
+  return api.put(`/doc-edit-sessions/${id}/submit`, data)
+}
+
+export function closeDocEditSession(id: number) {
+  return api.put(`/doc-edit-sessions/${id}/close`)
 }

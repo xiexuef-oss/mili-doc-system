@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDocEditSessions, createDocEditSession, updateDocEditSession, type DocEditSessionItem } from '@/api/doc-edit-session'
+import { getDocEditSessions, createDocEditSession, submitDocEditSession, closeDocEditSession, type DocEditSessionItem } from '@/api/doc-edit-session'
 
 const loading = ref(false); const saving = ref(false)
 const items = ref<DocEditSessionItem[]>([])
@@ -71,14 +71,14 @@ function showEditDialog(row: DocEditSessionItem) { editingId.value = row.id!; Ob
 async function handleSave() {
   saving.value = true
   try {
-    if (editingId.value) { await updateDocEditSession(editingId.value, { ...form }); ElMessage.success('更新成功') }
+    if (editingId.value) { await submitDocEditSession(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createDocEditSession({ ...form }); ElMessage.success('创建成功') }
     dialogVisible.value = false; fetch()
   } finally { saving.value = false }
 }
 async function handleDelete(row: DocEditSessionItem) {
   await ElMessageBox.confirm('确定删除吗？', '确认', { type: 'warning' })
-  try { await updateDocEditSession(row.id!, { ...row, sessionStatus: 'CLOSED' }); ElMessage.success('已关闭'); fetch() } catch { /* cancelled */ }
+  try { await closeDocEditSession(row.id!); ElMessage.success('已关闭'); fetch() } catch { /* cancelled */ }
 }
 onMounted(fetch)
 </script>

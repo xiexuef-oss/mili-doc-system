@@ -13,17 +13,17 @@ export interface DocEffectiveBaselineItem {
 }
 
 export function getDocEffectiveBaselines(projectId?: number) {
-  return api.get('/doc-effective-baselines', { params: { projectId } })
+  return api.get('/doc-baselines', { params: { projectId } })
 }
 
 export function createDocEffectiveBaseline(data: DocEffectiveBaselineItem) {
-  return api.post('/doc-effective-baselines', data)
+  return api.post('/doc-baselines', data)
 }
 
 export function updateDocEffectiveBaseline(id: number, data: DocEffectiveBaselineItem) {
-  return api.put(`/doc-effective-baselines/${id}`, data)
+  return api.put(`/doc-baselines/${id}`, data)
 }
 
 export function deleteDocEffectiveBaseline(id: number) {
-  return api.delete(`/doc-effective-baselines/${id}`)
+  return api.delete(`/doc-baselines/${id}`)
 }

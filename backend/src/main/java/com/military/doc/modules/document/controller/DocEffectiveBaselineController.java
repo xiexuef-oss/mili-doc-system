@@ -95,4 +95,11 @@ public class DocEffectiveBaselineController {
         baselineService.updateById(baseline);
         return Result.success(baseline);
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除基线记录")
+    public Result<Void> delete(@PathVariable Long id) {
+        baselineService.removeById(id);
+        return Result.success();
+    }
 }

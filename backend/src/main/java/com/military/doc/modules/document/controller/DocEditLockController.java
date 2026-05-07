@@ -75,4 +75,11 @@ public class DocEditLockController {
     public Result<DocEditLock> getById(@PathVariable Long id) {
         return Result.success(lockService.getById(id));
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除锁定记录")
+    public Result<Void> delete(@PathVariable Long id) {
+        lockService.removeById(id);
+        return Result.success();
+    }
 }
