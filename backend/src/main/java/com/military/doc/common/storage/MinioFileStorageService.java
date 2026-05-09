@@ -60,15 +60,24 @@ public class MinioFileStorageService implements FileStorageService {
 
     @Override
     public String upload(MultipartFile file) {
+        try {
+            return upload(file.getBytes(), file.getOriginalFilename());
+        } catch (Exception e) {
+            throw new RuntimeException("MinIO upload failed", e);
+        }
+    }
+
+    @Override
+    public String upload(byte[] bytes, String originalFilename) {
         String objectId = UUID.randomUUID().toString();
-        String ext = getExtension(file.getOriginalFilename());
+        String ext = getExtension(originalFilename);
         String objectName = objectId + ext;
-        try (InputStream is = file.getInputStream()) {
+        try (InputStream is = new java.io.ByteArrayInputStream(bytes)) {
             getClient().putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectName)
-                    .stream(is, file.getSize(), -1)
-                    .contentType(file.getContentType())
+                    .stream(is, bytes.length, -1)
+                    .contentType("application/octet-stream")
                     .build());
             return objectName;
         } catch (Exception e) {

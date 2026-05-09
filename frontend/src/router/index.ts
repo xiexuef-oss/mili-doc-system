@@ -72,6 +72,12 @@ const router = createRouter({
               name: 'ProjectInputFiles',
               component: () => import('@/views/project/ProjectInputFileList.vue'),
               meta: { title: '输入文件' }
+            },
+            {
+              path: 'ai-assistant',
+              name: 'ProjectAiAssistant',
+              component: () => import('@/views/project/ProjectAiAssistant.vue'),
+              meta: { title: 'AI 辅助' }
             }
           ]
         },
@@ -132,6 +138,13 @@ const router = createRouter({
           name: 'PermissionList',
           component: () => import('@/views/system/PermissionList.vue'),
           meta: { title: '权限管理' }
+        },
+        // AI 模型训练
+        {
+          path: 'ai-training',
+          name: 'AiTraining',
+          component: () => import('@/views/ai/TrainingManagement.vue'),
+          meta: { title: '模型训练' }
         },
         // Sub-feature routes (not in sidebar, accessed from detail drawers)
         {

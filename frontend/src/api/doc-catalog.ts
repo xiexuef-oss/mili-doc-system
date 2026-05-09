@@ -52,3 +52,7 @@ export function issueDocCatalog(id: number) {
 export function changeDocCatalog(id: number, changeReason: string) {
   return api.post(`/doc-catalogs/${id}/change`, { changeReason })
 }
+
+export function getDraftStatus(projectId: number) {
+  return api.get(`/doc-catalogs/draft-status`, { params: { projectId } })
+}

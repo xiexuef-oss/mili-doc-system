@@ -27,6 +27,10 @@
           <el-icon><Reading /></el-icon>
           <span>知识库</span>
         </el-menu-item>
+        <el-menu-item index="/ai-training">
+          <el-icon><Cpu /></el-icon>
+          <span>模型训练</span>
+        </el-menu-item>
         <el-sub-menu v-if="isAdmin()" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -85,6 +89,7 @@ const activeMenu = computed(() => {
   if (path.startsWith('/roles')) return '/roles'
   if (path.startsWith('/dicts')) return '/dicts'
   if (path.startsWith('/permissions')) return '/permissions'
+  if (path.startsWith('/ai-training')) return '/ai-training'
   return '/projects'
 })
 

@@ -20,6 +20,7 @@
       <el-tab-pane label="文档管理" name="documents" />
       <el-tab-pane label="评审管理" name="reviews" />
       <el-tab-pane label="项目成员" name="members" />
+      <el-tab-pane label="AI 辅助" name="ai-assistant" />
     </el-tabs>
 
     <div class="workspace-content">
@@ -63,6 +64,7 @@ function handleTabChange(name: string) {
     name === 'documents' ? 'ProjectDocuments' :
     name === 'reviews' ? 'ProjectReviews' :
     name === 'members' ? 'ProjectMembers' :
+    name === 'ai-assistant' ? 'ProjectAiAssistant' :
     'ProjectInputFiles'
   router.replace({ name: routeName, params: { projectId: projectId.value } })
 }
@@ -75,7 +77,8 @@ watch(() => route.name, (name) => {
     ProjectDocuments: 'documents',
     ProjectReviews: 'reviews',
     ProjectMembers: 'members',
-    ProjectInputFiles: 'input-files'
+    ProjectInputFiles: 'input-files',
+    ProjectAiAssistant: 'ai-assistant'
   }
   if (name && map[String(name)]) {
     activeTab.value = map[String(name)]

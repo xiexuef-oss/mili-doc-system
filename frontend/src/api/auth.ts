@@ -10,6 +10,7 @@ export interface LoginResponse {
   userId: number
   username: string
   realName: string
+  roles: string[]
 }
 
 export function login(data: LoginRequest) {

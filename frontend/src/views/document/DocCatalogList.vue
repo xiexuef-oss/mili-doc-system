@@ -33,8 +33,22 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="showEditDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-tooltip
+            v-if="hasDraftMap[row.id!]"
+            content="已生成文档初稿，不可修改或删除"
+            placement="top"
+          >
+            <el-button link type="info" disabled>编辑</el-button>
+          </el-tooltip>
+          <el-button v-else link type="primary" @click="showEditDialog(row)">编辑</el-button>
+          <el-tooltip
+            v-if="hasDraftMap[row.id!]"
+            content="已生成文档初稿，不可删除"
+            placement="top"
+          >
+            <el-button link type="info" disabled>删除</el-button>
+          </el-tooltip>
+          <el-button v-else link type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -121,7 +135,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDocCatalogs, createDocCatalog, updateDocCatalog, deleteDocCatalog, type DocCatalogItem } from '@/api/doc-catalog'
+import { getDocCatalogs, createDocCatalog, updateDocCatalog, deleteDocCatalog, getDraftStatus, type DocCatalogItem } from '@/api/doc-catalog'
 import { getProjects, type ProjectItem } from '@/api/project'
 
 const route = useRoute()
@@ -134,6 +148,7 @@ const loading = ref(false)
 const saving = ref(false)
 const catalogs = ref<DocCatalogItem[]>([])
 const projects = ref<ProjectItem[]>([])
+const hasDraftMap = ref<Record<number, boolean>>({})
 const total = ref(0)
 const pageNo = ref(1)
 const pageSize = ref(20)
@@ -191,6 +206,15 @@ async function fetchData() {
     const data = res.data.data
     catalogs.value = data.records
     total.value = data.total
+
+    // Load draft status for all visible catalogs
+    const pid = projectId.value || workspaceProjectId.value
+    if (pid && catalogs.value.length > 0) {
+      try {
+        const statusRes = await getDraftStatus(pid)
+        hasDraftMap.value = statusRes.data.data || {}
+      } catch { hasDraftMap.value = {} }
+    }
   } finally {
     loading.value = false
   }

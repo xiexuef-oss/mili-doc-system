@@ -26,12 +26,21 @@ public class LocalFileStorageService implements FileStorageService {
 
     @Override
     public String upload(MultipartFile file) {
+        try {
+            return upload(file.getBytes(), file.getOriginalFilename());
+        } catch (IOException e) {
+            throw new RuntimeException("Upload failed", e);
+        }
+    }
+
+    @Override
+    public String upload(byte[] bytes, String originalFilename) {
         String objectId = UUID.randomUUID().toString();
-        String ext = getExtension(file.getOriginalFilename());
+        String ext = getExtension(originalFilename);
         String filename = objectId + ext;
         try {
             Path target = uploadDir.resolve(filename);
-            file.transferTo(target.toFile());
+            Files.write(target, bytes);
             return filename;
         } catch (IOException e) {
             throw new RuntimeException("Upload failed", e);

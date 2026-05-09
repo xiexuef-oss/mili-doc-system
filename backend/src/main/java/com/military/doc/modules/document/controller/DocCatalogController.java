@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocCatalog;
+import com.military.doc.modules.document.entity.DocFile;
+import com.military.doc.modules.document.mapper.DocFileMapper;
 import com.military.doc.modules.document.service.DocCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +23,15 @@ public class DocCatalogController {
 
     @Autowired
     private DocCatalogService docCatalogService;
+
+    @Autowired
+    private DocFileMapper docFileMapper;
+
+    private boolean hasDraft(Long catalogId) {
+        Long count = docFileMapper.selectCount(
+            new LambdaQueryWrapper<DocFile>().eq(DocFile::getCatalogId, catalogId));
+        return count != null && count > 0;
+    }
 
     @PostMapping
     @Operation(summary = "创建文档目录条目")
@@ -71,9 +82,16 @@ public class DocCatalogController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新文档目录")
+    @Operation(summary = "更新文档目录（已生成初稿的条目不可修改名称）")
     public Result<DocCatalog> update(@PathVariable Long id, @RequestBody DocCatalog catalog, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
+        DocCatalog existing = docCatalogService.getById(id);
+        if (existing == null) return Result.error("NOT_FOUND", "目录条目不存在");
+
+        if (hasDraft(id)) {
+            return Result.error("HAS_DRAFT", "该目录条目已生成文档初稿，不可修改。如需修改，请先删除关联的文档初稿");
+        }
+
         catalog.setId(id);
         catalog.setUpdatedBy(userId);
         docCatalogService.updateById(catalog);
@@ -81,10 +99,25 @@ public class DocCatalogController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除文档目录条目")
+    @Operation(summary = "删除文档目录条目（已生成初稿的条目不可删除）")
     public Result<Void> delete(@PathVariable Long id) {
+        if (hasDraft(id)) {
+            return Result.error("HAS_DRAFT", "该目录条目已生成文档初稿，不可删除。请先删除关联的文档初稿");
+        }
         docCatalogService.removeById(id);
         return Result.success();
+    }
+
+    @GetMapping("/draft-status")
+    @Operation(summary = "批量查询目录条目是否已有初稿，返回 Map<catalogId, hasDraft>")
+    public Result<Map<Long, Boolean>> draftStatus(@RequestParam Long projectId) {
+        Map<Long, Boolean> status = new java.util.LinkedHashMap<>();
+        List<DocCatalog> catalogs = docCatalogService.list(
+            new LambdaQueryWrapper<DocCatalog>().eq(DocCatalog::getProjectId, projectId));
+        for (DocCatalog c : catalogs) {
+            status.put(c.getId(), hasDraft(c.getId()));
+        }
+        return Result.success(status);
     }
 
     @PostMapping("/{id}/issue")

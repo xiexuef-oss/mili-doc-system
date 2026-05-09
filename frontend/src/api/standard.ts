@@ -104,3 +104,30 @@ export function deleteStandardClause(standardId: number, clauseId: number) {
 export function searchStandardClauses(standardId: number, keyword: string) {
   return api.get(`/standards/${standardId}/clauses/search`, { params: { keyword } })
 }
+
+export function extractStandardClauses(id: number) {
+  return api.post(`/standards/${id}/extract-clauses`)
+}
+
+export interface ExtractClausesResult {
+  clauses: StandardClauseItem[]
+  clauseCount: number
+  textLength: number
+  warning: string
+}
+
+export interface ParseResult {
+  standard: StandardItem
+  extractedText: string
+  extractedClauses: StandardClauseExtract[]
+  ocrUsed: boolean
+  ocrStats: string
+}
+
+export interface StandardClauseExtract {
+  clauseNumber: string
+  clauseTitle: string
+  clauseContent: string
+  parentClauseNumber: string | null
+  orderNum: number
+}

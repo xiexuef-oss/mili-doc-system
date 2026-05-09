@@ -593,6 +593,24 @@ VALUES
     (14, 'PROJECT_STATUS', 'ARCHIVED',    '已归档',     4, 'ACTIVE', 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
+-- AI 训练示例表
+CREATE TABLE IF NOT EXISTS ai_training_example (
+    id              BIGSERIAL PRIMARY KEY,
+    project_id      BIGINT,
+    doc_file_id     BIGINT,
+    catalog_id      BIGINT,
+    prompt          TEXT,
+    completion      TEXT,
+    quality         VARCHAR(32)  DEFAULT 'PENDING_REVIEW',
+    created_by      BIGINT,
+    created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ai_training_quality ON ai_training_example(quality) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_ai_training_project ON ai_training_example(project_id) WHERE deleted = 0;
+
 -- 管理员角色授予所有权限
 INSERT INTO sys_role_permission (role_id, permission_id, created_by, created_at)
 SELECT 1, id, 1, CURRENT_TIMESTAMP FROM sys_permission

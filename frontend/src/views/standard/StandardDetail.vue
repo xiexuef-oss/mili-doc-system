@@ -34,7 +34,12 @@
       <div class="clauses-section">
         <div class="section-header">
           <h4>标准条款结构</h4>
-          <el-input v-model="keyword" placeholder="搜索条款内容..." style="width: 260px" clearable @change="fetchClauses" />
+          <div style="display: flex; gap: 10px; align-items: center">
+            <el-input v-model="keyword" placeholder="搜索条款内容..." style="width: 260px" clearable @change="fetchClauses" />
+            <el-button v-if="standard?.fileObjectId" type="success" size="small" :loading="extracting" @click="handleExtractClauses">
+              自动提取条款
+            </el-button>
+          </div>
         </div>
         <el-table :data="clauses" v-loading="clausesLoading" max-height="500" style="margin-top: 12px">
           <el-table-column prop="clauseNumber" label="章节号" width="100" />
@@ -57,7 +62,8 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { getStandard, getStandardDownloadUrl, getStandardClauses, searchStandardClauses, type StandardItem, type StandardClauseItem } from '@/api/standard'
+import { ElMessage } from 'element-plus'
+import { getStandard, getStandardDownloadUrl, getStandardClauses, searchStandardClauses, extractStandardClauses, type StandardItem, type StandardClauseItem } from '@/api/standard'
 
 const route = useRoute()
 const id = Number(route.params.id)
@@ -67,6 +73,7 @@ const standard = ref<StandardItem | null>(null)
 const clauses = ref<StandardClauseItem[]>([])
 const clausesLoading = ref(false)
 const keyword = ref('')
+const extracting = ref(false)
 
 async function fetchData() {
   loading.value = true
@@ -99,6 +106,27 @@ async function handleDownload() {
     const res = await getStandardDownloadUrl(id)
     window.open(res.data.data, '_blank')
   } catch { /* ignore */ }
+}
+
+async function handleExtractClauses() {
+  extracting.value = true
+  try {
+    const res = await extractStandardClauses(id)
+    const result = res.data.data
+    const count = result?.clauseCount || 0
+    if (result?.warning) {
+      ElMessage.warning(result.warning)
+    } else if (count > 0) {
+      ElMessage.success(`条款提取完成，共生成 ${count} 个条款`)
+    } else {
+      ElMessage.info('未识别到条款结构')
+    }
+    fetchClauses()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '条款提取失败')
+  } finally {
+    extracting.value = false
+  }
 }
 
 onMounted(() => {

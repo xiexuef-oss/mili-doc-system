@@ -29,13 +29,10 @@
           <span v-else class="text-muted">未上传</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="340" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="showDetail(row)">条款</el-button>
           <el-button link type="primary" @click="showEditDialog(row)">编辑</el-button>
-          <el-button link type="success" @click="showUpload(row)">
-            <el-icon><Upload /></el-icon>上传文件
-          </el-button>
           <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -135,33 +132,29 @@
         <el-form-item v-if="form.fileName" label="已上传文件">
           <el-tag type="success">{{ form.fileName }} ({{ formatFileSize(form.fileSize || 0) }})</el-tag>
         </el-form-item>
+        <!-- Show extracted clause preview -->
+        <el-form-item v-if="parsedClauses.length > 0" label="提取条款">
+          <div class="clause-preview">
+            <el-tag type="warning" size="small" style="margin-bottom: 8px">
+              共识别 {{ parsedClauses.length }} 个条款章节，保存后将自动生成
+            </el-tag>
+            <div class="clause-tree">
+              <div
+                v-for="c in parsedClauses"
+                :key="c.clauseNumber"
+                :class="['clause-node', c.parentClauseNumber ? 'child-node' : 'parent-node']"
+                :title="c.clauseTitle.length > 30 ? c.clauseTitle : undefined"
+              >
+                <span class="clause-num">{{ c.clauseNumber }}</span>
+                <span class="clause-title">{{ c.clauseTitle }}</span>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 上传文件对话框 -->
-    <el-dialog v-model="uploadVisible" title="上传标准文件" width="460px">
-      <el-upload
-        ref="uploadRef"
-        drag
-        :auto-upload="false"
-        :limit="1"
-        :on-change="handleFileChange"
-        :on-remove="handleFileRemove"
-        accept=".pdf,.doc,.docx"
-      >
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-        <div class="el-upload__text">拖拽文件到此处或<em>点击上传</em></div>
-        <template #tip>
-          <div class="el-upload__tip">支持 .pdf/.doc/.docx</div>
-        </template>
-      </el-upload>
-      <template #footer>
-        <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" :disabled="!pendingFile" @click="handleUpload">上传</el-button>
+        <el-button type="primary" :loading="saving" :disabled="!editingId && !form.fileObjectId" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
 
@@ -203,7 +196,12 @@
         </div>
         <div class="clause-header">
           <el-input v-model="clauseKeyword" placeholder="搜索条款" style="width: 240px" clearable @change="fetchClauses" />
-          <el-button type="primary" size="small" @click="showClauseCreateDialog">添加条款</el-button>
+          <div class="clause-actions">
+            <el-button v-if="detailStandard?.fileObjectId" type="success" size="small" :loading="extractingClauses" @click="handleExtractClauses">
+              自动提取条款
+            </el-button>
+            <el-button type="primary" size="small" @click="showClauseCreateDialog">添加条款</el-button>
+          </div>
         </div>
         <el-table :data="clauses" v-loading="clausesLoading" style="margin-top: 12px" max-height="460">
           <el-table-column prop="clauseNumber" label="章节号" width="100" />
@@ -224,7 +222,7 @@
           :title="editingClauseId ? '编辑条款' : '添加条款'"
           width="520px"
         >
-          <el-form ref="clauseFormRef" :model="clauseForm" label-width="80px">
+          <el-form :model="clauseForm" label-width="80px">
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="章节号">
@@ -260,12 +258,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Upload, UploadFilled } from '@element-plus/icons-vue'
+import { Loading, UploadFilled } from '@element-plus/icons-vue'
 import {
   getStandardList, createStandard, updateStandard, deleteStandard,
-  uploadStandardFile, batchUploadStandardFiles, parseStandardFile, getStandardDownloadUrl, getStandardTypes, getStandardCategories,
+  batchUploadStandardFiles, parseStandardFile, getStandardDownloadUrl, getStandardTypes, getStandardCategories,
   getStandardClauses, createStandardClause, updateStandardClause, deleteStandardClause, searchStandardClauses,
-  type StandardItem, type StandardClauseItem
+  extractStandardClauses,
+  type StandardItem, type StandardClauseItem, type StandardClauseExtract, type ParseResult
 } from '@/api/standard'
 
 const loading = ref(false)
@@ -284,6 +283,7 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const parsing = ref(false)
 const parseFileName = ref('')
+const parsedClauses = ref<StandardClauseExtract[]>([])
 const formRef = ref()
 
 const emptyForm = (): StandardItem => ({
@@ -342,6 +342,7 @@ function showCreateDialog() {
   Object.assign(form, emptyForm())
   parseFileName.value = ''
   parsing.value = false
+  parsedClauses.value = []
   dialogVisible.value = true
 }
 
@@ -358,10 +359,22 @@ async function handleParseFile(file: any) {
   parseFileName.value = file.name
   try {
     const res = await parseStandardFile(file.raw)
-    const { standard } = res.data.data
+    const data = res.data.data as ParseResult
+    const { standard, extractedClauses: clauses, ocrUsed, ocrStats } = data
     Object.assign(form, standard)
-    ElMessage.success('文件解析成功，请核对自动识别的信息')
+    parsedClauses.value = clauses || []
+    if (ocrUsed && ocrStats) {
+      ElMessage.info(`已使用 OCR 识别扫描件 (${ocrStats})`)
+    }
+    if (parsedClauses.value.length > 0) {
+      ElMessage.success(`解析成功: 识别到 ${parsedClauses.value.length} 个条款章节，请核对信息`)
+    } else if (!ocrUsed) {
+      ElMessage.warning('文件解析完成，未识别到条款结构。如为扫描件，请启用 OCR 功能')
+    } else {
+      ElMessage.warning('OCR 识别完成但未提取到条款结构，请手动添加')
+    }
   } catch (e: any) {
+    parsedClauses.value = []
     ElMessage.error(e?.response?.data?.message || '文件解析失败，请手动填写')
   } finally {
     parsing.value = false
@@ -397,39 +410,6 @@ async function handleDelete(row: StandardItem) {
     ElMessage.success('删除成功')
     fetchData()
   } catch { /* cancelled */ }
-}
-
-// 文件上传
-const uploadVisible = ref(false)
-const uploading = ref(false)
-const pendingFile = ref<File | null>(null)
-const currentUploadId = ref<number>(0)
-
-function showUpload(row: StandardItem) {
-  currentUploadId.value = row.id!
-  pendingFile.value = null
-  uploadVisible.value = true
-}
-
-function handleFileChange(file: any) {
-  pendingFile.value = file.raw
-}
-
-function handleFileRemove() {
-  pendingFile.value = null
-}
-
-async function handleUpload() {
-  if (!pendingFile.value) return
-  uploading.value = true
-  try {
-    await uploadStandardFile(currentUploadId.value, pendingFile.value)
-    ElMessage.success('上传成功')
-    uploadVisible.value = false
-    fetchData()
-  } finally {
-    uploading.value = false
-  }
 }
 
 // 批量上传
@@ -487,7 +467,8 @@ const clauseKeyword = ref('')
 const clauseDialogVisible = ref(false)
 const editingClauseId = ref<number | null>(null)
 const savingClause = ref(false)
-const clauseFormRef = ref()
+const extractingClauses = ref(false)
+
 
 const emptyClauseForm = (): StandardClauseItem => ({
   standardId: 0,
@@ -554,6 +535,26 @@ async function handleSaveClause() {
   }
 }
 
+async function handleExtractClauses() {
+  if (!detailStandard.value) return
+  extractingClauses.value = true
+  try {
+    const res = await extractStandardClauses(detailStandard.value.id!)
+    const result = res.data.data
+    const count = result?.clauseCount || 0
+    if (result?.warning) {
+      ElMessage.warning(result.warning)
+    } else {
+      ElMessage.success(`条款提取完成，共生成 ${count} 个条款`)
+    }
+    fetchClauses()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '条款提取失败')
+  } finally {
+    extractingClauses.value = false
+  }
+}
+
 async function handleClauseDelete(clause: StandardClauseItem) {
   await ElMessageBox.confirm('确定要删除该条款吗？', '确认删除', { type: 'warning' })
   try {
@@ -578,7 +579,14 @@ onMounted(() => {
 .standard-info { padding: 8px 0 16px; border-bottom: 1px solid #ebeef5; margin-bottom: 16px; }
 .standard-info h4 { margin: 0 0 8px; font-size: 16px; }
 .clause-header { display: flex; justify-content: space-between; align-items: center; }
+.clause-actions { display: flex; gap: 8px; }
 .parse-section { margin-bottom: 8px; }
 .parse-section .el-upload { width: 100%; }
 .parse-section .el-upload-dragger { width: 100%; }
+.clause-preview { width: 100%; }
+.clause-tree { max-height: 200px; overflow-y: auto; border: 1px solid #ebeef5; border-radius: 4px; padding: 8px 12px; }
+.clause-node { display: flex; gap: 8px; padding: 3px 0; font-size: 13px; line-height: 1.5; }
+.child-node { padding-left: 24px; }
+.clause-num { color: #409eff; font-weight: 500; min-width: 40px; flex-shrink: 0; }
+.clause-title { color: #606266; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
