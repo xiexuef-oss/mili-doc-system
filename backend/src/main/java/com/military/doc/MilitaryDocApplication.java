@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-@MapperScan("com.military.doc.modules.*.mapper")
+@MapperScan({"com.military.doc.modules.*.mapper", "com.military.doc.ai.mapper"})
 public class MilitaryDocApplication {
 
     public static void main(String[] args) {
