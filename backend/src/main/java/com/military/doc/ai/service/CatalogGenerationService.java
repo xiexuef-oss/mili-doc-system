@@ -8,9 +8,11 @@ import com.military.doc.ai.prompt.PromptTemplateService;
 import com.military.doc.config.LlmProperties;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
+import com.military.doc.modules.project.constant.StageDefinition;
+import com.military.doc.modules.project.entity.ProjectStage;
+import com.military.doc.modules.project.mapper.ProjectStageMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,6 +30,7 @@ public class CatalogGenerationService {
     private final LlmClient llmClient;
     private final LlmProperties llmProperties;
     private final DocCatalogMapper docCatalogMapper;
+    private final ProjectStageMapper projectStageMapper;
     private final ObjectMapper objectMapper;
 
     private static final Pattern JSON_ARRAY_PATTERN = Pattern.compile(
@@ -38,12 +41,14 @@ public class CatalogGenerationService {
                                      LlmClient llmClient,
                                      LlmProperties llmProperties,
                                      DocCatalogMapper docCatalogMapper,
+                                     ProjectStageMapper projectStageMapper,
                                      ObjectMapper objectMapper) {
         this.contextAssemblyService = contextAssemblyService;
         this.promptTemplateService = promptTemplateService;
         this.llmClient = llmClient;
         this.llmProperties = llmProperties;
         this.docCatalogMapper = docCatalogMapper;
+        this.projectStageMapper = projectStageMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -55,15 +60,36 @@ public class CatalogGenerationService {
             throw new RuntimeException("无法获取项目上下文信息，请确认项目存在且包含输入文件或适用标准");
         }
 
-        // 2. Render prompt
+        // 2. Build stage-specific context
+        StringBuilder stageContext = new StringBuilder();
+        if (stageId != null) {
+            ProjectStage stage = projectStageMapper.selectById(stageId);
+            if (stage != null) {
+                stageContext.append("## 当前阶段\n");
+                stageContext.append("- 阶段名称: ").append(nullToEmpty(stage.getStageName())).append("\n");
+                stageContext.append("- 阶段代码: ").append(nullToEmpty(stage.getStageCode())).append("\n");
+                if (stage.getStageGoal() != null) {
+                    stageContext.append("- 阶段目标: ").append(stage.getStageGoal()).append("\n");
+                }
+                StageDefinition def = StageDefinition.findByCode(stage.getStageCode());
+                if (def != null) {
+                    stageContext.append("- 阶段说明: ").append(def.description()).append("\n");
+                    stageContext.append("- 基线类型: ").append(def.defaultBaselineType() != null ? def.defaultBaselineType() : "无").append("\n");
+                }
+                stageContext.append("\n");
+            }
+        }
+
+        // 3. Render prompt with stage info
         String userPrompt = promptTemplateService.render("catalog-generation",
-            Map.of("context", context));
-        String systemPrompt = "你是一位军工文档策划专家。仅返回 JSON 数组，不包含任何其他文字。";
+            Map.of("context", stageContext + "\n" + context));
+        String systemPrompt = "你是一位军工文档策划专家，精通 GJB 3206B 技术状态管理各阶段的文档需求。"
+            + "请根据阶段特点生成该阶段特有的文档清单。不同阶段的文档应有明显差异。仅返回 JSON 数组，不包含任何其他文字。";
 
-        log.info("Catalog generation prompt: {} chars system, {} chars user",
-            systemPrompt.length(), userPrompt.length());
+        log.info("Catalog generation for project={} stage={}: system {} chars, user {} chars",
+            projectId, stageId, systemPrompt.length(), userPrompt.length());
 
-        // 3. Call LLM
+        // 4. Call LLM
         String response;
         try {
             response = llmClient.chat(systemPrompt, userPrompt);
@@ -77,22 +103,25 @@ public class CatalogGenerationService {
         }
         log.info("LLM response for catalog generation: {} chars", response.length());
 
-        // 4. Parse JSON from response
+        // 5. Parse JSON from response
         List<CatalogItem> items = parseCatalogResponse(response);
         if (items.isEmpty()) {
             log.warn("Failed to parse catalog items from LLM response");
             return List.of();
         }
 
-        // 5. Optionally clear existing catalog entries for this project
+        // 6. Clear only this stage's catalog entries (not the whole project)
         if (overwrite) {
-            docCatalogMapper.delete(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocCatalog>()
-                    .eq(DocCatalog::getProjectId, projectId));
-            log.info("Cleared existing catalog for project {}", projectId);
+            var deleteWrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocCatalog>()
+                .eq(DocCatalog::getProjectId, projectId);
+            if (stageId != null) {
+                deleteWrapper.eq(DocCatalog::getStageId, stageId);
+            }
+            docCatalogMapper.delete(deleteWrapper);
+            log.info("Cleared existing catalog for project={} stage={}", projectId, stageId);
         }
 
-        // 6. Insert new catalog entries
+        // 7. Insert new catalog entries
         List<DocCatalog> catalogs = new ArrayList<>();
         for (CatalogItem item : items) {
             DocCatalog catalog = new DocCatalog();
@@ -109,8 +138,12 @@ public class CatalogGenerationService {
             catalogs.add(catalog);
         }
 
-        log.info("Generated {} catalog entries for project {}", catalogs.size(), projectId);
+        log.info("Generated {} catalog entries for project={} stage={}", catalogs.size(), projectId, stageId);
         return catalogs;
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 
     List<CatalogItem> parseCatalogResponse(String response) {
