@@ -55,8 +55,13 @@ public class ProofreadingService {
 
         String systemPrompt = "你是一位军工文档标准化审查专家。请对文档进行校对，检查格式、术语、标准条款引用等方面的合规性。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        return parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            return parseResponse(response);
+        } catch (RuntimeException e) {
+            log.error("Proofreading failed: {}", e.getMessage());
+            return Map.of("error", "AI 校对服务不可用: " + e.getMessage());
+        }
     }
 
     private String readDocContent(DocLedger doc) {

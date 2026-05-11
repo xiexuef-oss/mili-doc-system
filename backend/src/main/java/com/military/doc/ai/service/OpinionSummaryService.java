@@ -54,8 +54,13 @@ public class OpinionSummaryService {
 
         String systemPrompt = "你是一位军工项目评审秘书。请汇总所有专家意见，归纳主要问题，提出结论建议。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        return parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            return parseResponse(response);
+        } catch (RuntimeException e) {
+            log.error("Opinion summary failed: {}", e.getMessage());
+            return Map.of("error", "AI 意见汇总服务不可用: " + e.getMessage());
+        }
     }
 
     private String loadPromptTemplate(String name) {

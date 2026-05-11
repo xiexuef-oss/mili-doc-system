@@ -55,21 +55,22 @@ public class OllamaClient implements LlmClient {
 
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    log.error("Ollama API error: {} {}", response.code(), response.message());
-                    return "";
+                    String msg = String.format("Ollama API error: %d %s", response.code(), response.message());
+                    log.error(msg);
+                    throw new RuntimeException(msg);
                 }
                 ResponseBody responseBody = response.body();
-                if (responseBody == null) return "";
+                if (responseBody == null) throw new RuntimeException("Ollama 返回空响应");
                 JsonNode node = objectMapper.readTree(responseBody.string());
-                JsonNode msg = node.get("message");
-                if (msg != null && msg.has("content")) {
-                    return msg.get("content").asText();
+                JsonNode msgNode = node.get("message");
+                if (msgNode != null && msgNode.has("content")) {
+                    return msgNode.get("content").asText();
                 }
                 return "";
             }
         } catch (IOException e) {
             log.error("Ollama chat failed: {}", e.getMessage());
-            return "";
+            throw new RuntimeException("Ollama 服务不可用: " + e.getMessage(), e);
         }
     }
 
@@ -84,11 +85,12 @@ public class OllamaClient implements LlmClient {
 
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    log.error("Ollama stream API error: {} {}", response.code(), response.message());
-                    return;
+                    String msg = String.format("Ollama stream API error: %d %s", response.code(), response.message());
+                    log.error(msg);
+                    throw new RuntimeException(msg);
                 }
                 ResponseBody responseBody = response.body();
-                if (responseBody == null) return;
+                if (responseBody == null) throw new RuntimeException("Ollama 流式返回空响应");
 
                 BufferedSource source = responseBody.source();
                 String line;
@@ -110,6 +112,7 @@ public class OllamaClient implements LlmClient {
             }
         } catch (IOException e) {
             log.error("Ollama chat stream failed: {}", e.getMessage());
+            throw new RuntimeException("Ollama 流式服务不可用: " + e.getMessage(), e);
         }
     }
 }

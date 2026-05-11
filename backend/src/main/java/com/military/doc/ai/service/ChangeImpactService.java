@@ -109,18 +109,23 @@ public class ChangeImpactService {
 
         String systemPrompt = "你是一位军工项目技术状态管理专家。请分析变更对相关文档和CI的影响范围，评估变更级别和风险。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        Map<String, Object> aiResult = parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            Map<String, Object> aiResult = parseResponse(response);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("aiAnalysis", aiResult);
-        result.put("context", Map.of(
-            "totalCis", cis.size(),
-            "totalDocs", docs.size(),
-            "openChangeRequests", openChanges,
-            "assessedBaselineItemCount", baselineItems.size()
-        ));
-        return result;
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("aiAnalysis", aiResult);
+            result.put("context", Map.of(
+                "totalCis", cis.size(),
+                "totalDocs", docs.size(),
+                "openChangeRequests", openChanges,
+                "assessedBaselineItemCount", baselineItems.size()
+            ));
+            return result;
+        } catch (RuntimeException e) {
+            log.error("Change impact analysis failed: {}", e.getMessage());
+            return Map.of("error", "AI 变更影响分析服务不可用: " + e.getMessage());
+        }
     }
 
     private String loadPromptTemplate(String name) {

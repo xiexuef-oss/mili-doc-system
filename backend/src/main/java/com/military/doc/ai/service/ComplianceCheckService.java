@@ -87,8 +87,13 @@ public class ComplianceCheckService {
 
         String systemPrompt = "你是一位军工标准合规审查专家。请评估基线文件与适用标准条款的符合性。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        return parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            return parseResponse(response);
+        } catch (RuntimeException e) {
+            log.error("Compliance check failed: {}", e.getMessage());
+            return Map.of("error", "AI 合规检查服务不可用: " + e.getMessage());
+        }
     }
 
     private String readDocContent(DocLedger doc) {

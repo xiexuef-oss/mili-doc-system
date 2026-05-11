@@ -55,8 +55,13 @@ public class PreReviewService {
 
         String systemPrompt = "你是一位军工文档评审专家。请基于适用标准条款对文档进行预评审，评估其合规度和完整性。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        return parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            return parseResponse(response);
+        } catch (RuntimeException e) {
+            log.error("Pre-review failed: {}", e.getMessage());
+            return Map.of("error", "AI 预评审服务不可用: " + e.getMessage());
+        }
     }
 
     private String readDocContent(DocLedger doc) {

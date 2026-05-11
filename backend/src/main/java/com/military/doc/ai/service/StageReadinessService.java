@@ -104,13 +104,21 @@ public class StageReadinessService {
 
         String systemPrompt = "你是一位军工项目管理专家。请基于阶段数据指标评估转阶段准备度，识别风险并提供建议。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        Map<String, Object> aiResult = parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            Map<String, Object> aiResult = parseResponse(response);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("metrics", metrics);
-        result.put("aiAssessment", aiResult);
-        return result;
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("metrics", metrics);
+            result.put("aiAssessment", aiResult);
+            return result;
+        } catch (RuntimeException e) {
+            log.error("Stage readiness assessment failed: {}", e.getMessage());
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("metrics", metrics);
+            result.put("aiAssessment", Map.of("error", "AI 评估服务不可用: " + e.getMessage()));
+            return result;
+        }
     }
 
     private String loadPromptTemplate(String name) {

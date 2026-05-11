@@ -52,7 +52,7 @@ public class CatalogGenerationService {
         String context = contextAssemblyService.assembleContext(projectId);
         if (context.isEmpty()) {
             log.warn("Empty context for project {}", projectId);
-            return List.of();
+            throw new RuntimeException("无法获取项目上下文信息，请确认项目存在且包含输入文件或适用标准");
         }
 
         // 2. Render prompt
@@ -64,10 +64,16 @@ public class CatalogGenerationService {
             systemPrompt.length(), userPrompt.length());
 
         // 3. Call LLM
-        String response = llmClient.chat(systemPrompt, userPrompt);
+        String response;
+        try {
+            response = llmClient.chat(systemPrompt, userPrompt);
+        } catch (RuntimeException e) {
+            log.error("LLM call failed for catalog generation: {}", e.getMessage());
+            throw new RuntimeException("AI 目录生成失败: " + e.getMessage(), e);
+        }
         if (response == null || response.isBlank()) {
             log.warn("LLM returned empty response for catalog generation");
-            return List.of();
+            throw new RuntimeException("AI 返回空响应，请检查 Ollama 模型是否正常加载");
         }
         log.info("LLM response for catalog generation: {} chars", response.length());
 

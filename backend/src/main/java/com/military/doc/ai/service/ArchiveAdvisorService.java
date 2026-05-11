@@ -57,8 +57,13 @@ public class ArchiveAdvisorService {
 
         String systemPrompt = "你是一位军工文档归档管理专家。请基于文档内容和项目背景，评估密级和保管期限的合理性，提供归档建议。返回 JSON 格式结果。";
 
-        String response = llmClient.chat(systemPrompt, userPrompt);
-        return parseResponse(response);
+        try {
+            String response = llmClient.chat(systemPrompt, userPrompt);
+            return parseResponse(response);
+        } catch (RuntimeException e) {
+            log.error("Archive advice failed: {}", e.getMessage());
+            return Map.of("error", "AI 归档建议服务不可用: " + e.getMessage());
+        }
     }
 
     private String readDocContent(DocLedger doc) {

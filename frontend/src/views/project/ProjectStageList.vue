@@ -210,6 +210,9 @@ async function handleGenerateCatalog(stageId: number) {
     const res = await getDocCatalogs({ projectId, stageId })
     catalogsMap.value[stageId] = res.data.data || []
     catalogsExpanded.value[stageId] = true
+    ElMessage.success(`AI 生成完成，共 ${(res.data.data || []).length} 项`)
+  } catch {
+    ElMessage.error('AI 生成失败，请确认 Ollama 服务是否正常运行')
   } finally { catalogsLoading.value[stageId] = false }
 }
 
