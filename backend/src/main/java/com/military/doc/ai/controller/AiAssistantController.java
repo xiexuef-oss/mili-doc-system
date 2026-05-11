@@ -26,6 +26,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +95,9 @@ public class AiAssistantController {
     @Autowired
     private OkHttpClient httpClient;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @PostMapping("/catalog/generate")
     @Operation(summary = "根据项目输入文件和适用标准自动生成文档目录")
     public Result<List<DocCatalog>> generateCatalog(@RequestBody Map<String, Object> body,
@@ -121,6 +125,8 @@ public class AiAssistantController {
         status.put("provider", llmProperties.getProvider());
         status.put("model", llmProperties.getModel());
         status.put("baseUrl", llmProperties.getBaseUrl());
+        status.put("connected", false);
+        status.put("modelLoaded", false);
 
         try {
             Request request = new Request.Builder()
@@ -130,6 +136,23 @@ public class AiAssistantController {
             try (var response = httpClient.newCall(request).execute()) {
                 status.put("connected", response.isSuccessful());
                 status.put("httpStatus", response.code());
+                if (response.isSuccessful() && response.body() != null) {
+                    String body = response.body().string();
+                    var node = objectMapper.readTree(body);
+                    var models = node.get("models");
+                    if (models != null && models.isArray()) {
+                        var modelNames = new java.util.ArrayList<String>();
+                        for (var m : models) {
+                            String name = m.has("name") ? m.get("name").asText() : "";
+                            modelNames.add(name);
+                            if (name.equals(llmProperties.getModel()) ||
+                                name.startsWith(llmProperties.getModel() + ":")) {
+                                status.put("modelLoaded", true);
+                            }
+                        }
+                        status.put("availableModels", modelNames);
+                    }
+                }
             }
         } catch (Exception e) {
             status.put("connected", false);

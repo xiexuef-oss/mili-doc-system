@@ -49,10 +49,18 @@
               <el-tag size="small" type="info" style="margin-left:6px">{{ (catalogsMap[stage.id!] || []).length }} 项</el-tag>
             </div>
             <div v-show="catalogsExpanded[stage.id!]" class="catalog-list">
-              <el-button size="small" type="primary" link :loading="catalogsLoading[stage.id!]"
-                @click.stop="handleGenerateCatalog(stage.id!)" style="margin-bottom:8px">
-                AI 生成文档清单
-              </el-button>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <el-button size="small" type="primary" link :loading="catalogsLoading[stage.id!]"
+                  @click.stop="handleGenerateCatalog(stage.id!)">
+                  AI 生成文档清单
+                </el-button>
+                <el-tooltip :content="aiOnline ? `大模型已连接 (${aiModel})` : '大模型未连接，请确认 Ollama 已启动'" placement="top">
+                  <span :style="{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'11px',color:aiOnline?'#67c23a':'#f56c6c',cursor:'pointer'}" @click.stop="handleCheckHealth">
+                    <span :style="{width:'8px',height:'8px',borderRadius:'50%',background:aiOnline?'#67c23a':'#f56c6c',display:'inline-block'}"></span>
+                    {{ aiOnline ? 'AI 在线' : 'AI 离线' }}
+                  </span>
+                </el-tooltip>
+              </div>
               <div v-if="(catalogsMap[stage.id!] || []).length === 0" class="catalog-empty">暂无文档清单，点击上方按钮由AI生成</div>
               <div v-for="cat in catalogsMap[stage.id!]" :key="cat.id" class="catalog-item">
                 <el-tag :type="cat.requiredFlag ? 'danger' : 'info'" size="small" effect="plain">
@@ -141,7 +149,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import { getProjectStages, updateProjectStage, requestTransition, suspendStage, terminateStage, gateCheck, type ProjectStageItem } from '@/api/project-stage'
 import { getDocCatalogs, type DocCatalogItem } from '@/api/doc-catalog'
-import { generateCatalog } from '@/api/ai'
+import { generateCatalog, checkAiHealth } from '@/api/ai'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -154,6 +162,10 @@ const transitioningStage = ref<ProjectStageItem | null>(null)
 const gateResult = ref<any>(null)
 
 const form = reactive<ProjectStageItem>({} as ProjectStageItem)
+
+// AI health
+const aiOnline = ref(false)
+const aiModel = ref('')
 
 // Document catalog per stage
 const catalogsMap = ref<Record<number, DocCatalogItem[]>>({})
@@ -276,7 +288,26 @@ async function handleTerminate(stage: ProjectStageItem) {
   } catch { /* cancelled */ }
 }
 
-onMounted(() => { fetch() })
+async function handleCheckHealth() {
+  try {
+    const res = await checkAiHealth()
+    const data = res.data.data
+    aiOnline.value = data?.modelLoaded === true && data?.connected === true
+    aiModel.value = data?.model || ''
+    if (aiOnline.value) {
+      ElMessage.success(`大模型已连接 (${aiModel.value})`)
+    } else if (data?.connected) {
+      ElMessage.warning(`Ollama 已连接，但模型 ${aiModel.value} 未加载，请运行: ollama pull ${aiModel.value}`)
+    } else {
+      ElMessage.error('Ollama 服务未启动，请确认 Ollama 已安装并运行')
+    }
+  } catch {
+    aiOnline.value = false
+    ElMessage.error('无法连接 Ollama 服务')
+  }
+}
+
+onMounted(() => { fetch(); handleCheckHealth() })
 </script>
 
 <style scoped>
