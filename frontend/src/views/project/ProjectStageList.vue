@@ -210,7 +210,7 @@ async function fetchAllCatalogs() {
     if (!stage.id) continue
     try {
       const res = await getDocCatalogs({ projectId, stageId: stage.id })
-      catalogsMap.value[stage.id] = res.data.data || []
+      catalogsMap.value[stage.id] = res.data.data?.records || []
     } catch { catalogsMap.value[stage.id] = [] }
   }
 }
@@ -220,9 +220,10 @@ async function handleGenerateCatalog(stageId: number) {
   try {
     await generateCatalog({ projectId, stageId, overwrite: true })
     const res = await getDocCatalogs({ projectId, stageId })
-    catalogsMap.value[stageId] = res.data.data || []
+    const records = res.data.data?.records || []
+    catalogsMap.value[stageId] = records
     catalogsExpanded.value[stageId] = true
-    ElMessage.success(`AI 生成完成，共 ${(res.data.data || []).length} 项`)
+    ElMessage.success(`AI 生成完成，共 ${records.length} 项`)
   } catch {
     ElMessage.error('AI 生成失败，请确认 Ollama 服务是否正常运行')
   } finally { catalogsLoading.value[stageId] = false }
