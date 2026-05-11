@@ -2,27 +2,26 @@ package com.military.doc.modules.project.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("project")
-public class Project {
+@TableName("configuration_item")
+public class ConfigurationItem {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String projectCode;
-    private String projectName;
-    private String projectType;
-    private String securityLevel;
+    private Long projectId;
+    private Long stageId;
+    private String ciCode;
+    private String ciName;
+    private String ciType;
+    private Long parentCiId;
+    private Long responsibleUserId;
+    private String currentVersion;
     private String status;
-    private String ownerUserId;
-    private String applicableStandards;
-    private LocalDate startDate;
-    private LocalDate endDate;
+    private Boolean isControlled;
+    private Boolean isKeyItem;
     private String description;
-    private Long currentStageId;
-    private String initialStageCode;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

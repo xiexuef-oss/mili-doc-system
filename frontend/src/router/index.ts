@@ -44,16 +44,10 @@ const router = createRouter({
               meta: { title: '阶段管理' }
             },
             {
-              path: 'catalog',
-              name: 'ProjectCatalog',
-              component: () => import('@/views/document/DocCatalogList.vue'),
-              meta: { title: '文档目录' }
-            },
-            {
-              path: 'documents',
-              name: 'ProjectDocuments',
-              component: () => import('@/views/document/DocFileList.vue'),
-              meta: { title: '文档管理' }
+              path: 'doc-ledger',
+              name: 'ProjectDocLedger',
+              component: () => import('@/views/document/DocKanbanBoard.vue'),
+              meta: { title: '文档台账' }
             },
             {
               path: 'reviews',
@@ -147,6 +141,42 @@ const router = createRouter({
           meta: { title: '模型训练' }
         },
         // Sub-feature routes (not in sidebar, accessed from detail drawers)
+        {
+          path: 'projects/:projectId/stage/:stageId/workbench',
+          name: 'StageWorkbench',
+          component: () => import('@/views/project/StageWorkbench.vue'),
+          meta: { title: '阶段工作台' }
+        },
+        {
+          path: 'projects/:projectId/stage/:stageId/configuration-items',
+          name: 'StageConfigurationItems',
+          component: () => import('@/views/project/ConfigurationItemsPage.vue'),
+          meta: { title: '技术状态项' }
+        },
+        {
+          path: 'projects/:projectId/stage/:stageId/baselines',
+          name: 'StageBaselines',
+          component: () => import('@/views/project/StageBaselinesPage.vue'),
+          meta: { title: '基线管理' }
+        },
+        {
+          path: 'projects/:projectId/stage/:stageId/change-requests',
+          name: 'StageChangeRequests',
+          component: () => import('@/views/project/ChangeRequestsPage.vue'),
+          meta: { title: '更改管理' }
+        },
+        {
+          path: 'projects/:projectId/stage/:stageId/status-accounting',
+          name: 'StageStatusAccounting',
+          component: () => import('@/views/project/StatusAccountingPage.vue'),
+          meta: { title: '技术状态记实' }
+        },
+        {
+          path: 'projects/:projectId/stage/:stageId/audits',
+          name: 'StageAudits',
+          component: () => import('@/views/project/AuditsPage.vue'),
+          meta: { title: '技术状态审核' }
+        },
         {
           path: 'projects/:projectId/transitions',
           name: 'StageTransitionList',

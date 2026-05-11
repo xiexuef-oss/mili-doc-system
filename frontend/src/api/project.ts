@@ -12,6 +12,8 @@ export interface ProjectItem {
   startDate: string
   endDate: string
   description: string
+  currentStageId?: number
+  initialStageCode?: string
 }
 
 export function getProjects(params: { pageNo?: number; pageSize?: number; keyword?: string; status?: string }) {
@@ -28,4 +30,8 @@ export function createProject(data: ProjectItem) {
 
 export function updateProject(id: number, data: ProjectItem) {
   return api.put(`/projects/${id}`, data)
+}
+
+export function updateProjectCurrentStage(id: number, stageId: number) {
+  return api.put(`/projects/${id}/current-stage`, { stageId })
 }

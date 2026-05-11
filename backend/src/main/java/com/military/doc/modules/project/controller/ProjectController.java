@@ -63,4 +63,24 @@ public class ProjectController {
         projectService.updateById(project);
         return Result.success(projectService.getById(id));
     }
+
+    @PutMapping("/{id}/current-stage")
+    @Operation(summary = "更新项目当前阶段")
+    public Result<Project> updateCurrentStage(@PathVariable Long id, @RequestBody StageUpdateRequest request, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        Project project = projectService.getById(id);
+        if (project == null) {
+            return Result.error("NOT_FOUND", "项目不存在");
+        }
+        project.setCurrentStageId(request.getStageId());
+        project.setUpdatedBy(userId);
+        projectService.updateById(project);
+        return Result.success(projectService.getById(id));
+    }
+
+    public static class StageUpdateRequest {
+        private Long stageId;
+        public Long getStageId() { return stageId; }
+        public void setStageId(Long stageId) { this.stageId = stageId; }
+    }
 }

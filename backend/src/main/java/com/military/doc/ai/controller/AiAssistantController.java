@@ -2,7 +2,14 @@ package com.military.doc.ai.controller;
 
 import com.military.doc.ai.llm.OllamaClient;
 import com.military.doc.ai.service.CatalogGenerationService;
+import com.military.doc.ai.service.ArchiveAdvisorService;
+import com.military.doc.ai.service.ChangeImpactService;
+import com.military.doc.ai.service.ComplianceCheckService;
 import com.military.doc.ai.service.DraftGenerationService;
+import com.military.doc.ai.service.OpinionSummaryService;
+import com.military.doc.ai.service.PreReviewService;
+import com.military.doc.ai.service.ProofreadingService;
+import com.military.doc.ai.service.StageReadinessService;
 import com.military.doc.ai.service.TrainingDataService;
 import com.military.doc.ai.entity.TrainingExample;
 import com.military.doc.common.result.Result;
@@ -10,8 +17,10 @@ import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.config.LlmProperties;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocFile;
+import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.entity.DocVersion;
 import com.military.doc.modules.document.service.DocFileService;
+import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.service.DocVersionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,10 +56,34 @@ public class AiAssistantController {
     private TrainingDataService trainingDataService;
 
     @Autowired
+    private ProofreadingService proofreadingService;
+
+    @Autowired
+    private PreReviewService preReviewService;
+
+    @Autowired
+    private ComplianceCheckService complianceCheckService;
+
+    @Autowired
+    private OpinionSummaryService opinionSummaryService;
+
+    @Autowired
+    private StageReadinessService stageReadinessService;
+
+    @Autowired
+    private ArchiveAdvisorService archiveAdvisorService;
+
+    @Autowired
+    private ChangeImpactService changeImpactService;
+
+    @Autowired
     private DocFileService docFileService;
 
     @Autowired
     private DocVersionService docVersionService;
+
+    @Autowired
+    private DocLedgerService docLedgerService;
 
     @Autowired
     private FileStorageService fileStorageService;
@@ -159,7 +192,7 @@ public class AiAssistantController {
             return Result.error("PARAM_ERROR", "projectId is required");
         }
 
-        // 1. Create DocFile metadata record
+        // 1. Create DocFile metadata record (backward compat)
         DocFile docFile = new DocFile();
         docFile.setProjectId(projectId);
         docFile.setCatalogId(catalogId);
@@ -195,9 +228,80 @@ public class AiAssistantController {
         version.setCreatedAt(LocalDateTime.now());
         docVersionService.save(version);
 
-        log.info("Draft saved: docFileId={}, versionId={}, catalogId={}, projectId={}",
-            docFile.getId(), version.getId(), catalogId, projectId);
+        // 4. Create/update DocLedger with DRAFTING status
+        DocLedger ledger = new DocLedger();
+        ledger.setProjectId(projectId);
+        ledger.setStageId(stageId);
+        ledger.setDocName(docName != null ? docName : "AI 生成文档");
+        ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
+        ledger.setSecurityLevel(securityLevel);
+        ledger.setFileObjectId(fileObjectId);
+        docLedgerService.createLedger(ledger, userId);
+        docLedgerService.transitionStatus(ledger.getId(), "DRAFTING", userId, "AI 生成初稿后自动转入起草状态");
+
+        log.info("Draft saved: docFileId={}, ledgerId={}, versionId={}, catalogId={}",
+            docFile.getId(), ledger.getId(), version.getId(), catalogId);
         return Result.success(docFile);
+    }
+
+    // ---- Phase 2: AI 校对、预评审、合规检查、意见汇总、转阶段评估 ----
+
+    @PostMapping("/proofread/{docLedgerId}")
+    @Operation(summary = "AI 校对：检查文档格式/术语/标准条款引用")
+    public Result<Map<String, Object>> proofread(@PathVariable Long docLedgerId) {
+        return Result.success(proofreadingService.proofread(docLedgerId));
+    }
+
+    @PostMapping("/pre-review/{docLedgerId}")
+    @Operation(summary = "AI 预评审：基于标准条款评估文档合规度")
+    public Result<Map<String, Object>> preReview(@PathVariable Long docLedgerId) {
+        return Result.success(preReviewService.preReview(docLedgerId));
+    }
+
+    @PostMapping("/compliance/check")
+    @Operation(summary = "基线文件 vs 标准条款合规检查")
+    public Result<Map<String, Object>> complianceCheck(@RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        Long baselineId = toLong(body.get("baselineId"));
+        if (projectId == null || baselineId == null) {
+            return Result.error("PARAM_ERROR", "projectId and baselineId are required");
+        }
+        return Result.success(complianceCheckService.check(projectId, baselineId));
+    }
+
+    @PostMapping("/opinion-summary/{meetingId}")
+    @Operation(summary = "汇总所有专家意见 + 结论建议")
+    public Result<Map<String, Object>> opinionSummary(@PathVariable Long meetingId) {
+        return Result.success(opinionSummaryService.summarize(meetingId));
+    }
+
+    @PostMapping("/stage-readiness")
+    @Operation(summary = "阶段齐套度评估 + 风险提示")
+    public Result<Map<String, Object>> stageReadiness(@RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        Long stageId = toLong(body.get("stageId"));
+        if (projectId == null || stageId == null) {
+            return Result.error("PARAM_ERROR", "projectId and stageId are required");
+        }
+        return Result.success(stageReadinessService.assess(projectId, stageId));
+    }
+
+    @PostMapping("/archive-advice/{docLedgerId}")
+    @Operation(summary = "归档建议：密级/保管期限评估")
+    public Result<Map<String, Object>> archiveAdvice(@PathVariable Long docLedgerId) {
+        return Result.success(archiveAdvisorService.advise(docLedgerId));
+    }
+
+    @PostMapping("/change-impact")
+    @Operation(summary = "变更影响分析：分析更改对相关文档/CI的影响范围")
+    public Result<Map<String, Object>> changeImpact(@RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        String changeDescription = (String) body.getOrDefault("changeDescription", "");
+        Long baselineId = toLong(body.get("baselineId"));
+        if (projectId == null || changeDescription.isBlank()) {
+            return Result.error("PARAM_ERROR", "projectId and changeDescription are required");
+        }
+        return Result.success(changeImpactService.analyze(projectId, changeDescription, baselineId));
     }
 
     // ---- Phase 3: Continuous Learning Pipeline ----

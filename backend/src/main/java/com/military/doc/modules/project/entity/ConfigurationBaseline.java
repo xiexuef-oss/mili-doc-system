@@ -2,27 +2,25 @@ package com.military.doc.modules.project.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("project")
-public class Project {
+@TableName("configuration_baseline")
+public class ConfigurationBaseline {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String projectCode;
-    private String projectName;
-    private String projectType;
-    private String securityLevel;
-    private String status;
-    private String ownerUserId;
-    private String applicableStandards;
-    private LocalDate startDate;
-    private LocalDate endDate;
+    private Long projectId;
+    private Long stageId;
+    private String baselineCode;
+    private String baselineName;
+    private String baselineType;
+    private String baselineVersion;
+    private String baselineStatus;
+    private Long approveUserId;
+    private LocalDateTime approveTime;
+    private LocalDateTime effectiveTime;
     private String description;
-    private Long currentStageId;
-    private String initialStageCode;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

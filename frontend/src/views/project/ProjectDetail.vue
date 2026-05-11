@@ -19,6 +19,14 @@
         <el-tag size="small">{{ statusLabel(project.status) }}</el-tag>
       </el-descriptions-item>
       <el-descriptions-item label="负责人">{{ project.ownerUserId || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="初始阶段">
+        <el-tag type="primary" size="small">{{ initialStageName || project?.initialStageCode || '-' }}</el-tag>
+      </el-descriptions-item>
+      <el-descriptions-item label="当前阶段">
+        <el-tag :type="currentStage?.isCurrent ? 'success' : 'info'" size="small">
+          {{ currentStage?.stageName || '-' }}
+        </el-tag>
+      </el-descriptions-item>
       <el-descriptions-item label="开始日期">{{ project.startDate || '-' }}</el-descriptions-item>
       <el-descriptions-item label="结束日期">{{ project.endDate || '-' }}</el-descriptions-item>
       <el-descriptions-item label="适用标准" :span="2">{{ project.applicableStandards || '-' }}</el-descriptions-item>
@@ -30,12 +38,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getProject, type ProjectItem } from '@/api/project'
+import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
+import { getStageDefinitions, type StageDefinitionItem } from '@/api/project-stage'
 
 const route = useRoute()
 const project = ref<ProjectItem | null>(null)
+const stages = ref<ProjectStageItem[]>([])
+const stageDefs = ref<StageDefinitionItem[]>([])
+
+// Resolve stage name from code using either loaded stages or stage definitions
+function stageNameByCode(code: string): string | null {
+  const fromStages = stages.value.find(s => s.stageCode === code)
+  if (fromStages) return fromStages.stageName
+  const fromDefs = stageDefs.value.find(d => d.code === code)
+  if (fromDefs) return fromDefs.name
+  return null
+}
+
+const initialStageName = computed(() => {
+  if (!project.value?.initialStageCode) return null
+  return stageNameByCode(project.value.initialStageCode) || project.value.initialStageCode
+})
+
+const currentStage = computed(() => {
+  return stages.value.find(s => s.isCurrent) || null
+})
 
 function typeLabel(type: string) {
   const map: Record<string, string> = {
@@ -58,11 +88,23 @@ function statusLabel(status: string) {
   return map[status] || status
 }
 
+async function loadStages() {
+  try {
+    const [stagesRes, defsRes] = await Promise.all([
+      getProjectStages(Number(route.params.projectId)),
+      getStageDefinitions()
+    ])
+    stages.value = stagesRes.data.data || []
+    stageDefs.value = defsRes.data.data || []
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
   const id = Number(route.params.projectId)
   try {
     const res = await getProject(id)
     project.value = res.data.data
+    await loadStages()
   } catch {
     // error handled
   }

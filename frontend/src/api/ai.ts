@@ -116,6 +116,36 @@ export function streamDraft(
   return controller
 }
 
+// ---- Phase 2: AI 校对、预评审、合规检查、意见汇总、转阶段评估 ----
+
+export function proofread(docLedgerId: number) {
+  return api.post(`/ai/proofread/${docLedgerId}`)
+}
+
+export function preReview(docLedgerId: number) {
+  return api.post(`/ai/pre-review/${docLedgerId}`)
+}
+
+export function complianceCheck(projectId: number, baselineId: number) {
+  return api.post('/ai/compliance/check', { projectId, baselineId })
+}
+
+export function opinionSummary(meetingId: number) {
+  return api.post(`/ai/opinion-summary/${meetingId}`)
+}
+
+export function stageReadiness(projectId: number, stageId: number) {
+  return api.post('/ai/stage-readiness', { projectId, stageId })
+}
+
+export function archiveAdvice(docLedgerId: number) {
+  return api.post(`/ai/archive-advice/${docLedgerId}`)
+}
+
+export function changeImpactAnalysis(projectId: number, changeDescription: string, baselineId?: number) {
+  return api.post('/ai/change-impact', { projectId, changeDescription, baselineId })
+}
+
 // ---- Phase 3: Training Data ----
 
 export interface TrainingExampleItem {

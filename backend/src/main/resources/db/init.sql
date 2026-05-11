@@ -612,6 +612,191 @@ CREATE TABLE IF NOT EXISTS ai_training_example (
 CREATE INDEX IF NOT EXISTS idx_ai_training_quality ON ai_training_example(quality) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_ai_training_project ON ai_training_example(project_id) WHERE deleted = 0;
 
+-- 文档台账 (合并 doc_catalog + doc_file)
+CREATE TABLE IF NOT EXISTS doc_ledger (
+    id                  BIGSERIAL PRIMARY KEY,
+    project_id          BIGINT NOT NULL,
+    stage_id            BIGINT,
+    doc_code            VARCHAR(64),
+    doc_name            VARCHAR(256) NOT NULL,
+    doc_type            VARCHAR(64),
+    required_flag       BOOLEAN      DEFAULT TRUE,
+    meeting_usage       VARCHAR(64),
+    usage_source        VARCHAR(128),
+    usage_adjust_reason VARCHAR(512),
+    change_reason       VARCHAR(512),
+    responsible_user_id BIGINT,
+    security_level      VARCHAR(32),
+    lifecycle_status    VARCHAR(32)  DEFAULT 'PLANNED',
+    file_object_id      VARCHAR(256),
+    content_size        BIGINT,
+    created_by          BIGINT,
+    created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted             SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_doc_ledger_project ON doc_ledger(project_id) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_doc_ledger_stage ON doc_ledger(stage_id) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_doc_ledger_lifecycle ON doc_ledger(lifecycle_status) WHERE deleted = 0;
+
+-- 文档台账操作日志
+CREATE TABLE IF NOT EXISTS doc_ledger_log (
+    id              BIGSERIAL PRIMARY KEY,
+    doc_ledger_id   BIGINT NOT NULL,
+    from_status     VARCHAR(32),
+    to_status       VARCHAR(32) NOT NULL,
+    operator_id     BIGINT,
+    operated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    remark          VARCHAR(512)
+);
+CREATE INDEX IF NOT EXISTS idx_doc_ledger_log_ledger ON doc_ledger_log(doc_ledger_id);
+
+-- ============================================================
+-- 技术状态管理模块 (GJB 3206B)
+-- ============================================================
+
+-- 技术状态项
+CREATE TABLE IF NOT EXISTS configuration_item (
+    id                  BIGSERIAL PRIMARY KEY,
+    project_id          BIGINT NOT NULL,
+    stage_id            BIGINT,
+    ci_code             VARCHAR(64),
+    ci_name             VARCHAR(256) NOT NULL,
+    ci_type             VARCHAR(64),
+    parent_ci_id        BIGINT,
+    responsible_user_id BIGINT,
+    current_version     VARCHAR(32),
+    status              VARCHAR(32)  DEFAULT 'ACTIVE',
+    is_controlled       BOOLEAN      DEFAULT FALSE,
+    is_key_item         BOOLEAN      DEFAULT FALSE,
+    description         VARCHAR(1024),
+    created_by          BIGINT,
+    created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted             SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ci_project ON configuration_item(project_id) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_ci_stage ON configuration_item(stage_id) WHERE deleted = 0;
+
+-- 技术状态基线
+CREATE TABLE IF NOT EXISTS configuration_baseline (
+    id              BIGSERIAL PRIMARY KEY,
+    project_id      BIGINT NOT NULL,
+    stage_id        BIGINT,
+    baseline_code   VARCHAR(64),
+    baseline_name   VARCHAR(256) NOT NULL,
+    baseline_type   VARCHAR(64),
+    baseline_version VARCHAR(32),
+    baseline_status VARCHAR(32)  DEFAULT 'DRAFT',
+    approve_user_id BIGINT,
+    approve_time    TIMESTAMP,
+    effective_time  TIMESTAMP,
+    description     VARCHAR(1024),
+    created_by      BIGINT,
+    created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_cb_project ON configuration_baseline(project_id) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_cb_stage ON configuration_baseline(stage_id) WHERE deleted = 0;
+
+-- 基线项
+CREATE TABLE IF NOT EXISTS configuration_baseline_item (
+    id              BIGSERIAL PRIMARY KEY,
+    baseline_id     BIGINT NOT NULL,
+    item_type       VARCHAR(32),
+    item_id         BIGINT,
+    item_version_id BIGINT,
+    item_code       VARCHAR(64),
+    item_name       VARCHAR(256),
+    item_version    VARCHAR(32),
+    created_by      BIGINT,
+    created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_cbi_baseline ON configuration_baseline_item(baseline_id) WHERE deleted = 0;
+
+-- 技术状态更改申请
+CREATE TABLE IF NOT EXISTS configuration_change_request (
+    id                  BIGSERIAL PRIMARY KEY,
+    project_id          BIGINT NOT NULL,
+    stage_id            BIGINT,
+    change_code         VARCHAR(64),
+    change_title        VARCHAR(256) NOT NULL,
+    change_type         VARCHAR(64),
+    change_level        VARCHAR(32),
+    change_reason       VARCHAR(1024),
+    change_content      TEXT,
+    impact_analysis     TEXT,
+    applicant_id        BIGINT,
+    responsible_user_id BIGINT,
+    status              VARCHAR(32)  DEFAULT 'DRAFT',
+    ccb_meeting_id      BIGINT,
+    approve_result      VARCHAR(32),
+    approve_opinion     VARCHAR(1024),
+    approve_time        TIMESTAMP,
+    created_by          BIGINT,
+    created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted             SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ccr_project ON configuration_change_request(project_id) WHERE deleted = 0;
+
+-- 技术状态记实
+CREATE TABLE IF NOT EXISTS configuration_status_accounting (
+    id                  BIGSERIAL PRIMARY KEY,
+    project_id          BIGINT NOT NULL,
+    stage_id            BIGINT,
+    ci_id               BIGINT,
+    doc_ledger_id       BIGINT,
+    doc_version_id      BIGINT,
+    event_type          VARCHAR(64) NOT NULL,
+    event_name          VARCHAR(256),
+    event_description   VARCHAR(1024),
+    related_object_type VARCHAR(32),
+    related_object_id   BIGINT,
+    event_time          TIMESTAMP,
+    operator_id         BIGINT,
+    created_by          BIGINT,
+    created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted             SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_csa_project ON configuration_status_accounting(project_id) WHERE deleted = 0;
+
+-- 技术状态审核
+CREATE TABLE IF NOT EXISTS configuration_audit (
+    id              BIGSERIAL PRIMARY KEY,
+    project_id      BIGINT NOT NULL,
+    stage_id        BIGINT,
+    baseline_id     BIGINT,
+    audit_code      VARCHAR(64),
+    audit_name      VARCHAR(256) NOT NULL,
+    audit_type      VARCHAR(64),
+    audit_status    VARCHAR(32)  DEFAULT 'PLANNED',
+    meeting_id      BIGINT,
+    audit_result    VARCHAR(32),
+    audit_opinion   VARCHAR(1024),
+    audit_time      TIMESTAMP,
+    created_by      BIGINT,
+    created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by      BIGINT,
+    updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT     DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ca_project ON configuration_audit(project_id) WHERE deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_ca_stage ON configuration_audit(stage_id) WHERE deleted = 0;
+
+-- 项目表增加当前阶段
+ALTER TABLE project ADD COLUMN IF NOT EXISTS current_stage_id BIGINT;
+
 -- 管理员角色授予所有权限
 INSERT INTO sys_role_permission (role_id, permission_id, created_by, created_at)
 SELECT 1, id, 1, CURRENT_TIMESTAMP FROM sys_permission

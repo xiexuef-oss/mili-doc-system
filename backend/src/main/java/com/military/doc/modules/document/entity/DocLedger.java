@@ -1,28 +1,30 @@
-package com.military.doc.modules.project.entity;
+package com.military.doc.modules.document.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("project")
-public class Project {
+@TableName("doc_ledger")
+public class DocLedger {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String projectCode;
-    private String projectName;
-    private String projectType;
+    private Long projectId;
+    private Long stageId;
+    private String docCode;
+    private String docName;
+    private String docType;
+    private Boolean requiredFlag;
+    private String meetingUsage;
+    private String usageSource;
+    private String usageAdjustReason;
+    private String changeReason;
+    private Long responsibleUserId;
     private String securityLevel;
-    private String status;
-    private String ownerUserId;
-    private String applicableStandards;
-    private LocalDate startDate;
-    private LocalDate endDate;
-    private String description;
-    private Long currentStageId;
-    private String initialStageCode;
+    private String lifecycleStatus;
+    private String fileObjectId;
+    private Long contentSize;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

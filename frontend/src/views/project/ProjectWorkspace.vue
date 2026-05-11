@@ -16,8 +16,7 @@
       <el-tab-pane label="概览" name="overview" />
       <el-tab-pane label="输入文件" name="input-files" />
       <el-tab-pane label="阶段管理" name="stages" />
-      <el-tab-pane label="文档目录" name="catalog" />
-      <el-tab-pane label="文档管理" name="documents" />
+      <el-tab-pane label="文档台账" name="doc-ledger" />
       <el-tab-pane label="评审管理" name="reviews" />
       <el-tab-pane label="项目成员" name="members" />
       <el-tab-pane label="AI 辅助" name="ai-assistant" />
@@ -60,8 +59,7 @@ const statusLabel = computed(() => {
 function handleTabChange(name: string) {
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :
-    name === 'catalog' ? 'ProjectCatalog' :
-    name === 'documents' ? 'ProjectDocuments' :
+    name === 'doc-ledger' ? 'ProjectDocLedger' :
     name === 'reviews' ? 'ProjectReviews' :
     name === 'members' ? 'ProjectMembers' :
     name === 'ai-assistant' ? 'ProjectAiAssistant' :
@@ -73,8 +71,7 @@ watch(() => route.name, (name) => {
   const map: Record<string, string> = {
     ProjectOverview: 'overview',
     ProjectStages: 'stages',
-    ProjectCatalog: 'catalog',
-    ProjectDocuments: 'documents',
+    ProjectDocLedger: 'doc-ledger',
     ProjectReviews: 'reviews',
     ProjectMembers: 'members',
     ProjectInputFiles: 'input-files',

@@ -55,6 +55,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { getStageTransitions, createStageTransition, updateStageTransition, deleteStageTransition, type StageTransitionItem } from '@/api/stage-transition'
+import { checkDocuments } from '@/api/doc-ledger'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -77,6 +78,26 @@ function showEditDialog(row: StageTransitionItem) { editingId.value = row.id!; O
 async function handleSave() {
   saving.value = true
   try {
+    if (!editingId.value) {
+      try {
+        const checkRes = await checkDocuments(projectId, form.fromStageId)
+        const check = checkRes.data.data
+        if (!check.passed) {
+          saving.value = false
+          const blockerNames = (check.blockers || []).map((b: any) => b.docCode + ' ' + b.docName).join('\n')
+          await ElMessageBox.alert(
+            '当前阶段存在 ' + check.unreleasedCount + ' 个未归档文档:\n\n' + blockerNames + '\n\n请先将这些文档归档后再转阶段。',
+            '文档检查未通过',
+            { confirmButtonText: '知道了', type: 'warning' }
+          )
+          return
+        }
+        ElMessage.success(check.checkResult)
+      } catch (err: any) {
+        if (err === 'cancel') { saving.value = false; return }
+      }
+    }
+
     if (editingId.value) { await updateStageTransition(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createStageTransition({ ...form }); ElMessage.success('创建成功') }
     dialogVisible.value = false; fetch()

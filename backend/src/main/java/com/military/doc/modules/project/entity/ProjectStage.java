@@ -21,6 +21,11 @@ public class ProjectStage {
     private String stageGoal;
     private String entryCriteria;
     private String exitCriteria;
+    private Long stageManagerId;
+    private Long technicalManagerId;
+    private Long qualityManagerId;
+    private Boolean isCurrent;
+    private Boolean allowParallel;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

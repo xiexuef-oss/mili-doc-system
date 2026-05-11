@@ -92,7 +92,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="editingId" :span="12">
             <el-form-item label="状态" prop="status">
               <el-select v-model="form.status" style="width: 100%">
                 <el-option label="草稿" value="DRAFT" />
@@ -115,10 +115,25 @@
           </el-col>
         </el-row>
         <el-form-item label="适用标准">
-          <el-input v-model="form.applicableStandards" />
+          <el-select v-model="selectedStandards" multiple filterable placeholder="选择适用标准" style="width: 100%" clearable>
+            <el-option v-for="s in standards" :key="s.id" :label="`${s.standardCode} - ${s.standardName}`" :value="s.standardCode" />
+          </el-select>
         </el-form-item>
         <el-form-item label="项目描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
+        </el-form-item>
+
+        <!-- Initial stage selection (only on create) -->
+        <el-form-item v-if="!editingId" label="初始阶段" prop="initialStageCode">
+          <p style="color:#909399;font-size:12px;margin-bottom:8px">选择项目从哪个阶段开始，该阶段及其后续所有阶段将自动纳入项目管理</p>
+          <el-radio-group v-model="form.initialStageCode">
+            <div v-for="def in stageDefs" :key="def.code" class="stage-def-item">
+              <el-radio :value="def.code">
+                <span class="def-name">{{ def.name }}</span>
+                <span class="def-desc">— {{ def.description }}</span>
+              </el-radio>
+            </div>
+          </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -134,9 +149,12 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProjects, createProject, updateProject, type ProjectItem } from '@/api/project'
 import { getDictItems, type DictItem } from '@/api/dict'
+import { getStageDefinitions, initializeStages, type StageDefinitionItem } from '@/api/project-stage'
+import { getStandardList, type StandardItem } from '@/api/standard'
 
 const loading = ref(false)
 const projectTypes = ref<DictItem[]>([])
+const stageDefs = ref<StageDefinitionItem[]>([])
 const saving = ref(false)
 const projects = ref<ProjectItem[]>([])
 const total = ref(0)
@@ -145,27 +163,31 @@ const pageSize = ref(20)
 const keyword = ref('')
 const statusFilter = ref('')
 
+const standards = ref<StandardItem[]>([])
+const selectedStandards = ref<string[]>([])
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref()
 
-const emptyForm = (): ProjectItem => ({
+const emptyForm = () => ({
   projectCode: '',
   projectName: '',
   projectType: '',
   securityLevel: 'INTERNAL',
-  status: 'DRAFT',
+  status: 'IN_PROGRESS',
   ownerUserId: '',
   applicableStandards: '',
   startDate: '',
   endDate: '',
-  description: ''
+  description: '',
+  initialStageCode: ''
 })
 
-const form = reactive<ProjectItem>(emptyForm())
+const form = reactive(emptyForm())
 const formRules = {
   projectCode: [{ required: true, message: '请输入项目编号', trigger: 'blur' }],
-  projectName: [{ required: true, message: '请输入项目名称', trigger: 'blur' }]
+  projectName: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+  initialStageCode: [{ required: true, message: '请选择初始阶段', trigger: 'change' }]
 }
 
 function statusTag(status: string) {
@@ -221,12 +243,15 @@ async function fetchData() {
 function showCreateDialog() {
   editingId.value = null
   Object.assign(form, emptyForm())
+  form.initialStageCode = stageDefs.value[0]?.code || '' // default: first stage
+  selectedStandards.value = []
   dialogVisible.value = true
 }
 
 function showEditDialog(row: ProjectItem) {
   editingId.value = row.id!
   Object.assign(form, row)
+  selectedStandards.value = row.applicableStandards ? row.applicableStandards.split(',').filter(Boolean) : []
   dialogVisible.value = true
 }
 
@@ -236,14 +261,20 @@ function resetForm() {
 
 async function handleSave() {
   await formRef.value?.validate()
+  form.applicableStandards = selectedStandards.value.join(',')
   saving.value = true
   try {
     if (editingId.value) {
       await updateProject(editingId.value, { ...form })
       ElMessage.success('更新成功')
     } else {
-      await createProject({ ...form })
-      ElMessage.success('创建成功')
+      const { initialStageCode, ...projectData } = form
+      const res = await createProject(projectData as ProjectItem)
+      const newProjectId = res.data.data.id
+      if (newProjectId && initialStageCode) {
+        await initializeStages(newProjectId, initialStageCode)
+      }
+      ElMessage.success('创建成功，阶段已初始化')
     }
     dialogVisible.value = false
     fetchData()
@@ -252,8 +283,24 @@ async function handleSave() {
   }
 }
 
+async function fetchStageDefs() {
+  try {
+    const res = await getStageDefinitions()
+    stageDefs.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
+async function fetchStandards() {
+  try {
+    const res = await getStandardList({ pageSize: 200 })
+    standards.value = res.data.data?.records || []
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   fetchProjectTypes()
+  fetchStageDefs()
+  fetchStandards()
   fetchData()
 })
 </script>
@@ -268,4 +315,9 @@ onMounted(() => {
 }
 .filters { display: flex; gap: 12px; }
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.stage-def-item { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.stage-def-item:last-child { border-bottom: none; }
+.def-name { font-weight: 600; color: #303133; }
+.def-desc { color: #909399; font-size: 12px; }
 </style>
