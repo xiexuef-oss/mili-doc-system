@@ -1,6 +1,8 @@
 package com.military.doc.ai.controller;
 
 import com.military.doc.ai.llm.OllamaClient;
+import com.military.doc.ai.context.VectorIndexService;
+import com.military.doc.ai.entity.EmbeddingIndexTask;
 import com.military.doc.ai.service.CatalogGenerationService;
 import com.military.doc.ai.service.ArchiveAdvisorService;
 import com.military.doc.ai.service.ChangeImpactService;
@@ -76,6 +78,9 @@ public class AiAssistantController {
 
     @Autowired
     private ChangeImpactService changeImpactService;
+
+    @Autowired
+    private VectorIndexService vectorIndexService;
 
     @Autowired
     private DocFileService docFileService;
@@ -384,6 +389,36 @@ public class AiAssistantController {
             "quality", quality,
             "data", (Object) jsonl
         ));
+    }
+
+    // ---- Embedding / Vector Index Management ----
+
+    @PostMapping("/embedding/index-clauses")
+    @Operation(summary = "为所有标准条款创建/更新向量嵌入")
+    public Result<Map<String, Object>> indexAllClauses() {
+        EmbeddingIndexTask task = vectorIndexService.createTask("INDEX_CLAUSES", "standard_clause");
+        vectorIndexService.indexAllClausesAsync(task);
+        return Result.success(Map.of("taskId", task.getId(), "status", task.getStatus()));
+    }
+
+    @PostMapping("/embedding/index-knowledge")
+    @Operation(summary = "为所有知识库文章创建/更新向量嵌入")
+    public Result<Map<String, Object>> indexAllKnowledge() {
+        EmbeddingIndexTask task = vectorIndexService.createTask("INDEX_KNOWLEDGE", "knowledge_base");
+        vectorIndexService.indexAllKnowledgeAsync(task);
+        return Result.success(Map.of("taskId", task.getId(), "status", task.getStatus()));
+    }
+
+    @GetMapping("/embedding/stats")
+    @Operation(summary = "查询向量嵌入统计")
+    public Result<Map<String, Object>> getEmbeddingStats() {
+        return Result.success(vectorIndexService.getStats());
+    }
+
+    @GetMapping("/embedding/tasks")
+    @Operation(summary = "查询索引任务状态")
+    public Result<List<EmbeddingIndexTask>> getIndexTasks() {
+        return Result.success(vectorIndexService.getRecentTasks());
     }
 
     private Long toLong(Object value) {

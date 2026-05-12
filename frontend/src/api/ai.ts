@@ -186,3 +186,21 @@ export function rejectTrainingExample(id: number) {
 export function exportTraining(quality?: string) {
   return api.get('/ai/training/export', { params: { quality: quality || 'APPROVED' } })
 }
+
+// ---- Embedding / Vector Index Management ----
+
+export function indexAllClauses() {
+  return api.post('/ai/embedding/index-clauses')
+}
+
+export function indexAllKnowledge() {
+  return api.post('/ai/embedding/index-knowledge')
+}
+
+export function getEmbeddingStats() {
+  return api.get('/ai/embedding/stats')
+}
+
+export function getIndexTasks() {
+  return api.get('/ai/embedding/tasks')
+}

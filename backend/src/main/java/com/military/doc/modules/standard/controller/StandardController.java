@@ -2,6 +2,7 @@ package com.military.doc.modules.standard.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.military.doc.ai.context.VectorIndexService;
 import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.standard.entity.Standard;
@@ -41,6 +42,9 @@ public class StandardController {
 
     @Autowired
     private OcrProperties ocrProperties;
+
+    @Autowired
+    private VectorIndexService vectorIndexService;
 
     // ---- Standard CRUD ----
 
@@ -313,6 +317,7 @@ public class StandardController {
     public Result<StandardClause> createClause(@PathVariable Long standardId, @RequestBody StandardClause clause) {
         clause.setStandardId(standardId);
         standardClauseMapper.insert(clause);
+        reindexClauseAsync(clause.getId());
         return Result.success(clause);
     }
 
@@ -322,6 +327,7 @@ public class StandardController {
         clause.setId(clauseId);
         clause.setStandardId(standardId);
         standardClauseMapper.updateById(clause);
+        reindexClauseAsync(clauseId);
         return Result.success(standardClauseMapper.selectById(clauseId));
     }
 
@@ -329,7 +335,16 @@ public class StandardController {
     @Operation(summary = "删除条款")
     public Result<Void> deleteClause(@PathVariable Long standardId, @PathVariable Long clauseId) {
         standardClauseMapper.deleteById(clauseId);
+        // embedding is cascade-deleted by FK; no reindex needed
         return Result.success();
+    }
+
+    private void reindexClauseAsync(Long clauseId) {
+        try {
+            vectorIndexService.reindexClause(clauseId);
+        } catch (Exception e) {
+            // best-effort; don't fail the request
+        }
     }
 
     @GetMapping("/{standardId}/clauses/search")

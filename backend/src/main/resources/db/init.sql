@@ -801,3 +801,54 @@ ALTER TABLE project ADD COLUMN IF NOT EXISTS current_stage_id BIGINT;
 INSERT INTO sys_role_permission (role_id, permission_id, created_by, created_at)
 SELECT 1, id, 1, CURRENT_TIMESTAMP FROM sys_permission
 ON CONFLICT DO NOTHING;
+
+-- ============================================================
+-- 向量嵌入索引 (Semantic RAG)
+-- 需要先执行: CREATE EXTENSION IF NOT EXISTS vector;
+-- ============================================================
+
+-- 标准条款向量嵌入
+CREATE TABLE IF NOT EXISTS standard_clause_embedding (
+    id              BIGSERIAL PRIMARY KEY,
+    clause_id       BIGINT NOT NULL UNIQUE,
+    embedding       vector(768),
+    indexed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    model_name      VARCHAR(128) DEFAULT 'nomic-embed-text',
+    text_hash       VARCHAR(64),
+    CONSTRAINT fk_clause_embedding_clause FOREIGN KEY (clause_id)
+        REFERENCES standard_clause(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_clause_embedding_clause ON standard_clause_embedding(clause_id);
+
+-- 知识库文章向量嵌入
+CREATE TABLE IF NOT EXISTS knowledge_base_embedding (
+    id              BIGSERIAL PRIMARY KEY,
+    kb_id           BIGINT NOT NULL UNIQUE,
+    embedding       vector(768),
+    indexed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    model_name      VARCHAR(128) DEFAULT 'nomic-embed-text',
+    text_hash       VARCHAR(64),
+    CONSTRAINT fk_kb_embedding_kb FOREIGN KEY (kb_id)
+        REFERENCES knowledge_base(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_kb_embedding_kb ON knowledge_base_embedding(kb_id);
+
+-- 嵌入索引任务
+CREATE TABLE IF NOT EXISTS embedding_index_task (
+    id              BIGSERIAL PRIMARY KEY,
+    task_type       VARCHAR(64) NOT NULL,
+    target_table    VARCHAR(64),
+    total_count     INT DEFAULT 0,
+    completed_count INT DEFAULT 0,
+    failed_count    INT DEFAULT 0,
+    status          VARCHAR(32) DEFAULT 'PENDING',
+    error_message   TEXT,
+    started_at      TIMESTAMP,
+    completed_at    TIMESTAMP,
+    created_by      BIGINT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 标记标准条款是否需要重新索引
+ALTER TABLE standard_clause ADD COLUMN IF NOT EXISTS embedding_indexed BOOLEAN DEFAULT FALSE;
+ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS embedding_indexed BOOLEAN DEFAULT FALSE;

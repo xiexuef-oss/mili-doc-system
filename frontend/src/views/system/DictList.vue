@@ -122,7 +122,9 @@ const formRules = {
 
 function dictTypeLabel(type: string) {
   const map: Record<string, string> = {
-    PROJECT_TYPE: '项目类型'
+    PROJECT_TYPE: '项目类型',
+    SECURITY_LEVEL: '密级',
+    PROJECT_STATUS: '项目状态'
   }
   return map[type] || type
 }

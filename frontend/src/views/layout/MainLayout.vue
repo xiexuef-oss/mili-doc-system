@@ -52,6 +52,10 @@
             <el-icon><Lock /></el-icon>
             <span>权限管理</span>
           </el-menu-item>
+          <el-menu-item index="/embedding">
+            <el-icon><Monitor /></el-icon>
+            <span>向量索引</span>
+          </el-menu-item>
         </el-sub-menu>
       </el-menu>
       <div class="sidebar-footer">

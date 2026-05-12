@@ -133,6 +133,12 @@ const router = createRouter({
           component: () => import('@/views/system/PermissionList.vue'),
           meta: { title: '权限管理' }
         },
+        {
+          path: 'embedding',
+          name: 'EmbeddingManagement',
+          component: () => import('@/views/system/EmbeddingManagement.vue'),
+          meta: { title: '向量索引' }
+        },
         // AI 模型训练
         {
           path: 'ai-training',

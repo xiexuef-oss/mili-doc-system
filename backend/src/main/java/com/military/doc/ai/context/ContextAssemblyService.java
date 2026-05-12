@@ -1,14 +1,17 @@
 package com.military.doc.ai.context;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.military.doc.ai.config.EmbeddingProperties;
 import com.military.doc.ai.util.FileTextExtractor;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.knowledge.entity.KnowledgeBase;
 import com.military.doc.modules.knowledge.mapper.KnowledgeBaseMapper;
 import com.military.doc.modules.project.entity.Project;
 import com.military.doc.modules.project.entity.ProjectInputFile;
+import com.military.doc.modules.project.entity.ProjectStage;
 import com.military.doc.modules.project.mapper.ProjectInputFileMapper;
 import com.military.doc.modules.project.mapper.ProjectMapper;
+import com.military.doc.modules.project.mapper.ProjectStageMapper;
 import com.military.doc.modules.standard.entity.Standard;
 import com.military.doc.modules.standard.entity.StandardClause;
 import com.military.doc.modules.standard.mapper.StandardClauseMapper;
@@ -29,29 +32,38 @@ public class ContextAssemblyService {
 
     private final ProjectMapper projectMapper;
     private final ProjectInputFileMapper inputFileMapper;
+    private final ProjectStageMapper projectStageMapper;
     private final StandardMapper standardMapper;
     private final StandardClauseMapper standardClauseMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final FileStorageService fileStorageService;
     private final FileTextExtractor fileTextExtractor;
+    private final VectorIndexService vectorIndexService;
+    private final EmbeddingProperties embeddingProperties;
 
     private static final int MAX_CLAUSE_LENGTH = 500;
     private static final int MAX_INPUT_FILE_LENGTH = 3000;
 
     public ContextAssemblyService(ProjectMapper projectMapper,
                                   ProjectInputFileMapper inputFileMapper,
+                                  ProjectStageMapper projectStageMapper,
                                   StandardMapper standardMapper,
                                   StandardClauseMapper standardClauseMapper,
                                   KnowledgeBaseMapper knowledgeBaseMapper,
                                   FileStorageService fileStorageService,
-                                  FileTextExtractor fileTextExtractor) {
+                                  FileTextExtractor fileTextExtractor,
+                                  VectorIndexService vectorIndexService,
+                                  EmbeddingProperties embeddingProperties) {
         this.projectMapper = projectMapper;
         this.inputFileMapper = inputFileMapper;
+        this.projectStageMapper = projectStageMapper;
         this.standardMapper = standardMapper;
         this.standardClauseMapper = standardClauseMapper;
         this.knowledgeBaseMapper = knowledgeBaseMapper;
         this.fileStorageService = fileStorageService;
         this.fileTextExtractor = fileTextExtractor;
+        this.vectorIndexService = vectorIndexService;
+        this.embeddingProperties = embeddingProperties;
     }
 
     public String assembleContext(Long projectId) {
@@ -89,58 +101,101 @@ public class ContextAssemblyService {
             }
         }
 
-        // 3. Applicable standards and clauses
-        String standardsStr = project.getApplicableStandards();
-        if (standardsStr != null && !standardsStr.isBlank()) {
-            List<String> standardCodes = parseStandardCodes(standardsStr);
-            List<Standard> standards = findStandards(standardCodes);
-            if (!standards.isEmpty()) {
-                ctx.append("## 适用标准条款\n");
-                for (Standard std : standards) {
-                    ctx.append("### ").append(std.getStandardCode())
-                        .append(" ").append(nullToEmpty(std.getStandardName())).append("\n");
-                    List<StandardClause> clauses = standardClauseMapper.selectList(
-                        new LambdaQueryWrapper<StandardClause>()
-                            .eq(StandardClause::getStandardId, std.getId())
-                            .orderByAsc(StandardClause::getOrderNum)
-                    );
-                    for (StandardClause clause : clauses) {
-                        ctx.append("- **").append(clause.getClauseNumber()).append("** ")
-                            .append(nullToEmpty(clause.getClauseTitle())).append("\n");
-                        String content = nullToEmpty(clause.getClauseContent());
-                        if (content.length() > MAX_CLAUSE_LENGTH) {
-                            content = content.substring(0, MAX_CLAUSE_LENGTH) + "...";
-                        }
-                        if (!content.isBlank()) {
-                            ctx.append("  ").append(content).append("\n");
-                        }
+        // 3. Applicable standards and clauses (semantic RAG or exact match)
+        if (embeddingProperties.isSemanticRagEnabled()) {
+            String queryText = buildQueryText(project);
+            List<SemanticMatch> clauses = vectorIndexService.searchSimilarClauses(queryText, 20);
+            if (!clauses.isEmpty()) {
+                ctx.append("## 适用标准条款（语义检索）\n");
+                for (SemanticMatch m : clauses) {
+                    ctx.append("- **").append(nullToEmpty(m.getClauseNumber())).append("** ")
+                        .append(nullToEmpty(m.getClauseTitle()))
+                        .append(" [").append(nullToEmpty(m.getStandardCode())).append("]")
+                        .append(" (相关性: ").append(String.format("%.2f", m.getSimilarity())).append(")\n");
+                    String content = nullToEmpty(m.getClauseContent());
+                    if (content.length() > MAX_CLAUSE_LENGTH) {
+                        content = content.substring(0, MAX_CLAUSE_LENGTH) + "...";
                     }
-                    ctx.append("\n");
+                    if (!content.isBlank()) {
+                        ctx.append("  ").append(content).append("\n");
+                    }
+                }
+                ctx.append("\n");
+            }
+        } else {
+            String standardsStr = project.getApplicableStandards();
+            if (standardsStr != null && !standardsStr.isBlank()) {
+                List<String> standardCodes = parseStandardCodes(standardsStr);
+                List<Standard> standards = findStandards(standardCodes);
+                if (!standards.isEmpty()) {
+                    ctx.append("## 适用标准条款\n");
+                    for (Standard std : standards) {
+                        ctx.append("### ").append(std.getStandardCode())
+                            .append(" ").append(nullToEmpty(std.getStandardName())).append("\n");
+                        List<StandardClause> clauses = standardClauseMapper.selectList(
+                            new LambdaQueryWrapper<StandardClause>()
+                                .eq(StandardClause::getStandardId, std.getId())
+                                .orderByAsc(StandardClause::getOrderNum)
+                        );
+                        for (StandardClause clause : clauses) {
+                            ctx.append("- **").append(clause.getClauseNumber()).append("** ")
+                                .append(nullToEmpty(clause.getClauseTitle())).append("\n");
+                            String content = nullToEmpty(clause.getClauseContent());
+                            if (content.length() > MAX_CLAUSE_LENGTH) {
+                                content = content.substring(0, MAX_CLAUSE_LENGTH) + "...";
+                            }
+                            if (!content.isBlank()) {
+                                ctx.append("  ").append(content).append("\n");
+                            }
+                        }
+                        ctx.append("\n");
+                    }
                 }
             }
         }
 
-        // 4. Knowledge base
-        List<KnowledgeBase> kbArticles = knowledgeBaseMapper.selectList(
-            new LambdaQueryWrapper<KnowledgeBase>()
-                .eq(KnowledgeBase::getStatus, "ACTIVE")
-                .orderByDesc(KnowledgeBase::getCreatedAt)
-                .last("LIMIT 5")
-        );
-        if (!kbArticles.isEmpty()) {
-            ctx.append("## 相关知识库文章\n");
-            for (KnowledgeBase kb : kbArticles) {
-                ctx.append("- **").append(nullToEmpty(kb.getTitle())).append("** (")
-                    .append(nullToEmpty(kb.getCategory())).append(")\n");
-                String content = nullToEmpty(kb.getContent());
-                if (content.length() > 300) {
-                    content = content.substring(0, 300) + "...";
+        // 4. Knowledge base (semantic RAG or recent)
+        if (embeddingProperties.isSemanticRagEnabled()) {
+            String queryText = buildQueryText(project);
+            List<SemanticMatch> articles = vectorIndexService.searchSimilarKnowledge(queryText, 5);
+            if (!articles.isEmpty()) {
+                ctx.append("## 相关知识库文章（语义检索）\n");
+                for (SemanticMatch m : articles) {
+                    ctx.append("- **").append(nullToEmpty(m.getClauseTitle())).append("** (")
+                        .append(nullToEmpty(m.getCategory())).append(")")
+                        .append(" 相关性: ").append(String.format("%.2f", m.getSimilarity())).append("\n");
+                    String content = nullToEmpty(m.getClauseContent());
+                    if (content.length() > 300) {
+                        content = content.substring(0, 300) + "...";
+                    }
+                    if (!content.isBlank()) {
+                        ctx.append("  ").append(content).append("\n");
+                    }
                 }
-                if (!content.isBlank()) {
-                    ctx.append("  ").append(content).append("\n");
-                }
+                ctx.append("\n");
             }
-            ctx.append("\n");
+        } else {
+            List<KnowledgeBase> kbArticles = knowledgeBaseMapper.selectList(
+                new LambdaQueryWrapper<KnowledgeBase>()
+                    .eq(KnowledgeBase::getStatus, "ACTIVE")
+                    .orderByDesc(KnowledgeBase::getCreatedAt)
+                    .last("LIMIT 5")
+            );
+            if (!kbArticles.isEmpty()) {
+                ctx.append("## 相关知识库文章\n");
+                for (KnowledgeBase kb : kbArticles) {
+                    ctx.append("- **").append(nullToEmpty(kb.getTitle())).append("** (")
+                        .append(nullToEmpty(kb.getCategory())).append(")\n");
+                    String content = nullToEmpty(kb.getContent());
+                    if (content.length() > 300) {
+                        content = content.substring(0, 300) + "...";
+                    }
+                    if (!content.isBlank()) {
+                        ctx.append("  ").append(content).append("\n");
+                    }
+                }
+                ctx.append("\n");
+            }
         }
 
         String result = ctx.toString();
@@ -186,6 +241,28 @@ public class ContextAssemblyService {
         if (filename == null) return "";
         int i = filename.lastIndexOf('.');
         return i >= 0 ? filename.substring(i) : "";
+    }
+
+    public String assembleContext(Long projectId, Long stageId) {
+        String baseContext = assembleContext(projectId);
+        if (stageId == null || baseContext.isEmpty()) return baseContext;
+
+        ProjectStage stage = projectStageMapper.selectById(stageId);
+        if (stage == null) return baseContext;
+
+        StringBuilder ctx = new StringBuilder(baseContext);
+        ctx.append("## 当前阶段补充信息\n");
+        ctx.append("- 阶段名称: ").append(nullToEmpty(stage.getStageName())).append("\n");
+        ctx.append("- 阶段目标: ").append(nullToEmpty(stage.getStageGoal())).append("\n");
+        return ctx.toString();
+    }
+
+    private String buildQueryText(Project project) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(nullToEmpty(project.getProjectName())).append(" ");
+        sb.append(nullToEmpty(project.getProjectType())).append(" ");
+        sb.append(nullToEmpty(project.getApplicableStandards()));
+        return sb.toString().trim();
     }
 
     private String nullToEmpty(String s) {
