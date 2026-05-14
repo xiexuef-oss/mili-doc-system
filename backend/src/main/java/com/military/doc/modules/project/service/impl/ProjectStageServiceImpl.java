@@ -8,6 +8,7 @@ import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
+import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.project.constant.StageDefinition;
 import com.military.doc.modules.project.entity.*;
 import com.military.doc.modules.project.mapper.*;
@@ -28,6 +29,9 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
 
     @Autowired
     private DocLedgerMapper docLedgerMapper;
+
+    @Autowired
+    private DocLedgerService docLedgerService;
 
     @Autowired
     private DocCatalogMapper docCatalogMapper;
@@ -91,6 +95,10 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
         }
 
         recordEvent(projectId, stageId, null, "STAGE_START", "启动阶段: " + stage.getStageName(), "PROJECT_STAGE", stageId, operatorId);
+
+        // 从文档目录同步创建台账条目
+        int synced = docLedgerService.syncFromCatalog(projectId, stageId, operatorId);
+        log.info("Stage {} started: synced {} ledger entries from catalog", stageId, synced);
     }
 
     @Override
@@ -395,6 +403,9 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
             nextStage.setUpdatedBy(operatorId);
             updateById(nextStage);
             recordEvent(projectId, nextStage.getId(), null, "STAGE_START", "转阶段启动: " + nextStage.getStageName(), "PROJECT_STAGE", nextStage.getId(), operatorId);
+
+            int synced = docLedgerService.syncFromCatalog(projectId, nextStage.getId(), operatorId);
+            log.info("Transition to stage {}: synced {} ledger entries from catalog", nextStage.getId(), synced);
 
             result.put("transitioned", true);
             result.put("fromStage", currentStage.getStageName());

@@ -617,6 +617,7 @@ CREATE TABLE IF NOT EXISTS doc_ledger (
     id                  BIGSERIAL PRIMARY KEY,
     project_id          BIGINT NOT NULL,
     stage_id            BIGINT,
+    catalog_id          BIGINT,
     doc_code            VARCHAR(64),
     doc_name            VARCHAR(256) NOT NULL,
     doc_type            VARCHAR(64),
@@ -804,14 +805,38 @@ ON CONFLICT DO NOTHING;
 
 -- ============================================================
 -- 向量嵌入索引 (Semantic RAG)
--- 需要先执行: CREATE EXTENSION IF NOT EXISTS vector;
+-- 使用 PostgreSQL 原生 double precision[] 数组存储向量 (无需 pgvector 扩展)
 -- ============================================================
+
+-- 余弦相似度函数 (double precision[] 版本)
+CREATE OR REPLACE FUNCTION cosine_similarity(a double precision[], b double precision[])
+RETURNS double precision AS $$
+DECLARE
+    dot_product double precision := 0;
+    norm_a double precision := 0;
+    norm_b double precision := 0;
+    i int;
+BEGIN
+    IF array_length(a, 1) IS NULL OR array_length(b, 1) IS NULL THEN
+        RETURN 0;
+    END IF;
+    FOR i IN 1..array_length(a, 1) LOOP
+        dot_product := dot_product + a[i] * b[i];
+        norm_a := norm_a + a[i] * a[i];
+        norm_b := norm_b + b[i] * b[i];
+    END LOOP;
+    IF norm_a = 0 OR norm_b = 0 THEN
+        RETURN 0;
+    END IF;
+    RETURN dot_product / (sqrt(norm_a) * sqrt(norm_b));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 -- 标准条款向量嵌入
 CREATE TABLE IF NOT EXISTS standard_clause_embedding (
     id              BIGSERIAL PRIMARY KEY,
     clause_id       BIGINT NOT NULL UNIQUE,
-    embedding       vector(768),
+    embedding       double precision[],
     indexed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     model_name      VARCHAR(128) DEFAULT 'nomic-embed-text',
     text_hash       VARCHAR(64),
@@ -824,7 +849,7 @@ CREATE INDEX IF NOT EXISTS idx_clause_embedding_clause ON standard_clause_embedd
 CREATE TABLE IF NOT EXISTS knowledge_base_embedding (
     id              BIGSERIAL PRIMARY KEY,
     kb_id           BIGINT NOT NULL UNIQUE,
-    embedding       vector(768),
+    embedding       double precision[],
     indexed_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     model_name      VARCHAR(128) DEFAULT 'nomic-embed-text',
     text_hash       VARCHAR(64),

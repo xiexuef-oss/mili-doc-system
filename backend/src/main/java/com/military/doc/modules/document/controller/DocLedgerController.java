@@ -106,6 +106,17 @@ public class DocLedgerController {
         return Result.success(logs);
     }
 
+    @PostMapping("/sync-from-catalog")
+    @Operation(summary = "从文档目录同步创建台账条目")
+    public Result<Map<String, Object>> syncFromCatalog(
+            @RequestParam Long projectId,
+            @RequestParam Long stageId,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        int created = docLedgerService.syncFromCatalog(projectId, stageId, userId);
+        return Result.success(Map.of("syncedCount", created));
+    }
+
     public static class StatusTransitionRequest {
         private String targetStatus;
         private String remark;

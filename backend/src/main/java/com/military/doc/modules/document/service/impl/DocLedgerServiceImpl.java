@@ -8,6 +8,8 @@ import com.military.doc.modules.document.entity.DocLedgerLog;
 import com.military.doc.modules.document.mapper.DocLedgerLogMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
 import com.military.doc.modules.document.service.DocLedgerService;
+import com.military.doc.modules.document.entity.DocCatalog;
+import com.military.doc.modules.document.mapper.DocCatalogMapper;
 import com.military.doc.modules.project.entity.ConfigurationStatusAccounting;
 import com.military.doc.modules.project.mapper.ConfigurationStatusAccountingMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger> implements DocLedgerService {
@@ -36,6 +39,9 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
 
     @Autowired
     private ConfigurationStatusAccountingMapper accountingMapper;
+
+    @Autowired
+    private DocCatalogMapper docCatalogMapper;
 
     @Override
     @Transactional
@@ -120,5 +126,62 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
         }
         wrapper.orderByAsc(DocLedger::getDocCode);
         return list(wrapper);
+    }
+
+    @Override
+    @Transactional
+    public int syncFromCatalog(Long projectId, Long stageId, Long operatorId) {
+        List<DocCatalog> catalogs = docCatalogMapper.selectList(
+            new LambdaQueryWrapper<DocCatalog>()
+                .eq(DocCatalog::getProjectId, projectId)
+                .eq(stageId != null, DocCatalog::getStageId, stageId)
+                .eq(DocCatalog::getRequiredFlag, true)
+        );
+
+        Set<Long> existingCatalogIds = list(new LambdaQueryWrapper<DocLedger>()
+            .eq(DocLedger::getProjectId, projectId)
+            .eq(stageId != null, DocLedger::getStageId, stageId)
+            .isNotNull(DocLedger::getCatalogId))
+            .stream()
+            .map(DocLedger::getCatalogId)
+            .filter(cid -> cid != null)
+            .collect(Collectors.toSet());
+
+        int created = 0;
+        for (DocCatalog catalog : catalogs) {
+            if (existingCatalogIds.contains(catalog.getId())) {
+                continue;
+            }
+
+            DocLedger ledger = new DocLedger();
+            ledger.setProjectId(catalog.getProjectId());
+            ledger.setStageId(catalog.getStageId());
+            ledger.setCatalogId(catalog.getId());
+            ledger.setDocCode(catalog.getDocCode());
+            ledger.setDocName(catalog.getDocName());
+            ledger.setDocType(catalog.getDocType());
+            ledger.setRequiredFlag(catalog.getRequiredFlag());
+            ledger.setMeetingUsage(catalog.getMeetingUsage());
+            ledger.setUsageSource(catalog.getUsageSource());
+            ledger.setUsageAdjustReason(catalog.getUsageAdjustReason());
+            ledger.setChangeReason(catalog.getChangeReason());
+            ledger.setResponsibleUserId(catalog.getResponsibleUserId());
+            ledger.setLifecycleStatus("PLANNED");
+            ledger.setCreatedBy(operatorId);
+            ledger.setUpdatedBy(operatorId);
+            save(ledger);
+
+            DocLedgerLog log = new DocLedgerLog();
+            log.setDocLedgerId(ledger.getId());
+            log.setToStatus("PLANNED");
+            log.setOperatorId(operatorId);
+            log.setOperatedAt(LocalDateTime.now());
+            log.setRemark("从文档目录自动创建 (catalogId=" + catalog.getId() + ")");
+            logMapper.insert(log);
+
+            created++;
+        }
+
+        return created;
     }
 }

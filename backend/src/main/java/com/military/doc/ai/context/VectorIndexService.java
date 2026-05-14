@@ -216,12 +216,12 @@ public class VectorIndexService {
             String sql = """
                 SELECT sc.id, sc.clause_number, sc.clause_title, sc.clause_content, sc.keywords,
                        s.standard_code, s.standard_name,
-                       (1 - (sce.embedding <=> ?::vector)) AS similarity
+                       cosine_similarity(sce.embedding, ?::double precision[]) AS similarity
                 FROM standard_clause_embedding sce
                 JOIN standard_clause sc ON sc.id = sce.clause_id AND sc.deleted = 0
                 JOIN standard s ON s.id = sc.standard_id AND s.deleted = 0 AND s.status = 'ACTIVE'
                 WHERE sce.embedding IS NOT NULL
-                ORDER BY sce.embedding <=> ?::vector
+                ORDER BY similarity DESC
                 LIMIT ?
                 """;
 
@@ -252,11 +252,11 @@ public class VectorIndexService {
 
             String sql = """
                 SELECT kb.id, kb.title, kb.content, kb.category,
-                       (1 - (kbe.embedding <=> ?::vector)) AS similarity
+                       cosine_similarity(kbe.embedding, ?::double precision[]) AS similarity
                 FROM knowledge_base_embedding kbe
                 JOIN knowledge_base kb ON kb.id = kbe.kb_id AND kb.deleted = 0
                 WHERE kbe.embedding IS NOT NULL AND kb.status = 'ACTIVE'
-                ORDER BY kbe.embedding <=> ?::vector
+                ORDER BY similarity DESC
                 LIMIT ?
                 """;
 
@@ -352,8 +352,8 @@ public class VectorIndexService {
         String model = embeddingProperties.getModel();
         jdbcTemplate.update(
             "INSERT INTO standard_clause_embedding (clause_id, embedding, model_name, text_hash) " +
-            "VALUES (?, ?::vector, ?, ?) " +
-            "ON CONFLICT (clause_id) DO UPDATE SET embedding = ?::vector, indexed_at = NOW(), model_name = ?, text_hash = ?",
+            "VALUES (?, ?::double precision[], ?, ?) " +
+            "ON CONFLICT (clause_id) DO UPDATE SET embedding = ?::double precision[], indexed_at = NOW(), model_name = ?, text_hash = ?",
             clauseId, vectorStr, model, hash,
             vectorStr, model, hash);
         jdbcTemplate.update(
@@ -365,8 +365,8 @@ public class VectorIndexService {
         String model = embeddingProperties.getModel();
         jdbcTemplate.update(
             "INSERT INTO knowledge_base_embedding (kb_id, embedding, model_name, text_hash) " +
-            "VALUES (?, ?::vector, ?, ?) " +
-            "ON CONFLICT (kb_id) DO UPDATE SET embedding = ?::vector, indexed_at = NOW(), model_name = ?, text_hash = ?",
+            "VALUES (?, ?::double precision[], ?, ?) " +
+            "ON CONFLICT (kb_id) DO UPDATE SET embedding = ?::double precision[], indexed_at = NOW(), model_name = ?, text_hash = ?",
             kbId, vectorStr, model, hash,
             vectorStr, model, hash);
         jdbcTemplate.update(
@@ -374,12 +374,12 @@ public class VectorIndexService {
     }
 
     static String toPgVector(float[] vec) {
-        StringBuilder sb = new StringBuilder("[");
+        StringBuilder sb = new StringBuilder("ARRAY[");
         for (int i = 0; i < vec.length; i++) {
             if (i > 0) sb.append(",");
             sb.append(vec[i]);
         }
-        sb.append("]");
+        sb.append("]::double precision[]");
         return sb.toString();
     }
 

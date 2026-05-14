@@ -4,6 +4,7 @@ export interface DocLedgerItem {
   id?: number
   projectId: number
   stageId?: number
+  catalogId?: number
   docCode?: string
   docName: string
   docType?: string
@@ -69,4 +70,8 @@ export function getDocLedgerLogs(id: number) {
 
 export function checkDocuments(projectId: number, fromStageId: number) {
   return api.post('/stage-transitions/check-documents', { projectId, fromStageId })
+}
+
+export function syncFromCatalog(projectId: number, stageId: number) {
+  return api.post('/doc-ledgers/sync-from-catalog', null, { params: { projectId, stageId } })
 }

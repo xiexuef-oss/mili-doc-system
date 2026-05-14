@@ -260,6 +260,7 @@ public class AiAssistantController {
         DocLedger ledger = new DocLedger();
         ledger.setProjectId(projectId);
         ledger.setStageId(stageId);
+        ledger.setCatalogId(catalogId);
         ledger.setDocName(docName != null ? docName : "AI 生成文档");
         ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
         ledger.setSecurityLevel(securityLevel);

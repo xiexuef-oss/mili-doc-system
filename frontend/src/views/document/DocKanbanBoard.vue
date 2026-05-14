@@ -8,6 +8,9 @@
         </el-select>
       </div>
       <div class="header-right">
+        <el-button type="success" :loading="syncing" @click="handleSyncFromCatalog" :disabled="!selectedStageId">
+          <el-icon><RefreshRight /></el-icon>从目录同步
+        </el-button>
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>新建文档条目
         </el-button>
@@ -38,7 +41,10 @@
             @dragstart="handleDragStart($event, item)"
             @click="showDetail(item)"
           >
-            <div class="card-code">{{ item.docCode || '—' }}</div>
+            <div class="card-code">
+              <span v-if="item.catalogId" class="catalog-badge" title="来自文档目录">📋</span>
+              {{ item.docCode || '—' }}
+            </div>
             <div class="card-name">{{ item.docName }}</div>
             <div class="card-tags">
               <el-tag size="small" type="info">{{ item.docType || '-' }}</el-tag>
@@ -122,7 +128,10 @@
           <el-descriptions-item label="是否必需">
             <el-tag :type="selectedItem.requiredFlag ? 'danger' : 'info'" size="small">{{ selectedItem.requiredFlag ? '必需' : '非必需' }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="阶段ID">{{ selectedItem.stageId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="来源目录ID">
+            <span v-if="selectedItem.catalogId" style="color:var(--el-color-success)">目录 #{{ selectedItem.catalogId }}</span>
+            <span v-else style="color:var(--el-text-color-placeholder)">手动创建</span>
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ selectedItem.createdAt || '-' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -172,9 +181,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import {
-  getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs,
+  getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromCatalog,
   type DocLedgerItem, type DocLedgerLogItem
 } from '@/api/doc-ledger'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
@@ -212,6 +221,7 @@ const targetStatus = ref('')
 const transitioning = ref(false)
 const logs = ref<DocLedgerLogItem[]>([])
 const dragOverColumn = ref<string | null>(null)
+const syncing = ref(false)
 let draggedItem: DocLedgerItem | null = null
 
 const createForm = reactive({
@@ -294,6 +304,20 @@ async function handleCreate() {
 }
 function resetForm() {
   Object.assign(createForm, { docName:'',docCode:'',docType:'MANAGEMENT_DOC',securityLevel:'INTERNAL',requiredFlag:true,stageId:null })
+}
+
+async function handleSyncFromCatalog() {
+  if (!selectedStageId.value) { ElMessage.warning('请先选择阶段'); return }
+  syncing.value = true
+  try {
+    const res = await syncFromCatalog(projectId, selectedStageId.value)
+    const count = res.data?.data?.syncedCount || 0
+    ElMessage.success(`已从目录同步创建 ${count} 个台账条目`)
+    loadKanban()
+  } catch {
+    ElMessage.error('同步失败')
+  }
+  syncing.value = false
 }
 
 async function showDetail(item: DocLedgerItem) {
