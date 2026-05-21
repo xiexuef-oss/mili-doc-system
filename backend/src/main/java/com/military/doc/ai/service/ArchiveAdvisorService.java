@@ -55,7 +55,7 @@ public class ArchiveAdvisorService {
                    "content", content.length() > 5000 ? content.substring(0, 5000) : content,
                    "context", context.length() > 2000 ? context.substring(0, 2000) : context));
 
-        String systemPrompt = "你是一位军工文档归档管理专家。请基于文档内容和项目背景，评估密级和保管期限的合理性，提供归档建议。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工文档归档管理专家，精通《军队档案管理条例》、GJB 5882-2006 文档分类体系和军工产品技术文件归档规范。请从密级合理性、保管期限（永久/30年/10年/5年）、归档类别（按 GJB 5882 十五大类）、归档风险四个维度提供归档建议。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

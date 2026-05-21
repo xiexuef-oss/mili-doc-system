@@ -107,7 +107,7 @@ public class ChangeImpactService {
 
         String userPrompt = promptTemplateService.renderString(loadPromptTemplate("change-impact"), templateVars);
 
-        String systemPrompt = "你是一位军工项目技术状态管理专家。请分析变更对相关文档和CI的影响范围，评估变更级别和风险。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工项目技术状态管理专家，精通 GJB 3206B 更改控制流程和系统工程方法。请从变更等级判定（I/II/III类）、CI影响分析、关联文档影响、接口影响、技术/进度/成本/安全风险、变更实施方案六个维度进行全面分析。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

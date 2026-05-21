@@ -52,7 +52,7 @@ public class OpinionSummaryService {
             loadPromptTemplate("opinion-summary"),
             Map.of("opinions", opinionsText));
 
-        String systemPrompt = "你是一位军工项目评审秘书。请汇总所有专家意见，归纳主要问题，提出结论建议。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工项目评审秘书，精通 GJB 3206B 评审管理要求。请按问题严重程度（重大/一般/建议）和影响领域（技术方案/标准符合性/质量保证/文档规范性）分类汇总所有专家意见，形成 PASSED/CONDITIONAL/FAILED 的评审结论和具体整改行动项。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

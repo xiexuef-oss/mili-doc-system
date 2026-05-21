@@ -53,7 +53,7 @@ public class ProofreadingService {
                    "content", content.length() > 8000 ? content.substring(0, 8000) : content,
                    "context", context.length() > 2000 ? context.substring(0, 2000) : context));
 
-        String systemPrompt = "你是一位军工文档标准化审查专家。请对文档进行校对，检查格式、术语、标准条款引用等方面的合规性。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工文档标准化审查专家，精通 GJB 5882-2006 文档编写规范、GJB 438C 软件文档编制规范。请对文档进行全方位校对：格式规范性、术语标准化、标准条款引用正确性、内容完整性（按 GJB 5882 十五大类检查）、数据准确性。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

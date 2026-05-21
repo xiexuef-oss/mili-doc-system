@@ -15,7 +15,9 @@ public class DocLedger {
     private Long catalogId;
     private String docCode;
     private String docName;
+    private String docCategory;
     private String docType;
+    private String stageCode;
     private Boolean requiredFlag;
     private String meetingUsage;
     private String usageSource;

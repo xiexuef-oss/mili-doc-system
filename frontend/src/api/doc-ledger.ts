@@ -7,7 +7,9 @@ export interface DocLedgerItem {
   catalogId?: number
   docCode?: string
   docName: string
+  docCategory?: string
   docType?: string
+  stageCode?: string
   requiredFlag?: boolean
   meetingUsage?: string
   usageSource?: string

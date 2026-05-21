@@ -41,7 +41,7 @@ public class DraftGenerationService {
 
         String userPrompt = promptTemplateService.render("draft-generation",
             Map.of("context", context));
-        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 438C、GJB 9001C 等标准。严格按照用户要求输出 Markdown 格式的文档正文。";
+        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》、GJB 438C、GJB 9001C、GJB 3206B 等标准。请严格按照 GJB 5882 规定的文档结构和内容要求撰写，输出 Markdown 格式的完整文档正文。";
 
         log.info("Draft generation: catalogId={}, prompt {} chars", catalogId, userPrompt.length());
         return llmClient.chat(systemPrompt, userPrompt);
@@ -53,7 +53,7 @@ public class DraftGenerationService {
 
         String userPrompt = promptTemplateService.render("draft-generation",
             Map.of("context", context));
-        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 438C、GJB 9001C 等标准。严格按照用户要求输出 Markdown 格式的文档正文。";
+        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》、GJB 438C、GJB 9001C、GJB 3206B 等标准。请严格按照 GJB 5882 规定的文档结构和内容要求撰写，输出 Markdown 格式的完整文档正文。";
 
         log.info("Draft generation stream: catalogId={}, prompt {} chars", catalogId, userPrompt.length());
         llmClient.chatStream(systemPrompt, userPrompt, onChunk);
@@ -78,18 +78,17 @@ public class DraftGenerationService {
 
         Project project = projectMapper.selectById(projectId);
         if (project != null && project.getProjectType() != null) {
-            String docTypeName = switch (catalog != null ? nullToEmpty(catalog.getDocType()) : "") {
-                case "DESIGN_DOC" -> "设计文档";
-                case "TEST_DOC" -> "测试文档";
-                case "MANAGEMENT_DOC" -> "管理文档";
-                case "QUALITY_DOC" -> "质量文档";
-                case "REVIEW_DOC" -> "评审文档";
-                default -> catalog != null ? nullToEmpty(catalog.getDocType()) : "文档";
-            };
+            String docTypeName = catalog != null ? nullToEmpty(catalog.getDocType()) : "";
+            String docCategory = catalog != null ? nullToEmpty(catalog.getDocCategory()) : "";
             ctx.append("\n## 撰写任务\n");
             ctx.append("请为「").append(project.getProjectName()).append("」项目撰写「")
                 .append(catalog != null ? nullToEmpty(catalog.getDocName()) : "")
-                .append("」").append(docTypeName).append("的完整初稿。\n");
+                .append("」(");
+            if (!docCategory.isEmpty()) {
+                ctx.append("文档类别: ").append(docCategory).append(", ");
+            }
+            ctx.append("文档类型: ").append(docTypeName.isEmpty() ? "文档" : docTypeName)
+                .append(")的完整初稿。\n");
         }
 
         return ctx.toString();

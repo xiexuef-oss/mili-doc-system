@@ -14,7 +14,9 @@ public class DocFile {
     private Long projectId;
     private Long stageId;
     private String docName;
+    private String docCategory;
     private String docType;
+    private String stageCode;
     private String securityLevel;
     private String status;
 

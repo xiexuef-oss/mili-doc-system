@@ -7,6 +7,7 @@ import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocFile;
 import com.military.doc.modules.document.mapper.DocFileMapper;
 import com.military.doc.modules.document.service.DocCatalogService;
+import com.military.doc.modules.document.service.StageCatalogTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,9 @@ public class DocCatalogController {
 
     @Autowired
     private DocCatalogService docCatalogService;
+
+    @Autowired
+    private StageCatalogTemplateService stageCatalogTemplateService;
 
     @Autowired
     private DocFileMapper docFileMapper;
@@ -118,6 +122,33 @@ public class DocCatalogController {
             status.put(c.getId(), hasDraft(c.getId()));
         }
         return Result.success(status);
+    }
+
+    @PostMapping("/generate-by-stage")
+    @Operation(summary = "按 GJB 5882 阶段模板生成文档目录（规则化，非AI）")
+    public Result<List<DocCatalog>> generateByStage(@RequestBody Map<String, Object> body,
+                                                     Authentication authentication) {
+        Long projectId = toLong(body.get("projectId"));
+        Long stageId = toLong(body.get("stageId"));
+        String stageCode = (String) body.get("stageCode");
+        boolean overwrite = Boolean.TRUE.equals(body.get("overwrite"));
+        Long userId = (Long) authentication.getPrincipal();
+
+        if (projectId == null || stageId == null || stageCode == null || stageCode.isEmpty()) {
+            return Result.error("PARAM_ERROR", "projectId, stageId and stageCode are required");
+        }
+
+        List<DocCatalog> catalogs = stageCatalogTemplateService.generateByStage(
+            projectId, stageId, stageCode, userId, overwrite);
+        return Result.success(catalogs);
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) return null;
+        if (value instanceof Long l) return l;
+        if (value instanceof Integer i) return i.longValue();
+        try { return Long.parseLong(value.toString()); }
+        catch (NumberFormatException e) { return null; }
     }
 
     @PostMapping("/{id}/issue")

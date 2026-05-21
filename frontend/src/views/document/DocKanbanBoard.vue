@@ -47,7 +47,9 @@
             </div>
             <div class="card-name">{{ item.docName }}</div>
             <div class="card-tags">
-              <el-tag size="small" type="info">{{ item.docType || '-' }}</el-tag>
+              <el-tag v-if="item.docCategory" size="small" type="success">{{ item.docCategory }}</el-tag>
+              <el-tag size="small" type="info">{{ docTypeLabel(item.docType) }}</el-tag>
+              <el-tag v-if="item.stageCode" size="small" type="warning">{{ item.stageCode }}</el-tag>
               <el-tag v-if="item.securityLevel" size="small" :type="item.securityLevel === 'TOP_SECRET' || item.securityLevel === 'SECRET' ? 'danger' : 'warning'">
                 {{ securityLabel(item.securityLevel) }}
               </el-tag>
@@ -77,16 +79,14 @@
         <el-form-item label="文档编号">
           <el-input v-model="createForm.docCode" placeholder="如 GJB-XXX-001" />
         </el-form-item>
+        <el-form-item label="文档类别">
+          <el-select v-model="createForm.docCategory" style="width:100%" @change="onCreateCategoryChange" placeholder="选择类别">
+            <el-option v-for="c in docCategories" :key="c.dictCode" :label="c.dictName" :value="c.dictCode" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="文档类型">
-          <el-select v-model="createForm.docType" style="width:100%">
-            <el-option label="方案论证报告" value="FEASIBILITY_REPORT" />
-            <el-option label="设计说明书" value="DESIGN_SPEC" />
-            <el-option label="测试大纲" value="TEST_OUTLINE" />
-            <el-option label="试验报告" value="TEST_REPORT" />
-            <el-option label="评审报告" value="REVIEW_REPORT" />
-            <el-option label="综合保障方案" value="SUPPORT_PLAN" />
-            <el-option label="管理文档" value="MANAGEMENT_DOC" />
-            <el-option label="其他" value="OTHER" />
+          <el-select v-model="createForm.docType" style="width:100%" :disabled="!createForm.docCategory" placeholder="选择具体类型">
+            <el-option v-for="t in filteredDocTypes" :key="t.dictCode" :label="t.dictName" :value="t.dictCode" />
           </el-select>
         </el-form-item>
         <el-form-item label="密级">
@@ -120,7 +120,12 @@
           <el-descriptions-item label="ID">{{ selectedItem.id }}</el-descriptions-item>
           <el-descriptions-item label="文档编号">{{ selectedItem.docCode || '-' }}</el-descriptions-item>
           <el-descriptions-item label="文档名称">{{ selectedItem.docName }}</el-descriptions-item>
-          <el-descriptions-item label="文档类型">{{ selectedItem.docType || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="文档类别">
+            <el-tag v-if="selectedItem.docCategory" size="small" type="success">{{ categoryLabel(selectedItem.docCategory) }}</el-tag>
+            <span v-else>-</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="文档类型">{{ docTypeLabel(selectedItem.docType) }}</el-descriptions-item>
+          <el-descriptions-item label="阶段">{{ selectedItem.stageCode || '-' }}</el-descriptions-item>
           <el-descriptions-item label="密级">{{ securityLabel(selectedItem.securityLevel || '') }}</el-descriptions-item>
           <el-descriptions-item label="当前状态">
             <el-tag :type="statusTagType(selectedItem.lifecycleStatus!)">{{ statusLabel(selectedItem.lifecycleStatus!) }}</el-tag>
@@ -174,11 +179,104 @@
         </div>
       </template>
     </el-drawer>
+
+    <!-- AI Draft Generation Dialog -->
+    <el-dialog v-model="showDraftDialog" title="AI 生成文档初稿" width="700px" :close-on-click-modal="false" @closed="stopDraftGeneration">
+      <div v-if="draftItem" style="margin-bottom:12px">
+        <el-tag size="small" type="info">{{ draftItem.docCode }}</el-tag>
+        <span style="margin-left:8px;font-weight:500">{{ draftItem.docName }}</span>
+      </div>
+      <el-form label-width="100px">
+        <el-form-item label="目录条目">
+          <el-select v-model="draftCatalogId" placeholder="选择文档目录条目" filterable style="width:100%" :disabled="draftStreaming">
+            <el-option v-for="c in catalogEntries" :key="c.id" :label="`${c.docCode} - ${c.docName}`" :value="c.id!" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div v-if="draftContent || draftStreaming" class="draft-output">
+        <div class="draft-output-header">
+          <span>生成结果</span>
+          <span v-if="draftStreaming" style="color:var(--el-color-warning)">生成中，已接收 {{ draftCharCount }} 字...</span>
+        </div>
+        <div class="draft-output-body" ref="draftContentRef">
+          <div class="markdown-body" v-html="renderMarkdown(draftContent)" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showDraftDialog = false" :disabled="draftStreaming">关闭</el-button>
+        <el-button v-if="!draftStreaming" type="primary" @click="startDraftGeneration" :disabled="!draftCatalogId">开始生成</el-button>
+        <el-button v-else type="danger" plain @click="stopDraftGeneration">停止生成</el-button>
+        <el-button v-if="draftContent && !draftStreaming" type="success" :loading="draftSaving" @click="handleSaveDraft">保存为文档</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI Proofread Result Dialog -->
+    <el-dialog v-model="showProofreadDialog" title="AI 校对结果" width="560px">
+      <div v-if="proofreadItem" style="margin-bottom:12px">
+        <el-tag size="small" type="info">{{ proofreadItem.docCode }}</el-tag>
+        <span style="margin-left:8px;font-weight:500">{{ proofreadItem.docName }}</span>
+      </div>
+      <div v-loading="proofreading">
+        <div v-if="proofreadResult">
+          <div v-if="proofreadResult.summary" style="margin-bottom:12px">
+            <el-alert :title="proofreadResult.summary" type="info" :closable="false" show-icon />
+          </div>
+          <el-table :data="proofreadResult.issues || []" border size="small" max-height="350">
+            <el-table-column label="严重度" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.severity === 'ERROR' ? 'danger' : 'warning'" size="small">{{ row.severity }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="location" label="位置" width="150" />
+            <el-table-column prop="description" label="问题描述" min-width="200" />
+            <el-table-column prop="suggestion" label="建议" min-width="200" />
+          </el-table>
+          <el-empty v-if="!proofreadResult.issues?.length" description="未发现问题" :image-size="40" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showProofreadDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI Pre-Review Result Dialog -->
+    <el-dialog v-model="showPreReviewDialog" title="AI 预评审结果" width="560px">
+      <div v-if="preReviewItem" style="margin-bottom:12px">
+        <el-tag size="small" type="info">{{ preReviewItem.docCode }}</el-tag>
+        <span style="margin-left:8px;font-weight:500">{{ preReviewItem.docName }}</span>
+      </div>
+      <div v-loading="preReviewing">
+        <div v-if="preReviewResult">
+          <div style="display:flex;gap:16px;margin-bottom:12px">
+            <el-statistic title="合规度" :value="preReviewResult.complianceScore || 0" suffix="/100" />
+            <el-statistic title="完备度" :value="preReviewResult.completenessScore || 0" suffix="/100" />
+          </div>
+          <el-alert v-if="preReviewResult.summary" :title="preReviewResult.summary" type="warning" :closable="false" show-icon style="margin-bottom:12px" />
+          <div v-if="preReviewResult.issues?.length">
+            <h4 style="margin:8px 0">评审意见</h4>
+            <div v-for="(issue, i) in preReviewResult.issues" :key="i" style="margin-bottom:8px;padding:8px;background:var(--el-fill-color-lighter);border-radius:4px">
+              <el-tag size="small" :type="issue.status === 'NON_COMPLIANT' ? 'danger' : 'warning'" style="margin-right:8px">{{ issue.status }}</el-tag>
+              <span v-if="issue.clauseRef" style="color:var(--el-text-color-secondary);margin-right:8px">[{{ issue.clauseRef }}]</span>
+              {{ issue.description }}
+            </div>
+          </div>
+          <div v-if="preReviewResult.recommendations?.length">
+            <h4 style="margin:8px 0">改进建议</h4>
+            <ul style="padding-left:20px">
+              <li v-for="(rec, i) in preReviewResult.recommendations" :key="i" style="margin-bottom:4px">{{ rec }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showPreReviewDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
@@ -187,6 +285,11 @@ import {
   type DocLedgerItem, type DocLedgerLogItem
 } from '@/api/doc-ledger'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
+import { getDocCatalogsByProject, type DocCatalogItem } from '@/api/doc-catalog'
+import {
+  proofread, preReview, streamDraft, saveDraft
+} from '@/api/ai'
+import { getDictItems, type DictItem } from '@/api/dict'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -225,9 +328,19 @@ const syncing = ref(false)
 let draggedItem: DocLedgerItem | null = null
 
 const createForm = reactive({
-  docName: '', docCode: '', docType: 'MANAGEMENT_DOC',
+  docName: '', docCode: '', docCategory: '', docType: '',
   securityLevel: 'INTERNAL', requiredFlag: true, stageId: null as number | null
 })
+const docCategories = ref<DictItem[]>([])
+const docTypes = ref<DictItem[]>([])
+const filteredDocTypes = ref<DictItem[]>([])
+
+function onCreateCategoryChange(categoryCode: string) {
+  createForm.docType = ''
+  filteredDocTypes.value = categoryCode
+    ? docTypes.value.filter(t => t.parentCode === categoryCode)
+    : []
+}
 
 function getColumnItems(key: string) { return kanbanData.value[key] || [] }
 function getColumnCount(key: string) { return (kanbanData.value[key] || []).length }
@@ -237,6 +350,16 @@ function securityLabel(s: string) {
     PUBLIC:'公开',INTERNAL:'内部',SECRET:'秘密',CONFIDENTIAL:'机密',TOP_SECRET:'绝密'
   }
   return map[s] || s
+}
+const typeNameMap = ref<Record<string, string>>({})
+const categoryNameMap = ref<Record<string, string>>({})
+function categoryLabel(c?: string) {
+  if (!c) return '-'
+  return categoryNameMap.value[c] || c
+}
+function docTypeLabel(t?: string) {
+  if (!t) return '-'
+  return typeNameMap.value[t] || t
 }
 function statusLabel(s: string) {
   const map: Record<string, string> = {
@@ -303,7 +426,7 @@ async function handleCreate() {
   creating.value = false
 }
 function resetForm() {
-  Object.assign(createForm, { docName:'',docCode:'',docType:'MANAGEMENT_DOC',securityLevel:'INTERNAL',requiredFlag:true,stageId:null })
+  Object.assign(createForm, { docName:'',docCode:'',docCategory:'',docType:'',securityLevel:'INTERNAL',requiredFlag:true,stageId:null })
 }
 
 async function handleSyncFromCatalog() {
@@ -347,18 +470,187 @@ async function handleTransition() {
   transitioning.value = false
 }
 
-// AI integration buttons
-function generateDraft(item: DocLedgerItem) {
-  ElMessage.info('AI 初稿生成功能：请前往 AI 辅助页面，选择对应目录条目生成初稿')
-}
-function aiProofread(item: DocLedgerItem) {
-  ElMessage.info('AI 校对功能将在后续版本中推出')
-}
-function aiPreReview(item: DocLedgerItem) {
-  ElMessage.info('AI 预评审功能将在后续版本中推出')
+// ---- AI: Draft Generation ----
+const showDraftDialog = ref(false)
+const draftItem = ref<DocLedgerItem | null>(null)
+const draftCatalogId = ref<number | null>(null)
+const draftStreaming = ref(false)
+const draftContent = ref('')
+const draftCharCount = ref(0)
+const draftSaving = ref(false)
+const catalogEntries = ref<DocCatalogItem[]>([])
+const draftContentRef = ref<HTMLElement>()
+let draftAbortController: AbortController | null = null
+
+async function generateDraft(item: DocLedgerItem) {
+  draftItem.value = item
+  draftContent.value = ''
+  draftCharCount.value = 0
+  draftCatalogId.value = item.catalogId || null
+  showDraftDialog.value = true
+  // Load catalog entries for selection
+  try {
+    const res = await getDocCatalogsByProject(projectId)
+    catalogEntries.value = res.data.data || []
+  } catch { catalogEntries.value = [] }
 }
 
-onMounted(() => { loadKanban(); loadStages() })
+function startDraftGeneration() {
+  if (!healthOk.value) {
+    ElMessage.error('本地大模型未连接，无法生成初稿')
+    return
+  }
+  const catId = draftCatalogId.value
+  if (!catId) {
+    ElMessage.warning('请先选择文档目录条目')
+    return
+  }
+
+  draftStreaming.value = true
+  draftContent.value = ''
+  draftCharCount.value = 0
+
+  draftAbortController = streamDraft(
+    projectId, catId,
+    (chunk: string) => {
+      draftContent.value += chunk
+      draftCharCount.value = draftContent.value.length
+    },
+    (fullText: string) => {
+      draftContent.value = fullText
+      draftCharCount.value = fullText.length
+      draftStreaming.value = false
+      ElMessage.success(`初稿生成完成，共 ${draftCharCount.value} 字`)
+    },
+    (err: Error) => {
+      draftStreaming.value = false
+      ElMessage.error(`生成失败: ${err.message}`)
+    }
+  )
+}
+
+function stopDraftGeneration() {
+  if (draftAbortController) {
+    draftAbortController.abort()
+    draftAbortController = null
+  }
+  draftStreaming.value = false
+}
+
+async function handleSaveDraft() {
+  if (!draftContent.value || !draftItem.value) return
+  draftSaving.value = true
+  try {
+    await saveDraft({
+      projectId,
+      catalogId: draftCatalogId.value ?? undefined,
+      stageId: selectedStageId.value ?? undefined,
+      docName: draftItem.value.docName || 'AI 生成文档',
+      docType: draftItem.value.docType || 'MANAGEMENT_DOC',
+      securityLevel: draftItem.value.securityLevel || '内部',
+      content: draftContent.value
+    })
+    ElMessage.success('文档初稿已保存')
+    showDraftDialog.value = false
+    loadKanban()
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+// ---- AI: Proofread ----
+const showProofreadDialog = ref(false)
+const proofreading = ref(false)
+const proofreadResult = ref<any>(null)
+const proofreadItem = ref<DocLedgerItem | null>(null)
+
+async function aiProofread(item: DocLedgerItem) {
+  proofreadItem.value = item
+  proofreadResult.value = null
+  showProofreadDialog.value = true
+  proofreading.value = true
+  try {
+    const res = await proofread(item.id!)
+    proofreadResult.value = res.data.data
+  } catch {
+    ElMessage.error('AI 校对失败')
+    showProofreadDialog.value = false
+  } finally {
+    proofreading.value = false
+  }
+}
+
+// ---- AI: Pre-Review ----
+const showPreReviewDialog = ref(false)
+const preReviewing = ref(false)
+const preReviewResult = ref<any>(null)
+const preReviewItem = ref<DocLedgerItem | null>(null)
+
+async function aiPreReview(item: DocLedgerItem) {
+  preReviewItem.value = item
+  preReviewResult.value = null
+  showPreReviewDialog.value = true
+  preReviewing.value = true
+  try {
+    const res = await preReview(item.id!)
+    preReviewResult.value = res.data.data
+  } catch {
+    ElMessage.error('AI 预评审失败')
+    showPreReviewDialog.value = false
+  } finally {
+    preReviewing.value = false
+  }
+}
+
+// ---- AI Health Check ----
+const healthOk = ref(false)
+async function checkHealth() {
+  try {
+    const res = await (await import('@/api/ai')).checkAiHealth()
+    healthOk.value = res.data.data?.connected === true
+  } catch { healthOk.value = false }
+}
+
+// Lightweight Markdown to HTML (same as ProjectAiAssistant)
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+  html = html.replace(/\n\n+/g, '</p><p>')
+  html = '<p>' + html + '</p>'
+  html = html.replace(/\n/g, '<br>')
+  html = html.replace(/<p><\/p>/g, '')
+  return html
+}
+
+async function loadDocDicts() {
+  try {
+    const [catRes, typeRes] = await Promise.all([
+      getDictItems('DOC_CATEGORY'),
+      getDictItems('DOC_TYPE')
+    ])
+    docCategories.value = catRes.data.data || []
+    docTypes.value = typeRes.data.data || []
+    for (const c of docCategories.value) {
+      categoryNameMap.value[c.dictCode] = c.dictName
+    }
+    for (const t of docTypes.value) {
+      typeNameMap.value[t.dictCode] = t.dictName
+    }
+  } catch { /* ignore */ }
+}
+
+onMounted(() => { loadKanban(); loadStages(); checkHealth(); loadDocDicts() })
 </script>
 
 <style scoped>
@@ -388,4 +680,16 @@ onMounted(() => { loadKanban(); loadStages() })
 .card-tags { display:flex; gap:4px; flex-wrap:wrap; }
 .card-actions { margin-top:8px; padding-top:6px; border-top:1px solid var(--el-border-color-lighter); }
 .header-left, .header-right { display:flex; align-items:center; gap:8px; }
+
+.draft-output { margin-top:16px; border:1px solid var(--el-border-color); border-radius:6px; overflow:hidden; }
+.draft-output-header { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:var(--el-fill-color-light); border-bottom:1px solid var(--el-border-color); font-size:13px; }
+.draft-output-body { padding:16px; max-height:300px; overflow-y:auto; background:#fff; font-size:14px; line-height:1.8; }
+.markdown-body :deep(h1) { font-size:20px; margin:16px 0 8px; border-bottom:1px solid var(--el-border-color); padding-bottom:4px; }
+.markdown-body :deep(h2) { font-size:18px; margin:14px 0 6px; }
+.markdown-body :deep(h3) { font-size:16px; margin:12px 0 4px; }
+.markdown-body :deep(h4) { font-size:15px; margin:10px 0 4px; }
+.markdown-body :deep(p) { margin:4px 0; }
+.markdown-body :deep(ul) { margin:4px 0; padding-left:24px; }
+.markdown-body :deep(li) { margin:2px 0; }
+.markdown-body :deep(strong) { font-weight:600; }
 </style>

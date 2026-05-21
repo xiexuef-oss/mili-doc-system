@@ -66,12 +66,6 @@ const router = createRouter({
               name: 'ProjectInputFiles',
               component: () => import('@/views/project/ProjectInputFileList.vue'),
               meta: { title: '输入文件' }
-            },
-            {
-              path: 'ai-assistant',
-              name: 'ProjectAiAssistant',
-              component: () => import('@/views/project/ProjectAiAssistant.vue'),
-              meta: { title: 'AI 辅助' }
             }
           ]
         },

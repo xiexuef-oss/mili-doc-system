@@ -83,8 +83,8 @@ public class CatalogGenerationService {
         // 3. Render prompt with stage info
         String userPrompt = promptTemplateService.render("catalog-generation",
             Map.of("context", stageContext + "\n" + context));
-        String systemPrompt = "你是一位军工文档策划专家，精通 GJB 3206B 技术状态管理各阶段的文档需求。"
-            + "请根据阶段特点生成该阶段特有的文档清单。不同阶段的文档应有明显差异。仅返回 JSON 数组，不包含任何其他文字。";
+        String systemPrompt = "你是一位军工文档策划专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》三维分类体系（7个阶段×15个内容类别）、GJB 3206B 技术状态管理各阶段的文档需求。"
+            + "请根据阶段特点生成该阶段特有的文档清单，覆盖 GJB 5882 定义的十五大文档类别中该阶段适用的所有类别。不同阶段的文档应有明显差异。仅返回 JSON 数组，不包含任何其他文字。";
 
         log.info("Catalog generation for project={} stage={}: system {} chars, user {} chars",
             projectId, stageId, systemPrompt.length(), userPrompt.length());
@@ -129,7 +129,9 @@ public class CatalogGenerationService {
             catalog.setStageId(stageId);
             catalog.setDocCode(item.docCode);
             catalog.setDocName(item.docName);
+            catalog.setDocCategory(item.docCategory);
             catalog.setDocType(item.docType);
+            catalog.setStageCode(item.stageCode);
             catalog.setRequiredFlag(item.requiredFlag != null ? item.requiredFlag : true);
             catalog.setStatus("DRAFT");
             catalog.setCreatedBy(userId);
@@ -178,7 +180,9 @@ public class CatalogGenerationService {
     public static class CatalogItem {
         public String docCode;
         public String docName;
+        public String docCategory;
         public String docType;
+        public String stageCode;
         public Boolean requiredFlag;
     }
 }

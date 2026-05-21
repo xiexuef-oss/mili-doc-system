@@ -13,9 +13,19 @@
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="docCode" label="文档编号" width="140" />
       <el-table-column prop="docName" label="文档名称" min-width="200" />
-      <el-table-column prop="docType" label="文档类型" width="120">
+      <el-table-column prop="docCategory" label="文档类别" width="110">
+        <template #default="{ row }">
+          <el-tag size="small" type="success">{{ categoryLabel(row.docCategory) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="docType" label="文档类型" width="130">
         <template #default="{ row }">
           <el-tag size="small">{{ docTypeLabel(row.docType) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="stageCode" label="阶段" width="70">
+        <template #default="{ row }">
+          <el-tag v-if="row.stageCode" size="small" type="warning">{{ row.stageCode }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="requiredFlag" label="必选" width="70">
@@ -83,21 +93,28 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="文档类别" prop="docCategory">
+              <el-select v-model="form.docCategory" style="width: 100%" @change="onCategoryChange" placeholder="选择类别">
+                <el-option v-for="c in docCategories" :key="c.dictCode" :label="c.dictName" :value="c.dictCode" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="文档类型" prop="docType">
-              <el-select v-model="form.docType" style="width: 100%">
-                <el-option label="技术文档" value="TECH_DOC" />
-                <el-option label="管理文档" value="MGMT_DOC" />
-                <el-option label="质量文档" value="QUALITY_DOC" />
-                <el-option label="设计文档" value="DESIGN_DOC" />
-                <el-option label="测试文档" value="TEST_DOC" />
+              <el-select v-model="form.docType" style="width: 100%" :disabled="!form.docCategory" placeholder="选择具体类型">
+                <el-option v-for="t in filteredDocTypes" :key="t.dictCode" :label="t.dictName" :value="t.dictCode" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="文档名称" prop="docName">
-          <el-input v-model="form.docName" />
-        </el-form-item>
         <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="适用阶段">
+              <el-select v-model="form.stageCode" style="width: 100%" placeholder="选择阶段" clearable>
+                <el-option v-for="s in docStages" :key="s.dictCode" :label="`${s.dictCode} ${s.dictName}`" :value="s.dictCode" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="必选" prop="requiredFlag">
               <el-switch v-model="form.requiredFlag" />
@@ -137,6 +154,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDocCatalogs, createDocCatalog, updateDocCatalog, deleteDocCatalog, getDraftStatus, type DocCatalogItem } from '@/api/doc-catalog'
 import { getProjects, type ProjectItem } from '@/api/project'
+import { getDictItems, type DictItem } from '@/api/dict'
 
 const route = useRoute()
 const workspaceProjectId = computed(() => {
@@ -162,7 +180,9 @@ const emptyForm = (): DocCatalogItem => ({
   projectId: 0,
   docCode: '',
   docName: '',
+  docCategory: '',
   docType: '',
+  stageCode: '',
   requiredFlag: true,
   status: 'DRAFT'
 })
@@ -173,12 +193,49 @@ const formRules = {
   docName: [{ required: true, message: '请输入文档名称', trigger: 'blur' }]
 }
 
-function docTypeLabel(type: string) {
-  const map: Record<string, string> = {
-    TECH_DOC: '技术文档', MGMT_DOC: '管理文档', QUALITY_DOC: '质量文档',
-    DESIGN_DOC: '设计文档', TEST_DOC: '测试文档'
-  }
-  return map[type] || type
+// Dict-based category and type
+const docCategories = ref<DictItem[]>([])
+const docTypes = ref<DictItem[]>([])
+const docStages = ref<DictItem[]>([])
+const filteredDocTypes = ref<DictItem[]>([])
+const categoryNameMap = ref<Record<string, string>>({})
+const typeNameMap = ref<Record<string, string>>({})
+
+function onCategoryChange(categoryCode: string) {
+  form.docType = ''
+  filteredDocTypes.value = categoryCode
+    ? docTypes.value.filter(t => t.parentCode === categoryCode)
+    : []
+}
+
+function categoryLabel(code?: string) {
+  if (!code) return '-'
+  return categoryNameMap.value[code] || code
+}
+
+function docTypeLabel(type?: string) {
+  if (!type) return '-'
+  return typeNameMap.value[type] || type
+}
+
+async function loadDocDicts() {
+  try {
+    const [catRes, typeRes, stageRes] = await Promise.all([
+      getDictItems('DOC_CATEGORY'),
+      getDictItems('DOC_TYPE'),
+      getDictItems('DOC_STAGE')
+    ])
+    docCategories.value = catRes.data.data || []
+    docTypes.value = typeRes.data.data || []
+    docStages.value = stageRes.data.data || []
+    // Build name maps
+    for (const c of docCategories.value) {
+      categoryNameMap.value[c.dictCode] = c.dictName
+    }
+    for (const t of docTypes.value) {
+      typeNameMap.value[t.dictCode] = t.dictName
+    }
+  } catch { /* ignore */ }
 }
 
 function statusTag(status: string) {
@@ -229,6 +286,10 @@ function showCreateDialog() {
 function showEditDialog(row: DocCatalogItem) {
   editingId.value = row.id!
   Object.assign(form, { ...row })
+  // Pre-populate filtered types for the current category
+  if (row.docCategory) {
+    filteredDocTypes.value = docTypes.value.filter(t => t.parentCode === row.docCategory)
+  }
   dialogVisible.value = true
 }
 
@@ -265,6 +326,7 @@ async function handleDelete(row: DocCatalogItem) {
 
 onMounted(() => {
   if (!workspaceProjectId.value) fetchProjects()
+  loadDocDicts()
   fetchData()
 })
 </script>

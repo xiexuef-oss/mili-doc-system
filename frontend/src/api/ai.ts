@@ -204,3 +204,77 @@ export function getEmbeddingStats() {
 export function getIndexTasks() {
   return api.get('/ai/embedding/tasks')
 }
+
+// ---- General AI Chat ----
+
+export function streamChat(
+  message: string,
+  history: { role: string; content: string }[],
+  onChunk: (text: string) => void,
+  onDone: (fullText: string) => void,
+  onError: (err: Error) => void
+): AbortController {
+  const controller = new AbortController()
+  const token = getToken()
+  const url = '/api/v1/ai/chat/stream'
+
+  let fullText = ''
+
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream'
+    },
+    body: JSON.stringify({ message, history }),
+    signal: controller.signal
+  }).then(async response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('Response body is not readable')
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      let eventType = ''
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventType = line.substring(6).trim()
+        } else if (line.startsWith('data:')) {
+          const data = line.substring(5).trim()
+          if (eventType === 'chunk') {
+            fullText += data
+            onChunk(data)
+          } else if (eventType === 'done') {
+            onDone(fullText)
+            return
+          } else if (eventType === 'error') {
+            onError(new Error(data))
+            return
+          }
+          eventType = ''
+        }
+      }
+    }
+    onDone(fullText)
+  }).catch(err => {
+    if (err.name !== 'AbortError') {
+      onError(err)
+    }
+  })
+
+  return controller
+}

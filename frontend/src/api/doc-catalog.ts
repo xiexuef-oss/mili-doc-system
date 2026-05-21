@@ -6,7 +6,9 @@ export interface DocCatalogItem {
   stageId?: number
   docCode: string
   docName: string
+  docCategory?: string
   docType: string
+  stageCode?: string
   requiredFlag: boolean
   meetingUsage?: string
   usageSource?: string
@@ -51,6 +53,10 @@ export function issueDocCatalog(id: number) {
 
 export function changeDocCatalog(id: number, changeReason: string) {
   return api.post(`/doc-catalogs/${id}/change`, { changeReason })
+}
+
+export function generateCatalogByStage(projectId: number, stageId: number, stageCode: string, overwrite = true) {
+  return api.post('/doc-catalogs/generate-by-stage', { projectId, stageId, stageCode, overwrite })
 }
 
 export function getDraftStatus(projectId: number) {

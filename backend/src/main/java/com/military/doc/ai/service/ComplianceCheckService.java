@@ -85,7 +85,7 @@ public class ComplianceCheckService {
                    "docsSummary", docsSummary,
                    "context", context.length() > 2000 ? context.substring(0, 2000) : context));
 
-        String systemPrompt = "你是一位军工标准合规审查专家。请评估基线文件与适用标准条款的符合性。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工标准合规审查专家，精通 GJB 3206B 技术状态管理、GJB 9001C 质量管理、GJB 5882-2006 文档分类编码。请从技术状态标识、更改控制、质量体系符合性、文档编码合规、密级合理性五个维度对基线文件进行审查。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

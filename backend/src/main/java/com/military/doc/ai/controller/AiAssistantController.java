@@ -1,6 +1,6 @@
 package com.military.doc.ai.controller;
 
-import com.military.doc.ai.llm.OllamaClient;
+import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.context.VectorIndexService;
 import com.military.doc.ai.entity.EmbeddingIndexTask;
 import com.military.doc.ai.service.CatalogGenerationService;
@@ -98,6 +98,9 @@ public class AiAssistantController {
     private LlmProperties llmProperties;
 
     @Autowired
+    private LlmClient llmClient;
+
+    @Autowired
     private OkHttpClient httpClient;
 
     @Autowired
@@ -124,38 +127,52 @@ public class AiAssistantController {
     }
 
     @GetMapping("/health")
-    @Operation(summary = "检查本地大模型连接状态")
+    @Operation(summary = "检查大模型连接状态")
     public Result<Map<String, Object>> health() {
         Map<String, Object> status = new java.util.LinkedHashMap<>();
         status.put("provider", llmProperties.getProvider());
         status.put("model", llmProperties.getModel());
         status.put("baseUrl", llmProperties.getBaseUrl());
         status.put("connected", false);
-        status.put("modelLoaded", false);
 
         try {
-            Request request = new Request.Builder()
-                .url(llmProperties.getBaseUrl() + "/api/tags")
-                .get()
-                .build();
+            boolean isOllama = "ollama".equals(llmProperties.getProvider());
+            String healthUrl = isOllama
+                ? llmProperties.getBaseUrl() + "/api/tags"
+                : llmProperties.getBaseUrl() + "/v1/models";
+            Request.Builder reqBuilder = new Request.Builder().url(healthUrl).get();
+            if (!isOllama) {
+                reqBuilder.header("Authorization", "Bearer " + llmProperties.getApiKey());
+            }
+            Request request = reqBuilder.build();
             try (var response = httpClient.newCall(request).execute()) {
                 status.put("connected", response.isSuccessful());
                 status.put("httpStatus", response.code());
                 if (response.isSuccessful() && response.body() != null) {
-                    String body = response.body().string();
-                    var node = objectMapper.readTree(body);
-                    var models = node.get("models");
-                    if (models != null && models.isArray()) {
-                        var modelNames = new java.util.ArrayList<String>();
-                        for (var m : models) {
-                            String name = m.has("name") ? m.get("name").asText() : "";
-                            modelNames.add(name);
-                            if (name.equals(llmProperties.getModel()) ||
-                                name.startsWith(llmProperties.getModel() + ":")) {
-                                status.put("modelLoaded", true);
+                    String bodyStr = response.body().string();
+                    var node = objectMapper.readTree(bodyStr);
+                    if (isOllama) {
+                        var models = node.get("models");
+                        if (models != null && models.isArray()) {
+                            var modelNames = new java.util.ArrayList<String>();
+                            for (var m : models) {
+                                String name = m.has("name") ? m.get("name").asText() : "";
+                                modelNames.add(name);
                             }
+                            status.put("availableModels", modelNames);
+                            status.put("modelLoaded", true);
                         }
-                        status.put("availableModels", modelNames);
+                    } else {
+                        var models = node.get("data");
+                        if (models != null && models.isArray()) {
+                            var modelNames = new java.util.ArrayList<String>();
+                            for (var m : models) {
+                                String id = m.has("id") ? m.get("id").asText() : "";
+                                modelNames.add(id);
+                            }
+                            status.put("availableModels", modelNames);
+                            status.put("modelLoaded", !modelNames.isEmpty());
+                        }
                     }
                 }
             }
@@ -420,6 +437,94 @@ public class AiAssistantController {
     @Operation(summary = "查询索引任务状态")
     public Result<List<EmbeddingIndexTask>> getIndexTasks() {
         return Result.success(vectorIndexService.getRecentTasks());
+    }
+
+    // ---- General AI Chat (Engineering Assistant) ----
+
+    private static final String ENGINEER_SYSTEM_PROMPT =
+        "你是一个军工项目文档策划与编制系统的AI工程助手。你的职责是协助工程师完成以下工作：\n" +
+        "- 解答军工标准（GJB 5882-2006、GJB 438C、GJB 9001C、GJB 3206B 等）相关的问题\n" +
+        "- 提供技术文档编写建议（依据 GJB 5882-2006 军工产品研制技术文件编写指南）\n" +
+        "- 协助技术方案分析和设计（覆盖论证/方案/工程研制/定型/批生产/退役各阶段）\n" +
+        "- 解答项目管理、技术状态管理（GJB 3206B）相关问题\n" +
+        "- 帮助理解标准条款和合规要求\n" +
+        "- 熟悉七阶段(L/F/C/S/D/P/N)和十五大文档类别(PROCESS/SOFTWARE/MANUFACTURE/STANDARDIZE/QUALITY/RISK/RELIABILITY/MAINTAINABILITY/TESTABILITY/SUPPORTABILITY/SAFETY/ENVIRONMENT/EMC/ERGONOMICS/ACHIEVEMENT)\n\n" +
+        "请用专业、准确、简洁的中文回答。如果不确定，请明确说明。";
+
+    @PostMapping("/chat/stream")
+    @Operation(summary = "AI 工程助手流式对话（SSE）")
+    public SseEmitter chatStream(@RequestBody Map<String, Object> body) {
+        String userMessage = (String) body.get("message");
+        @SuppressWarnings("unchecked")
+        var historyList = (List<Map<String, String>>) body.get("history");
+
+        if (userMessage == null || userMessage.isBlank()) {
+            SseEmitter emitter = new SseEmitter();
+            try {
+                emitter.send(SseEmitter.event().name("error").data("message is required"));
+                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
+            }
+            return emitter;
+        }
+
+        // Build the full prompt: include history as context
+        StringBuilder fullPrompt = new StringBuilder();
+        if (historyList != null && !historyList.isEmpty()) {
+            fullPrompt.append("以下是之前的对话历史：\n");
+            for (var msg : historyList) {
+                String role = msg.get("role");
+                String content = msg.get("content");
+                if (content != null && !content.isBlank()) {
+                    fullPrompt.append(role.equals("user") ? "工程师: " : "AI助手: ");
+                    fullPrompt.append(content).append("\n");
+                }
+            }
+            fullPrompt.append("\n---\n\n");
+        }
+        fullPrompt.append("工程师: ").append(userMessage).append("\nAI助手: ");
+
+        SseEmitter emitter = new SseEmitter(300000L);
+        log.info("AI chat stream requested, message length={}", userMessage.length());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                llmClient.chatStream(ENGINEER_SYSTEM_PROMPT, fullPrompt.toString(), chunk -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("chunk").data(chunk));
+                    } catch (IOException e) {
+                        log.warn("SSE send failed for chat chunk, aborting stream", e);
+                        throw new RuntimeException("SSE send failed", e);
+                    }
+                });
+                emitter.send(SseEmitter.event().name("done").data("complete"));
+                emitter.complete();
+            } catch (RuntimeException e) {
+                log.warn("Chat stream interrupted: {}", e.getMessage());
+                emitter.completeWithError(e);
+            } catch (Exception e) {
+                log.error("Chat stream failed", e);
+                emitter.completeWithError(e);
+            }
+        });
+
+        emitter.onTimeout(() -> log.warn("SSE timeout for chat stream"));
+        emitter.onError(ex -> log.warn("SSE error for chat stream: {}", ex.getMessage()));
+
+        return emitter;
+    }
+
+    @PostMapping("/chat")
+    @Operation(summary = "AI 工程助手对话（非流式）")
+    public Result<Map<String, Object>> chat(@RequestBody Map<String, Object> body) {
+        String userMessage = (String) body.get("message");
+        if (userMessage == null || userMessage.isBlank()) {
+            return Result.error("PARAM_ERROR", "message is required");
+        }
+        log.info("AI chat requested, message length={}", userMessage.length());
+        String response = llmClient.chat(ENGINEER_SYSTEM_PROMPT, userMessage);
+        return Result.success(Map.of("reply", response));
     }
 
     private Long toLong(Object value) {

@@ -13,6 +13,7 @@ public class SysDict {
     private String dictType;
     private String dictCode;
     private String dictName;
+    private String parentCode;
     private Integer orderNum;
     private String status;
 

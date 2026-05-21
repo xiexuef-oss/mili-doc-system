@@ -5,6 +5,7 @@ export interface DictItem {
   dictType: string
   dictCode: string
   dictName: string
+  parentCode?: string
   orderNum: number
   status: string
 }
@@ -13,8 +14,8 @@ export function getDictTypes() {
   return api.get('/dicts/types')
 }
 
-export function getDictItems(dictType: string) {
-  return api.get(`/dicts/items/${dictType}`)
+export function getDictItems(dictType: string, parentCode?: string) {
+  return api.get(`/dicts/items/${dictType}`, { params: parentCode ? { parentCode } : undefined })
 }
 
 export function getDicts(params: {

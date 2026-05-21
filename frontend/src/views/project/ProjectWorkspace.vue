@@ -19,7 +19,6 @@
       <el-tab-pane label="文档台账" name="doc-ledger" />
       <el-tab-pane label="评审管理" name="reviews" />
       <el-tab-pane label="项目成员" name="members" />
-      <el-tab-pane label="AI 辅助" name="ai-assistant" />
     </el-tabs>
 
     <div class="workspace-content">
@@ -62,7 +61,6 @@ function handleTabChange(name: string) {
     name === 'doc-ledger' ? 'ProjectDocLedger' :
     name === 'reviews' ? 'ProjectReviews' :
     name === 'members' ? 'ProjectMembers' :
-    name === 'ai-assistant' ? 'ProjectAiAssistant' :
     'ProjectInputFiles'
   router.replace({ name: routeName, params: { projectId: projectId.value } })
 }
@@ -74,8 +72,7 @@ watch(() => route.name, (name) => {
     ProjectDocLedger: 'doc-ledger',
     ProjectReviews: 'reviews',
     ProjectMembers: 'members',
-    ProjectInputFiles: 'input-files',
-    ProjectAiAssistant: 'ai-assistant'
+    ProjectInputFiles: 'input-files'
   }
   if (name && map[String(name)]) {
     activeTab.value = map[String(name)]

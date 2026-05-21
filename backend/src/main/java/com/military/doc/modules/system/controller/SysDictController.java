@@ -33,15 +33,17 @@ public class SysDictController {
     }
 
     @GetMapping("/items/{dictType}")
-    @Operation(summary = "按类型获取字典项列表")
-    public Result<List<SysDict>> listByType(@PathVariable String dictType) {
-        List<SysDict> list = sysDictMapper.selectList(
-            new LambdaQueryWrapper<SysDict>()
-                .eq(SysDict::getDictType, dictType)
-                .eq(SysDict::getStatus, "ACTIVE")
-                .orderByAsc(SysDict::getOrderNum)
-        );
-        return Result.success(list);
+    @Operation(summary = "按类型获取字典项列表，可选 parentCode 过滤子项")
+    public Result<List<SysDict>> listByType(@PathVariable String dictType,
+                                             @RequestParam(required = false) String parentCode) {
+        LambdaQueryWrapper<SysDict> wrapper = new LambdaQueryWrapper<SysDict>()
+            .eq(SysDict::getDictType, dictType)
+            .eq(SysDict::getStatus, "ACTIVE")
+            .orderByAsc(SysDict::getOrderNum);
+        if (parentCode != null && !parentCode.isEmpty()) {
+            wrapper.eq(SysDict::getParentCode, parentCode);
+        }
+        return Result.success(sysDictMapper.selectList(wrapper));
     }
 
     @PostMapping

@@ -49,10 +49,14 @@
               <el-tag size="small" type="info" style="margin-left:6px">{{ (catalogsMap[stage.id!] || []).length }} 项</el-tag>
             </div>
             <div v-show="catalogsExpanded[stage.id!]" class="catalog-list">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                <el-button size="small" type="success" :loading="catalogsLoading[stage.id!]"
+                  @click.stop="handleGenerateByStage(stage)">
+                  <el-icon><Plus /></el-icon>GJB 5882 规则生成
+                </el-button>
                 <el-button size="small" type="primary" link :loading="catalogsLoading[stage.id!]"
                   @click.stop="handleGenerateCatalog(stage.id!)">
-                  AI 生成文档清单
+                  AI 补充生成
                 </el-button>
                 <el-tooltip :content="aiOnline ? `大模型已连接 (${aiModel})` : '大模型未连接，请确认 Ollama 已启动'" placement="top">
                   <span :style="{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'11px',color:aiOnline?'#67c23a':'#f56c6c',cursor:'pointer'}" @click.stop="handleCheckHealth">
@@ -68,6 +72,7 @@
                 </el-tag>
                 <span class="catalog-code">{{ cat.docCode }}</span>
                 <span class="catalog-name">{{ cat.docName }}</span>
+                <el-tag v-if="cat.docCategory" size="small" type="success">{{ cat.docCategory }}</el-tag>
                 <el-tag size="small" type="">{{ docTypeLabel(cat.docType) }}</el-tag>
               </div>
             </div>
@@ -146,10 +151,11 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, Plus } from '@element-plus/icons-vue'
 import { getProjectStages, updateProjectStage, requestTransition, suspendStage, terminateStage, gateCheck, type ProjectStageItem } from '@/api/project-stage'
-import { getDocCatalogs, type DocCatalogItem } from '@/api/doc-catalog'
+import { getDocCatalogs, generateCatalogByStage, type DocCatalogItem } from '@/api/doc-catalog'
 import { generateCatalog, checkAiHealth } from '@/api/ai'
+import { getDictItems, type DictItem } from '@/api/dict'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -233,12 +239,39 @@ function toggleCatalog(stageId: number) {
   catalogsExpanded.value[stageId] = !catalogsExpanded.value[stageId]
 }
 
-function docTypeLabel(t: string) {
-  const map: Record<string, string> = {
-    DESIGN_DOC: '设计文档', TEST_DOC: '试验文档', MANAGEMENT_DOC: '管理文档',
-    QUALITY_DOC: '质量文档', REVIEW_DOC: '评审文档'
+const typeNameMap = ref<Record<string, string>>({})
+
+function docTypeLabel(t?: string) {
+  if (!t) return '-'
+  return typeNameMap.value[t] || t
+}
+
+async function loadDocTypeNames() {
+  try {
+    const res = await getDictItems('DOC_TYPE')
+    const types = res.data.data || []
+    for (const t of types) {
+      typeNameMap.value[t.dictCode] = t.dictName
+    }
+  } catch { /* ignore */ }
+}
+
+async function handleGenerateByStage(stage: ProjectStageItem) {
+  if (!stage.id || !stage.stageCode) {
+    ElMessage.warning('阶段缺少 stageCode，无法按模板生成')
+    return
   }
-  return map[t] || t
+  catalogsLoading.value[stage.id] = true
+  try {
+    await generateCatalogByStage(projectId, stage.id, stage.stageCode, true)
+    const res = await getDocCatalogs({ projectId, stageId: stage.id })
+    const records = res.data.data?.records || []
+    catalogsMap.value[stage.id] = records
+    catalogsExpanded.value[stage.id] = true
+    ElMessage.success(`GJB 5882 模板生成完成，共 ${records.length} 项`)
+  } catch {
+    ElMessage.error('模板生成失败')
+  } finally { catalogsLoading.value[stage.id] = false }
 }
 
 async function handleRequestTransition(stage: ProjectStageItem) {
@@ -308,7 +341,7 @@ async function handleCheckHealth() {
   }
 }
 
-onMounted(() => { fetch(); handleCheckHealth() })
+onMounted(() => { fetch(); handleCheckHealth(); loadDocTypeNames() })
 </script>
 
 <style scoped>

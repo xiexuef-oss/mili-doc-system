@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 
 @Slf4j
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("'${llm.provider:ollama}'.equals('ollama')")
 public class OllamaClient implements LlmClient {
 
     private final OkHttpClient httpClient;

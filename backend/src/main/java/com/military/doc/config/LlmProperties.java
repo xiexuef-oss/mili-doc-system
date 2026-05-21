@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class LlmProperties {
     private String provider = "ollama";
     private String baseUrl = "http://localhost:11434";
+    private String apiKey = "";
     private String model = "qwen2.5:7b";
     private double temperature = 0.7;
     private int maxTokens = 4096;

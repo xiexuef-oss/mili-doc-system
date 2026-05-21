@@ -102,7 +102,7 @@ public class StageReadinessService {
                 .collect(Collectors.joining("\n")),
                 "context", context.length() > 2000 ? context.substring(0, 2000) : context));
 
-        String systemPrompt = "你是一位军工项目管理专家。请基于阶段数据指标评估转阶段准备度，识别风险并提供建议。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工项目管理专家，精通 GJB 3206B 技术状态管理和军工产品研制七阶段（L/F/C/S/D/P/N）管理要求。请从文档齐套性、基线状态、更改控制、技术状态审核、风险状态、阶段特有要求六个维度评估转阶段准备度。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);

@@ -53,7 +53,7 @@ public class PreReviewService {
                    "content", content.length() > 8000 ? content.substring(0, 8000) : content,
                    "context", context.length() > 3000 ? context.substring(0, 3000) : context));
 
-        String systemPrompt = "你是一位军工文档评审专家。请基于适用标准条款对文档进行预评审，评估其合规度和完整性。返回 JSON 格式结果。";
+        String systemPrompt = "你是一位军工文档评审专家，精通 GJB 5882-2006 三维分类体系（阶段×内容×形式）、GJB 3206B 技术状态管理。请从标准符合性、阶段匹配度、文档间一致性、条款覆盖率四个维度进行预评审。返回 JSON 格式结果。";
 
         try {
             String response = llmClient.chat(systemPrompt, userPrompt);
