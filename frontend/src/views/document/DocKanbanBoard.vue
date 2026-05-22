@@ -54,11 +54,25 @@
                 {{ securityLabel(item.securityLevel) }}
               </el-tag>
             </div>
+            <!-- Completeness indicator -->
+            <div v-if="completenessMap.get(item.id!)" class="card-completeness" @click.stop="goAssembly(item)">
+              <CompletenessProgressBar
+                :passed="completenessMap.get(item.id!)!.passed"
+                :warnings="completenessMap.get(item.id!)!.warnings"
+                :errors="completenessMap.get(item.id!)!.errors"
+                :total="completenessMap.get(item.id!)!.total"
+              />
+            </div>
             <!-- AI buttons per column -->
             <div v-if="col.key === 'PLANNED'" class="card-actions">
               <el-button size="small" type="primary" link @click.stop="generateDraft(item)">AI 生成初稿</el-button>
             </div>
+            <div v-if="col.key === 'RELEASED'" class="card-actions">
+              <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
+            </div>
             <div v-if="col.key === 'DRAFTING'" class="card-actions">
+              <el-button size="small" type="primary" link @click.stop="goAssembly(item)">章节编辑</el-button>
+              <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
               <el-button size="small" type="warning" link @click.stop="aiProofread(item)">AI 校对</el-button>
             </div>
             <div v-if="col.key === 'CHECKING'" class="card-actions">
@@ -198,7 +212,7 @@
           <span>生成结果</span>
           <span v-if="draftStreaming" style="color:var(--el-color-warning)">生成中，已接收 {{ draftCharCount }} 字...</span>
         </div>
-        <div class="draft-output-body" ref="draftContentRef">
+        <div class="draft-output-body">
           <div class="markdown-body" v-html="renderMarkdown(draftContent)" />
         </div>
       </div>
@@ -239,6 +253,15 @@
       </template>
     </el-dialog>
 
+    <!-- Docx Export Dialog -->
+    <DocxExportDialog
+      v-if="showExportItem"
+      v-model="showExportDialog"
+      :doc-ledger-id="showExportItem.id!"
+      :doc-name="showExportItem.docName"
+      @done="loadKanban"
+    />
+
     <!-- AI Pre-Review Result Dialog -->
     <el-dialog v-model="showPreReviewDialog" title="AI 预评审结果" width="560px">
       <div v-if="preReviewItem" style="margin-bottom:12px">
@@ -276,14 +299,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import {
   getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromCatalog,
   type DocLedgerItem, type DocLedgerLogItem
 } from '@/api/doc-ledger'
+import { getCompletionSummary } from '@/api/doc-chapter'
+import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
+import DocxExportDialog from '@/components/DocxExportDialog.vue'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
 import { getDocCatalogsByProject, type DocCatalogItem } from '@/api/doc-catalog'
 import {
@@ -292,7 +318,10 @@ import {
 import { getDictItems, type DictItem } from '@/api/dict'
 
 const route = useRoute()
+const router = useRouter()
 const projectId = Number(route.params.projectId)
+
+const completenessMap = ref<Map<number, { passed: number; warnings: number; errors: number; total: number }>>(new Map())
 
 const columns = [
   { key: 'PLANNED',  label: '策划',     tagType: '' },
@@ -378,10 +407,42 @@ function statusTagType(s: string) {
 function allowedTransitions(current: string) { return TRANSITIONS[current] || [] }
 function canTransitionFrom(key: string) { return !!(TRANSITIONS[key] && TRANSITIONS[key].length > 0) }
 
+function goAssembly(item: DocLedgerItem) {
+  router.push({ name: 'DocAssembly', params: { projectId, docLedgerId: item.id } })
+}
+
+function exportDocx(item: DocLedgerItem) {
+  showExportItem.value = item
+  showExportDialog.value = true
+}
+
+const showExportDialog = ref(false)
+const showExportItem = ref<DocLedgerItem | null>(null)
+
+async function loadCompletenessForAll() {
+  const allItems = Object.values(kanbanData.value).flat()
+  for (const item of allItems) {
+    if (!item.id) continue
+    try {
+      const res = await getCompletionSummary(item.id)
+      const s = res.data.data
+      if (s && s.total > 0) {
+        completenessMap.value.set(item.id, {
+          passed: s.filled || 0,
+          warnings: s.partial || 0,
+          errors: s.empty || 0,
+          total: s.total
+        })
+      }
+    } catch { /* skip */ }
+  }
+}
+
 async function loadKanban() {
   try {
     const res = await getKanbanData(projectId, selectedStageId.value || undefined)
     kanbanData.value = res.data.data
+    loadCompletenessForAll()
   } catch { /* ignore */ }
 }
 async function loadStages() {
@@ -391,8 +452,8 @@ async function loadStages() {
   } catch { /* ignore */ }
 }
 
-function handleDragStart(ev: DragEvent, item: DocLedgerItem) { draggedItem = item }
-function handleDrop(ev: DragEvent, targetColumn: string) {
+function handleDragStart(_ev: DragEvent, item: DocLedgerItem) { draggedItem = item }
+function handleDrop(_ev: DragEvent, targetColumn: string) {
   dragOverColumn.value = null
   if (!draggedItem || draggedItem.lifecycleStatus === targetColumn) return
   const allowed = allowedTransitions(draggedItem.lifecycleStatus!)
@@ -416,7 +477,7 @@ async function handleCreate() {
   if (!createForm.docName) { ElMessage.warning('请输入文档名称'); return }
   creating.value = true
   try {
-    await createDocLedger({ ...createForm, projectId })
+    await createDocLedger({ ...createForm, projectId } as any)
     ElMessage.success('创建成功')
     showCreateDialog.value = false
     loadKanban()
@@ -479,7 +540,6 @@ const draftContent = ref('')
 const draftCharCount = ref(0)
 const draftSaving = ref(false)
 const catalogEntries = ref<DocCatalogItem[]>([])
-const draftContentRef = ref<HTMLElement>()
 let draftAbortController: AbortController | null = null
 
 async function generateDraft(item: DocLedgerItem) {

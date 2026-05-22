@@ -23,6 +23,12 @@ const router = createRouter({
           component: () => import('@/views/project/ProjectList.vue'),
           meta: { title: '项目管理' }
         },
+        {
+          path: 'projects/create',
+          name: 'ProjectCreate',
+          component: () => import('@/views/project/ProjectCreateWizard.vue'),
+          meta: { title: '新建项目' }
+        },
         // 项目工作台 (7 tabs)
         {
           path: 'projects/:projectId',
@@ -66,6 +72,24 @@ const router = createRouter({
               name: 'ProjectInputFiles',
               component: () => import('@/views/project/ProjectInputFileList.vue'),
               meta: { title: '输入文件' }
+            },
+            {
+              path: 'master-data',
+              name: 'ProjectMasterData',
+              component: () => import('@/views/project/ProjectMasterDataEdit.vue'),
+              meta: { title: '主数据' }
+            },
+            {
+              path: 'assembly/:docLedgerId',
+              name: 'DocAssembly',
+              component: () => import('@/views/document/DocAssemblyPage.vue'),
+              meta: { title: '文档汇编' }
+            },
+            {
+              path: 'completeness',
+              name: 'CompletenessCheck',
+              component: () => import('@/views/document/CompletenessCheckPage.vue'),
+              meta: { title: '完整性检查' }
             }
           ]
         },
@@ -75,6 +99,18 @@ const router = createRouter({
           name: 'TemplateList',
           component: () => import('@/views/template/TemplateList.vue'),
           meta: { title: '模版管理' }
+        },
+        {
+          path: 'templates/v2',
+          name: 'TemplateV2List',
+          component: () => import('@/views/template/TemplateV2List.vue'),
+          meta: { title: '增强模板' }
+        },
+        {
+          path: 'templates/v2/:templateId/chapters',
+          name: 'TemplateChapterEditor',
+          component: () => import('@/views/template/TemplateChapterEditor.vue'),
+          meta: { title: '章节结构编辑' }
         },
         {
           path: 'templates/create',
@@ -101,6 +137,12 @@ const router = createRouter({
           name: 'KnowledgeBaseList',
           component: () => import('@/views/knowledge/KnowledgeBaseList.vue'),
           meta: { title: '知识库' }
+        },
+        {
+          path: 'knowledge-cards',
+          name: 'KnowledgeCardList',
+          component: () => import('@/views/knowledge/KnowledgeCardList.vue'),
+          meta: { title: '知识卡片' }
         },
         // 系统管理
         {
@@ -141,6 +183,12 @@ const router = createRouter({
           meta: { title: '模型训练' }
         },
         // Sub-feature routes (not in sidebar, accessed from detail drawers)
+        {
+          path: 'doc-chapters/:chapterId/edit',
+          name: 'DocChapterEditor',
+          component: () => import('@/views/document/DocChapterEditor.vue'),
+          meta: { title: '编辑章节' }
+        },
         {
           path: 'projects/:projectId/stage/:stageId/workbench',
           name: 'StageWorkbench',

@@ -13,8 +13,16 @@
       </div>
     </div>
 
+    <!-- Process Pipeline -->
+    <el-card shadow="never" style="margin-bottom:16px" v-if="navigatorData">
+      <ProcessPipeline
+        :stages="navigatorData.stages || []"
+        :current-stage="stage?.stageCode"
+      />
+    </el-card>
+
     <el-row :gutter="16" v-if="workbench">
-      <!-- 左侧：指标卡片 -->
+      <!-- 左侧：指标卡片 + 知识 -->
       <el-col :span="8">
         <el-card shadow="never" class="metric-card">
           <template #header><span>文档完成度</span></template>
@@ -38,6 +46,19 @@
           <template #header><span>变更状态</span></template>
           <p class="metric-detail">待处理变更: {{ workbench.openChangeRequests || 0 }}</p>
           <p class="metric-detail">评审中文档: {{ workbench.reviewingDocs || 0 }}</p>
+        </el-card>
+
+        <el-card shadow="never" class="metric-card">
+          <template #header><span>知识卡片</span></template>
+          <div v-if="stageKnowledgeCards.length > 0">
+            <div v-for="card in stageKnowledgeCards" :key="card.id" style="margin-bottom:8px">
+              <KnowledgeCardPopover
+                :keyword="card.title"
+                :label="card.title"
+              />
+            </div>
+          </div>
+          <p v-else class="no-data">暂无相关知识卡片</p>
         </el-card>
       </el-col>
 
@@ -124,6 +145,10 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import { getStageWorkbench, requestTransition, gateCheck, type ProjectStageItem } from '@/api/project-stage'
 import { createBaseline, getBaselines, getBaselineItems, approveBaseline, setBaselineEffective, getStatusAccounting, type ConfigurationBaselineVO, type ConfigurationBaselineItemVO, type ConfigurationStatusAccountingVO } from '@/api/configuration-management'
 import { stageReadiness } from '@/api/ai'
+import { getNavigatorData } from '@/api/project-master-data'
+import { getKnowledgeCards, type KnowledgeCard } from '@/api/knowledge-card'
+import ProcessPipeline from '@/components/ProcessPipeline.vue'
+import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
 
 const route = useRoute()
 const stageId = Number(route.params.stageId)
@@ -135,6 +160,8 @@ const blLoading = ref(false)
 
 const stage = ref<ProjectStageItem | null>(null)
 const workbench = ref<any>(null)
+const navigatorData = ref<any>(null)
+const stageKnowledgeCards = ref<KnowledgeCard[]>([])
 const baselines = ref<ConfigurationBaselineVO[]>([])
 const events = ref<ConfigurationStatusAccountingVO[]>([])
 const baselineItems = ref<ConfigurationBaselineItemVO[]>([])
@@ -282,10 +309,26 @@ async function handleAiReadiness() {
   } catch { /* ignore */ } finally { aiLoading.value = false }
 }
 
+async function loadNavigatorData() {
+  try {
+    const res = await getNavigatorData(projectId)
+    navigatorData.value = res.data.data
+  } catch { /* ignore */ }
+}
+
+async function loadStageKnowledgeCards() {
+  try {
+    const res = await getKnowledgeCards(undefined, 'project_stage', stageId)
+    stageKnowledgeCards.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   loadWorkbench()
   fetchBaselines()
   fetchEvents()
+  loadNavigatorData()
+  loadStageKnowledgeCards()
 })
 </script>
 

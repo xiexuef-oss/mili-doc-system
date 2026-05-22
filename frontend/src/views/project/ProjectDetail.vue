@@ -33,6 +33,49 @@
       <el-descriptions-item label="描述" :span="2">{{ project.description || '-' }}</el-descriptions-item>
     </el-descriptions>
 
+    <!-- Master Data Summary -->
+    <el-card v-if="masterData" shadow="never" class="info-card">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>项目主数据概览</span>
+          <el-button size="small" type="primary" @click="$router.push({ name: 'ProjectMasterData', params: { projectId: $route.params.projectId } })">
+            编辑主数据
+          </el-button>
+        </div>
+      </template>
+      <el-row :gutter="16">
+        <el-col :span="8" v-if="masterData.equipmentInfo">
+          <h4 class="md-section-title">装备信息</h4>
+          <p v-if="masterData.equipmentInfo.equipmentName">名称: {{ masterData.equipmentInfo.equipmentName }}</p>
+          <p v-if="masterData.equipmentInfo.equipmentType">类型: {{ masterData.equipmentInfo.equipmentType }}</p>
+          <p v-if="masterData.equipmentInfo.model">型号: {{ masterData.equipmentInfo.model }}</p>
+        </el-col>
+        <el-col :span="8" v-if="masterData.tacticalIndicators">
+          <h4 class="md-section-title">战术技术指标</h4>
+          <p>{{ (masterData.tacticalIndicators || []).length }} 项指标</p>
+        </el-col>
+        <el-col :span="8" v-if="masterData.productTree">
+          <h4 class="md-section-title">产品结构</h4>
+          <p>{{ (masterData.productTree || []).length }} 个节点</p>
+        </el-col>
+      </el-row>
+      <el-row :gutter="16" style="margin-top:12px">
+        <el-col :span="8" v-if="masterData.teamMembers">
+          <h4 class="md-section-title">项目团队</h4>
+          <p>{{ (masterData.teamMembers || []).length }} 人</p>
+        </el-col>
+        <el-col :span="8" v-if="masterData.milestones">
+          <h4 class="md-section-title">里程碑</h4>
+          <p>{{ (masterData.milestones || []).length }} 个节点</p>
+        </el-col>
+        <el-col :span="8">
+          <div v-if="!masterData.equipmentInfo && !masterData.tacticalIndicators" style="color:#999;font-size:13px;padding:12px 0">
+            尚未填写主数据，点击"编辑主数据"开始填写
+          </div>
+        </el-col>
+      </el-row>
+    </el-card>
+
     <div v-if="!project" style="text-align:center;padding:80px 0;color:#999">加载中...</div>
   </div>
 </template>
@@ -43,9 +86,11 @@ import { useRoute } from 'vue-router'
 import { getProject, type ProjectItem } from '@/api/project'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
 import { getStageDefinitions, type StageDefinitionItem } from '@/api/project-stage'
+import { getMasterData } from '@/api/project-master-data'
 
 const route = useRoute()
 const project = ref<ProjectItem | null>(null)
+const masterData = ref<any>(null)
 const stages = ref<ProjectStageItem[]>([])
 const stageDefs = ref<StageDefinitionItem[]>([])
 
@@ -99,12 +144,19 @@ async function loadStages() {
   } catch { /* ignore */ }
 }
 
+async function loadMasterData() {
+  try {
+    const res = await getMasterData(Number(route.params.projectId))
+    masterData.value = res.data.data
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
   const id = Number(route.params.projectId)
   try {
     const res = await getProject(id)
     project.value = res.data.data
-    await loadStages()
+    await Promise.all([loadStages(), loadMasterData()])
   } catch {
     // error handled
   }

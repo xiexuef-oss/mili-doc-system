@@ -1,0 +1,305 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <el-button link @click="$router.back()"><el-icon><ArrowLeft /></el-icon>返回台账</el-button>
+        <h3 style="display:inline;margin-left:16px">文档汇编</h3>
+        <el-tag v-if="ledger" size="small" style="margin-left:12px">{{ ledger.docName }}</el-tag>
+      </div>
+      <div class="header-actions">
+        <el-select v-model="selectedTemplateId" placeholder="选择模板初始化章节" style="width:220px" @change="handleInitChapters">
+          <el-option v-for="t in templates" :key="t.id" :label="t.templateName" :value="t.id" />
+        </el-select>
+        <el-button type="primary" @click="showExport = true">
+          <el-icon><Download /></el-icon>导出 Word
+        </el-button>
+      </div>
+    </div>
+
+    <el-row :gutter="16" v-if="ledger">
+      <!-- Left: Chapter tree -->
+      <el-col :span="5">
+        <el-card shadow="never">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span>章节结构</span>
+              <el-tag size="small">{{ completionSummary.filled || 0 }}/{{ completionSummary.total || 0 }}</el-tag>
+            </div>
+          </template>
+          <ChapterTreeViewer
+            :tree-data="chapterTree"
+            @node-click="selectChapter"
+          />
+          <CompletenessProgressBar
+            v-if="completionSummary.total > 0"
+            :passed="completionSummary.filled || 0"
+            :warnings="completionSummary.partial || 0"
+            :errors="completionSummary.empty || 0"
+            :total="completionSummary.total || 1"
+            style="margin-top:12px"
+          />
+        </el-card>
+      </el-col>
+
+      <!-- Center: Chapter editor -->
+      <el-col :span="13">
+        <el-card shadow="never">
+          <template #header>
+            <span v-if="selectedChapter">
+              编辑: {{ selectedChapter.chapterNumber }} {{ selectedChapter.chapterTitle }}
+            </span>
+            <span v-else>请从左侧选择章节</span>
+          </template>
+
+          <template v-if="selectedChapter">
+            <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+              <el-tag size="small" :type="statusType(selectedChapter.fillStatus)">
+                {{ statusLabel(selectedChapter.fillStatus) }}
+              </el-tag>
+              <el-select v-model="selectedChapter.fillStatus" size="small" style="width:120px" @change="handleStatusChange">
+                <el-option label="已完成" value="FILLED" />
+                <el-option label="部分完成" value="PARTIAL" />
+                <el-option label="待填写" value="EMPTY" />
+              </el-select>
+              <el-input-number v-model="selectedChapter.fillPercentage" :min="0" :max="100" size="small" style="width:100px" placeholder="%" @change="handleFillPercentChange" />
+
+              <KnowledgeCardPopover
+                v-if="selectedChapter.chapterTitle"
+                :keyword="selectedChapter.chapterTitle"
+                :label="'GJB参考'"
+                style="margin-left:auto"
+              />
+            </div>
+
+            <el-input
+              v-model="selectedChapter.content"
+              type="textarea"
+              :rows="20"
+              placeholder="在此输入章节内容..."
+            />
+
+            <div v-if="contentSchema" class="schema-fields">
+              <el-divider content-position="left">结构化字段</el-divider>
+              <div v-for="(field, key) in contentSchema" :key="key" style="margin-bottom:8px">
+                <el-input v-model="contentJsonObj[key]" :placeholder="'输入: ' + (field as any).label || key" size="small" />
+              </div>
+              <el-button size="small" type="primary" style="margin-top:4px" @click="handleSaveContent">保存内容</el-button>
+            </div>
+
+            <div style="margin-top:16px;display:flex;gap:8px">
+              <el-button type="primary" size="small" :loading="saving" @click="handleSaveContent">保存内容</el-button>
+              <el-button size="small" @click="selectedChapter = null">取消</el-button>
+            </div>
+          </template>
+        </el-card>
+      </el-col>
+
+      <!-- Right: Knowledge & completeness -->
+      <el-col :span="6">
+        <el-card shadow="never">
+          <template #header><span>知识卡片</span></template>
+          <div v-if="knowledgeCards.length > 0">
+            <div v-for="card in knowledgeCards" :key="card.id" class="knowledge-item" @click="selectedCard = card">
+              <h4>{{ card.title }}</h4>
+              <p v-if="card.plainLanguage" class="plain-text">{{ card.plainLanguage }}</p>
+              <el-tag v-if="card.gjbReference" size="small" type="danger">{{ card.gjbReference }}</el-tag>
+            </div>
+          </div>
+          <el-empty v-else description="暂无相关卡片" :image-size="40" />
+        </el-card>
+
+        <el-card shadow="never" style="margin-top:12px" v-if="selectedCard">
+          <template #header><span>{{ selectedCard.title }}</span></template>
+          <div class="card-detail">
+            <div v-if="selectedCard.plainLanguage" class="plain-box">
+              <strong>白话解释：</strong>{{ selectedCard.plainLanguage }}
+            </div>
+            <div v-if="selectedCard.gjbReference">
+              <strong>GJB原文参考：</strong>{{ selectedCard.gjbReference }}
+            </div>
+            <div v-if="selectedCard.tags" style="margin-top:4px">
+              <el-tag v-for="tag in cardTags" :key="tag" size="small" type="info" style="margin-right:4px">{{ tag }}</el-tag>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Export Dialog -->
+    <DocxExportDialog
+      v-if="ledger"
+      v-model="showExport"
+      :doc-ledger-id="ledger.id!"
+      :doc-name="ledger.docName"
+      :chapter-count="completionSummary.total"
+      :fill-rate="completionSummary.total ? Math.round((completionSummary.filled || 0) / completionSummary.total * 100) : 0"
+      @done="loadChapters"
+    />
+
+    <div v-if="!ledger" style="text-align:center;padding:80px 0;color:#999">加载中...</div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, Download } from '@element-plus/icons-vue'
+import { getDocLedger, type DocLedgerItem } from '@/api/doc-ledger'
+import { getChapterTree, getCompletionSummary, updateChapterContent, initFromTemplate } from '@/api/doc-chapter'
+import { getTemplates, type DocTemplateV2 } from '@/api/template-v2'
+import { getKnowledgeCards, type KnowledgeCard } from '@/api/knowledge-card'
+import ChapterTreeViewer from '@/components/ChapterTreeViewer.vue'
+import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
+import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
+import DocxExportDialog from '@/components/DocxExportDialog.vue'
+
+const route = useRoute()
+const docLedgerId = Number(route.params.docLedgerId || 0)
+
+const ledger = ref<DocLedgerItem | null>(null)
+const chapterTree = ref<any[]>([])
+const selectedChapter = ref<any>(null)
+const saving = ref(false)
+const showExport = ref(false)
+
+const templates = ref<DocTemplateV2[]>([])
+const selectedTemplateId = ref<number | null>(null)
+const knowledgeCards = ref<KnowledgeCard[]>([])
+const selectedCard = ref<KnowledgeCard | null>(null)
+
+const completionSummary = ref<{ total: number; filled: number; partial: number; empty: number; score: number }>({ total: 0, filled: 0, partial: 0, empty: 0, score: 0 })
+
+const contentSchema = computed(() => {
+  if (!selectedChapter.value?.contentSchema) return null
+  try {
+    const schema = typeof selectedChapter.value.contentSchema === 'string'
+      ? JSON.parse(selectedChapter.value.contentSchema)
+      : selectedChapter.value.contentSchema
+    return schema.fields || schema
+  } catch { return null }
+})
+
+const contentJsonObj: Record<string, any> = reactive({})
+
+const cardTags = computed(() => {
+  if (!selectedCard.value?.tags) return []
+  return selectedCard.value.tags.split(',').map(t => t.trim()).filter(Boolean)
+})
+
+function statusType(s: string) {
+  const map: Record<string, string> = { FILLED: 'success', PARTIAL: 'warning', EMPTY: 'info' }
+  return map[s] || 'info'
+}
+
+function statusLabel(s: string) {
+  const map: Record<string, string> = { FILLED: '已完成', PARTIAL: '部分完成', EMPTY: '待填写' }
+  return map[s] || s
+}
+
+async function selectChapter(ch: any) {
+  selectedChapter.value = ch
+  // Load full chapter content
+  try {
+    const { getChapter } = await import('@/api/doc-chapter')
+    const res = await getChapter(ch.id)
+    selectedChapter.value = res.data.data || ch
+    // Parse contentJson
+    if (selectedChapter.value.contentJson) {
+      try {
+        Object.assign(contentJsonObj, JSON.parse(selectedChapter.value.contentJson))
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
+
+async function loadLedger() {
+  try {
+    const res = await getDocLedger(docLedgerId)
+    ledger.value = res.data.data
+  } catch { /* ignore */ }
+}
+
+async function loadChapters() {
+  try {
+    const res = await getChapterTree(docLedgerId)
+    chapterTree.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
+async function loadSummary() {
+  try {
+    const res = await getCompletionSummary(docLedgerId)
+    completionSummary.value = res.data.data || { total: 0, filled: 0, partial: 0, empty: 0, score: 0 }
+  } catch { /* ignore */ }
+}
+
+async function loadTemplates() {
+  try {
+    const res = await getTemplates()
+    templates.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
+async function loadKnowledgeCards() {
+  try {
+    const res = await getKnowledgeCards(undefined, 'doc_chapter', docLedgerId)
+    knowledgeCards.value = res.data.data || []
+  } catch { /* ignore */ }
+}
+
+async function handleInitChapters() {
+  if (!selectedTemplateId.value) return
+  try {
+    await initFromTemplate(docLedgerId, selectedTemplateId.value, 1)
+    ElMessage.success('章节结构已从模板初始化')
+    loadChapters()
+    loadSummary()
+  } catch {
+    ElMessage.error('初始化失败')
+  }
+}
+
+async function handleSaveContent() {
+  if (!selectedChapter.value?.id) return
+  saving.value = true
+  try {
+    const contentJson = Object.keys(contentJsonObj).length > 0 ? JSON.stringify(contentJsonObj) : undefined
+    await updateChapterContent(selectedChapter.value.id, selectedChapter.value.content || '', contentJson, 1)
+    ElMessage.success('内容已保存')
+    loadSummary()
+  } catch { ElMessage.error('保存失败') }
+  saving.value = false
+}
+
+async function handleStatusChange() {
+  if (!selectedChapter.value?.id) return
+  try {
+    const { updateFillStatus } = await import('@/api/doc-chapter')
+    await updateFillStatus(selectedChapter.value.id, selectedChapter.value.fillStatus, selectedChapter.value.fillPercentage)
+    loadSummary()
+  } catch { /* ignore */ }
+}
+
+async function handleFillPercentChange() {
+  handleStatusChange()
+}
+
+onMounted(() => { loadLedger(); loadChapters(); loadSummary(); loadTemplates(); loadKnowledgeCards() })
+</script>
+
+<style scoped>
+.page { background: #fff; padding: 24px; border-radius: 4px; min-height: calc(100vh - 140px); }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.header-actions { display: flex; gap: 8px; }
+.knowledge-item {
+  padding: 8px; margin-bottom: 6px; border: 1px solid #ebeef5; border-radius: 4px;
+  cursor: pointer; transition: background .2s;
+}
+.knowledge-item:hover { background: #f5f7fa; }
+.knowledge-item h4 { margin: 0 0 4px; font-size: 13px; }
+.plain-text { font-size: 12px; color: #67c23a; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-detail { font-size: 13px; line-height: 1.8; }
+.plain-box { padding: 8px; background: #f0f9eb; border-radius: 4px; margin-bottom: 8px; }
+.schema-fields { margin-top: 12px; padding: 12px; background: var(--el-fill-color-lighter); border-radius: 4px; }
+</style>

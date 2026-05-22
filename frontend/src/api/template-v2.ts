@@ -64,8 +64,10 @@ export function getCategoryTree() { return api.get('/template-structure/categori
 export function getTemplates(categoryId?: number) {
   return api.get('/template-structure/templates', { params: categoryId ? { categoryId } : {} })
 }
+export function getTemplate(id: number) { return api.get(`/template-structure/templates/${id}`) }
 export function createTemplate(data: DocTemplateV2) { return api.post('/template-structure/templates', data) }
 export function updateTemplate(id: number, data: DocTemplateV2) { return api.put(`/template-structure/templates/${id}`, data) }
+export function deleteTemplate(id: number) { return api.delete(`/template-structure/templates/${id}`) }
 
 // Chapters
 export function getChapters(templateId: number) { return api.get(`/template-structure/templates/${templateId}/chapters`) }

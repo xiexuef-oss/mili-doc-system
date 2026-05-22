@@ -36,3 +36,7 @@ export function getMasterDataSchema() {
 export function getDefaultMasterData() {
   return api.get('/projects/1/master-data/default')
 }
+
+export function getNavigatorData(projectId: number) {
+  return api.get(`/projects/${projectId}/navigator`)
+}

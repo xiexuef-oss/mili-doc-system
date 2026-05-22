@@ -17,7 +17,9 @@
       <el-tab-pane label="输入文件" name="input-files" />
       <el-tab-pane label="阶段管理" name="stages" />
       <el-tab-pane label="文档台账" name="doc-ledger" />
+      <el-tab-pane label="主数据" name="master-data" />
       <el-tab-pane label="评审管理" name="reviews" />
+      <el-tab-pane label="完整性检查" name="completeness" />
       <el-tab-pane label="项目成员" name="members" />
     </el-tabs>
 
@@ -59,7 +61,9 @@ function handleTabChange(name: string) {
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :
     name === 'doc-ledger' ? 'ProjectDocLedger' :
+    name === 'master-data' ? 'ProjectMasterData' :
     name === 'reviews' ? 'ProjectReviews' :
+    name === 'completeness' ? 'CompletenessCheck' :
     name === 'members' ? 'ProjectMembers' :
     'ProjectInputFiles'
   router.replace({ name: routeName, params: { projectId: projectId.value } })
@@ -70,7 +74,9 @@ watch(() => route.name, (name) => {
     ProjectOverview: 'overview',
     ProjectStages: 'stages',
     ProjectDocLedger: 'doc-ledger',
+    ProjectMasterData: 'master-data',
     ProjectReviews: 'reviews',
+    CompletenessCheck: 'completeness',
     ProjectMembers: 'members',
     ProjectInputFiles: 'input-files'
   }
