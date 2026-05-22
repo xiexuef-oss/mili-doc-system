@@ -1,0 +1,1 @@
+import{t as e}from"./api-D39N_Z9z.js";function t(t){return e.get(`/roles`,{params:t})}function n(t){return e.post(`/roles`,t)}function r(t,n){return e.put(`/roles/${t}`,n)}function i(t){return e.delete(`/roles/${t}`)}export{r as i,i as n,t as r,n as t};

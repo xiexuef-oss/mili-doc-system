@@ -7,6 +7,7 @@ import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.entity.DocLedgerLog;
 import com.military.doc.modules.document.mapper.DocLedgerLogMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
+import com.military.doc.modules.document.service.DocChapterService;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
@@ -42,6 +43,9 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
 
     @Autowired
     private DocCatalogMapper docCatalogMapper;
+
+    @Autowired
+    private DocChapterService docChapterService;
 
     @Override
     @Transactional
@@ -183,5 +187,16 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
         }
 
         return created;
+    }
+
+    @Override
+    @Transactional
+    public void initChaptersFromTemplate(Long docLedgerId, Long templateId, Long operatorId) {
+        DocLedger ledger = getById(docLedgerId);
+        if (ledger == null) throw BusinessException.notFound("文档台账条目不存在: " + docLedgerId);
+        docChapterService.initFromTemplate(docLedgerId, templateId, operatorId);
+        ledger.setLifecycleStatus("DRAFTING");
+        ledger.setUpdatedBy(operatorId);
+        updateById(ledger);
     }
 }

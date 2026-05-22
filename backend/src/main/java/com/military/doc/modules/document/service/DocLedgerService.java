@@ -19,4 +19,9 @@ public interface DocLedgerService extends IService<DocLedger> {
      * 从文档目录同步创建台账条目。已存在的(同catalogId)跳过，返回新创建的条目数。
      */
     int syncFromCatalog(Long projectId, Long stageId, Long operatorId);
+
+    /**
+     * 从V2模板初始化文档章节结构
+     */
+    void initChaptersFromTemplate(Long docLedgerId, Long templateId, Long operatorId);
 }
