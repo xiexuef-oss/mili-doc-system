@@ -26,11 +26,13 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\se
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocEditLockController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\entity\ReviewMeeting.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\mapper\ReviewMeetingDocumentMapper.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocxGenerationService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\service\ReviewExpertOpinionFileService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\controller\ProjectController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\security\JwtTokenProvider.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\vo\LoginRequest.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\mapper\DocEditLockMapper.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\ProcessNavigatorService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\mapper\SysPermissionMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\service\ReviewMeetingOpinionFileService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\entity\ReviewExpertOpinionFile.java
@@ -69,6 +71,8 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\prompt\PromptT
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\mapper\StageTransitionCheckMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\exception\BusinessException.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\entity\DocTemplateCategory.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\impl\ProjectMasterDataServiceImpl.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\CompletenessCheckController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocChapterController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\service\KnowledgeBaseService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\mapper\DocTemplateChapterMapper.java
@@ -79,6 +83,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\Archiv
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\CompletenessCheckResult.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\mapper\KnowledgeCardMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocEffectiveBaselineService.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\CompletenessCheckService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocEditSessionService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\standard\mapper\StandardClauseMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\mapper\DocFileMapper.java
@@ -125,10 +130,12 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\ProjectMember.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\mapper\KnowledgeBaseMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocChapter.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\util\GjbStyleHelper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\controller\ConfigurationManagementController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\mapper\EmbeddingIndexTaskMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\StageTransitionCheck.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\context\ContextAssemblyService.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\controller\ProcessNavigatorController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\service\SysUserService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\controller\AiAssistantController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\impl\ConfigurationManagementServiceImpl.java
@@ -137,11 +144,13 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\config\MybatisPlu
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\result\Result.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\mapper\DocTemplateElementMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\mapper\SysUserRoleMapper.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\service\KnowledgeCardService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\impl\ProjectStageServiceImpl.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\controller\SysPermissionController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocFileController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\exception\GlobalExceptionHandler.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\util\FileTextExtractor.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\constant\MasterDataSchemaRegistry.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\config\SpaController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocChangeImpactController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\impl\ProjectServiceImpl.java
@@ -155,6 +164,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\standard\service\OcrService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\OpinionSummaryService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\impl\TrainingDataServiceImpl.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\controller\KnowledgeCardController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\storage\MinioFileStorageService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocEffectiveBaseline.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocVersionService.java
@@ -179,6 +189,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\en
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\service\ReviewMeetingDocumentService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\knowledge\entity\KnowledgeBase.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocFile.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocxController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocEditLock.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocEditSession.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocChapterService.java
@@ -200,7 +211,9 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\standard\service\impl\StandardServiceImpl.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\ChangeImpactService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\storage\FileStorageService.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\controller\ProjectMasterDataController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\mapper\ProjectInputFileMapper.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\service\ProjectMasterDataService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\StageReadinessService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\mapper\ConfigurationBaselineItemMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\service\impl\DocTemplateServiceImpl.java
@@ -209,6 +222,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\en
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\entity\DocTemplate.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\system\controller\SysUserController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\mapper\DocEditSessionMapper.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocxParsingService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\ConfigurationAudit.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\service\impl\ReviewMeetingDocumentServiceImpl.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\Project.java

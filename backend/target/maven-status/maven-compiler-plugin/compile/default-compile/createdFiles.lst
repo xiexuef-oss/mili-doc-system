@@ -10,7 +10,9 @@ com\military\doc\modules\project\mapper\ConfigurationAuditMapper.class
 com\military\doc\modules\review\controller\ReviewMeetingDocumentController.class
 com\military\doc\modules\template\service\impl\DocTemplateCategoryServiceImpl.class
 com\military\doc\modules\project\entity\ConfigurationAudit.class
+com\military\doc\modules\document\service\DocxGenerationService.class
 com\military\doc\modules\template\service\TemplateGenerateService$ByteArrayMultipartFile.class
+com\military\doc\modules\document\controller\CompletenessCheckController.class
 com\military\doc\modules\project\service\impl\ConfigurationManagementServiceImpl.class
 com\military\doc\modules\document\entity\DocLedger.class
 com\military\doc\modules\system\controller\SysRoleController.class
@@ -41,10 +43,12 @@ com\military\doc\modules\document\service\DocVersionService.class
 com\military\doc\modules\template\entity\DocTemplate.class
 com\military\doc\modules\project\service\ProjectService.class
 com\military\doc\ai\entity\TrainingExample.class
+com\military\doc\modules\project\service\impl\ProjectMasterDataServiceImpl.class
 com\military\doc\modules\document\service\impl\DocEffectiveBaselineServiceImpl.class
 com\military\doc\modules\review\controller\ReviewExpertOpinionFileController.class
 com\military\doc\modules\review\service\ReviewMeetingDocumentService.class
 com\military\doc\modules\standard\mapper\StandardMapper.class
+com\military\doc\modules\document\service\DocxParsingService$ChapterExtract.class
 com\military\doc\modules\document\mapper\DocLedgerMapper.class
 com\military\doc\modules\project\controller\StageTransitionCheckController.class
 com\military\doc\modules\document\service\StageCatalogTemplateService$StageDoc.class
@@ -64,6 +68,7 @@ com\military\doc\modules\review\mapper\ReviewExpertOpinionFileMapper.class
 com\military\doc\modules\template\service\TemplateStructureService.class
 com\military\doc\modules\system\entity\SysPermission.class
 com\military\doc\modules\template\entity\DocTemplateChapter.class
+com\military\doc\modules\document\controller\DocxController.class
 com\military\doc\modules\standard\service\StandardService.class
 com\military\doc\modules\template\entity\DocTemplateChapterElement.class
 com\military\doc\common\storage\MinioFileStorageService.class
@@ -71,6 +76,7 @@ com\military\doc\modules\document\service\DocEffectiveBaselineService.class
 com\military\doc\modules\project\entity\ConfigurationChangeRequest.class
 com\military\doc\modules\template\mapper\DocTemplateV2Mapper.class
 com\military\doc\modules\document\entity\DocCatalog.class
+com\military\doc\modules\knowledge\controller\KnowledgeCardController.class
 com\military\doc\modules\template\mapper\DocTemplateChapterMapper.class
 com\military\doc\modules\review\controller\ReviewMeetingOpinionFileController.class
 com\military\doc\modules\system\controller\AuthController.class
@@ -83,9 +89,11 @@ com\military\doc\modules\project\service\impl\ProjectStageServiceImpl.class
 com\military\doc\modules\document\entity\CompletenessCheckResult.class
 com\military\doc\modules\standard\entity\StandardClause.class
 com\military\doc\common\security\JwtTokenProvider.class
+com\military\doc\modules\document\util\GjbStyleHelper.class
 com\military\doc\modules\document\mapper\DocCatalogMapper.class
 com\military\doc\modules\project\mapper\ProjectStageMapper.class
 com\military\doc\modules\template\service\impl\DocTemplateV2ServiceImpl.class
+com\military\doc\modules\project\service\ProcessNavigatorService.class
 com\military\doc\modules\template\mapper\DocTemplateElementMapper.class
 com\military\doc\ai\service\OpinionSummaryService.class
 com\military\doc\ai\llm\EmbeddingClient.class
@@ -111,10 +119,13 @@ com\military\doc\modules\document\service\impl\DocLedgerServiceImpl.class
 com\military\doc\ai\service\CatalogGenerationService.class
 com\military\doc\modules\system\controller\SysUserController.class
 com\military\doc\modules\document\service\DocLedgerService.class
+com\military\doc\modules\document\service\DocxParsingService.class
+com\military\doc\modules\project\controller\ProjectMasterDataController.class
 com\military\doc\ai\mapper\TrainingExampleMapper.class
 com\military\doc\modules\document\entity\DocLedgerLog.class
 com\military\doc\modules\system\mapper\SysRoleMapper.class
 com\military\doc\ai\entity\EmbeddingIndexTask.class
+com\military\doc\modules\project\controller\ProcessNavigatorController.class
 com\military\doc\modules\document\service\DocCatalogService.class
 com\military\doc\ai\service\DraftGenerationService.class
 com\military\doc\modules\review\entity\ReviewMeeting.class
@@ -140,6 +151,7 @@ com\military\doc\modules\document\service\DocChangeImpactService.class
 com\military\doc\ai\llm\OpenAiCompatibleClient.class
 com\military\doc\modules\standard\service\impl\StandardClauseServiceImpl.class
 com\military\doc\modules\template\entity\DocTemplateElement.class
+com\military\doc\modules\document\service\CompletenessCheckService.class
 com\military\doc\modules\document\service\impl\DocChapterServiceImpl.class
 com\military\doc\modules\standard\service\StandardParseService$StandardParseResult.class
 com\military\doc\modules\project\constant\StageDefinition.class
@@ -163,6 +175,7 @@ com\military\doc\ai\config\AiConfig.class
 com\military\doc\modules\knowledge\entity\KnowledgeBase.class
 com\military\doc\modules\document\mapper\DocChangeImpactMapper.class
 com\military\doc\common\storage\FileStorageService.class
+com\military\doc\modules\project\constant\MasterDataSchemaRegistry.class
 com\military\doc\ai\service\CatalogGenerationService$CatalogItem.class
 com\military\doc\modules\project\entity\ConfigurationStatusAccounting.class
 com\military\doc\modules\system\entity\SysUser.class
@@ -180,6 +193,7 @@ com\military\doc\modules\review\service\ReviewMeetingOpinionFileService.class
 com\military\doc\modules\review\mapper\ReviewMeetingOpinionFileMapper.class
 com\military\doc\modules\review\service\impl\ReviewMeetingServiceImpl.class
 com\military\doc\modules\review\service\impl\ReviewExpertOpinionFileServiceImpl.class
+com\military\doc\modules\project\service\ProjectMasterDataService.class
 com\military\doc\modules\system\mapper\SysUserRoleMapper.class
 com\military\doc\modules\system\service\impl\SysPermissionServiceImpl.class
 com\military\doc\ai\config\EmbeddingProperties.class
@@ -196,6 +210,7 @@ com\military\doc\modules\project\controller\ConfigurationManagementController.cl
 com\military\doc\modules\standard\mapper\StandardClauseMapper.class
 com\military\doc\modules\project\entity\ProjectMember.class
 com\military\doc\modules\system\vo\LoginResponse.class
+com\military\doc\modules\document\service\DocxGenerationService$ByteArrayMultipartFile.class
 com\military\doc\ai\service\ComplianceCheckService.class
 com\military\doc\modules\document\controller\DocCatalogController.class
 com\military\doc\modules\document\controller\DocChangeImpactController.class
@@ -218,6 +233,7 @@ com\military\doc\modules\project\entity\Project.class
 com\military\doc\modules\review\entity\ReviewMeetingOpinionFile.class
 com\military\doc\modules\document\service\DocEditLockService.class
 com\military\doc\modules\knowledge\entity\KnowledgeCard.class
+com\military\doc\modules\knowledge\service\KnowledgeCardService.class
 com\military\doc\modules\project\mapper\ProjectMasterDataMapper.class
 com\military\doc\modules\system\entity\SysRolePermission.class
 com\military\doc\modules\template\service\DocTemplateCategoryService.class
