@@ -39,12 +39,15 @@
             <el-button v-if="standard?.fileObjectId" type="success" size="small" :loading="extracting" @click="handleExtractClauses">
               自动提取条款
             </el-button>
+            <el-button type="primary" size="small" @click="showClauseDialog()">
+              <el-icon><Plus /></el-icon>添加条款
+            </el-button>
           </div>
         </div>
         <el-table :data="clauses" v-loading="clausesLoading" max-height="500" style="margin-top: 12px">
           <el-table-column prop="clauseNumber" label="章节号" width="100" />
           <el-table-column prop="clauseTitle" label="标题" width="220" />
-          <el-table-column prop="clauseContent" label="内容" min-width="300" show-overflow-tooltip />
+          <el-table-column prop="clauseContent" label="内容" min-width="250" show-overflow-tooltip />
           <el-table-column prop="keywords" label="关键字" width="140">
             <template #default="{ row }">
               <el-tag v-for="kw in (row.keywords || '').split(',')" :key="kw" size="small" class="kw-tag">
@@ -52,18 +55,52 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button link size="small" type="primary" @click="showClauseDialog(row)">编辑</el-button>
+              <el-button link size="small" type="danger" @click="handleDeleteClause(row)">删除</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
     </el-card>
+
+    <!-- Clause Edit Dialog -->
+    <el-dialog v-model="clauseDialogVisible" :title="editingClauseId ? '编辑条款' : '添加条款'" width="600px">
+      <el-form :model="clauseForm" label-width="80px">
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="章节号"><el-input v-model="clauseForm.clauseNumber" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="排序号"><el-input-number v-model="clauseForm.orderNum" :min="0" style="width:100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="父条款ID"><el-input-number v-model="clauseForm.parentId" :min="0" style="width:100%" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="标题"><el-input v-model="clauseForm.clauseTitle" /></el-form-item>
+        <el-form-item label="内容"><el-input v-model="clauseForm.clauseContent" type="textarea" :rows="6" /></el-form-item>
+        <el-form-item label="关键字"><el-input v-model="clauseForm.keywords" placeholder="逗号分隔" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="clauseDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="clauseSaving" @click="handleClauseSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { getStandard, getStandardDownloadUrl, getStandardClauses, searchStandardClauses, extractStandardClauses, type StandardItem, type StandardClauseItem } from '@/api/standard'
+import { ArrowLeft, Plus } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getStandard, getStandardDownloadUrl, getStandardClauses, searchStandardClauses,
+  extractStandardClauses, createStandardClause, updateStandardClause, deleteStandardClause,
+  type StandardItem, type StandardClauseItem
+} from '@/api/standard'
 
 const route = useRoute()
 const id = Number(route.params.id)
@@ -127,6 +164,53 @@ async function handleExtractClauses() {
   } finally {
     extracting.value = false
   }
+}
+
+// Clause editing
+const clauseDialogVisible = ref(false)
+const editingClauseId = ref<number | null>(null)
+const clauseSaving = ref(false)
+const clauseForm = reactive<StandardClauseItem>({
+  standardId: id, clauseNumber: '', clauseTitle: '', clauseContent: '', parentId: 0, orderNum: 0, keywords: ''
+})
+
+function showClauseDialog(row?: StandardClauseItem) {
+  if (row) {
+    editingClauseId.value = row.id!
+    Object.assign(clauseForm, row)
+  } else {
+    editingClauseId.value = null
+    Object.assign(clauseForm, {
+      standardId: id, clauseNumber: '', clauseTitle: '', clauseContent: '', parentId: 0, orderNum: 0, keywords: ''
+    })
+  }
+  clauseDialogVisible.value = true
+}
+
+async function handleClauseSave() {
+  clauseSaving.value = true
+  try {
+    if (editingClauseId.value) {
+      await updateStandardClause(id, editingClauseId.value, { ...clauseForm })
+      ElMessage.success('条款更新成功')
+    } else {
+      await createStandardClause(id, { ...clauseForm })
+      ElMessage.success('条款创建成功')
+    }
+    clauseDialogVisible.value = false
+    fetchClauses()
+  } finally {
+    clauseSaving.value = false
+  }
+}
+
+async function handleDeleteClause(row: StandardClauseItem) {
+  await ElMessageBox.confirm(`确定删除条款「${row.clauseNumber} ${row.clauseTitle}」吗？`, '确认删除', { type: 'warning' })
+  try {
+    await deleteStandardClause(id, row.id!)
+    ElMessage.success('删除成功')
+    fetchClauses()
+  } catch { /* cancelled */ }
 }
 
 onMounted(() => {

@@ -182,6 +182,13 @@ const router = createRouter({
           component: () => import('@/views/ai/TrainingManagement.vue'),
           meta: { title: '模型训练' }
         },
+        // 评审会议详情
+        {
+          path: 'review-meetings/:id',
+          name: 'ReviewMeetingDetail',
+          component: () => import('@/views/review/ReviewMeetingDetail.vue'),
+          meta: { title: '会议详情' }
+        },
         // Sub-feature routes (not in sidebar, accessed from detail drawers)
         {
           path: 'doc-chapters/:chapterId/edit',

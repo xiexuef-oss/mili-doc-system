@@ -180,6 +180,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\template\
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\CatalogGenerationService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\service\ProofreadingService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\controller\ProjectStageController.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\controller\TrainingDataController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\ProjectInputFile.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\llm\OpenAiCompatibleClient.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\MilitaryDocApplication.java
@@ -192,6 +193,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocxController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocEditLock.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\entity\DocEditSession.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\mybatis\JsonbTypeHandler.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocChapterService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\project\entity\ProjectStage.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\entity\ReviewMeetingDocument.java

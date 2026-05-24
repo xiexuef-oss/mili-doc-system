@@ -32,8 +32,9 @@
           <el-tag :type="statusTag(row.status)" size="small">{{ row.status }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
+          <el-button link type="primary" @click="router.push(`/review-meetings/${row.id}`)">详情</el-button>
           <el-button link type="primary" @click="showEditDialog(row)">编辑</el-button>
           <el-button v-if="row.status === 'DRAFT'" link type="success" @click="handleStatus(row, 'SCHEDULED')">排期</el-button>
           <el-button v-if="row.status === 'SCHEDULED'" link type="success" @click="handleStatus(row, 'IN_PROGRESS')">开始</el-button>
@@ -119,12 +120,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getReviewMeetings, createReviewMeeting, updateReviewMeeting, updateMeetingStatus, deleteReviewMeeting, type ReviewMeetingItem } from '@/api/review-meeting'
 import { getProjects, type ProjectItem } from '@/api/project'
 
 const route = useRoute()
+const router = useRouter()
 const workspaceProjectId = computed(() => {
   const pid = route.params.projectId
   return pid ? Number(pid) : undefined
