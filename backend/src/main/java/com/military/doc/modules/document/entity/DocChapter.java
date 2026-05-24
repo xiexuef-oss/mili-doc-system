@@ -1,11 +1,12 @@
 package com.military.doc.modules.document.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.military.doc.common.mybatis.JsonbTypeHandler;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doc_chapter")
+@TableName(value = "doc_chapter", autoResultMap = true)
 public class DocChapter {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -18,7 +19,10 @@ public class DocChapter {
     private Integer chapterLevel;
     private Integer orderNum;
     private String content;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String contentJson;
+
     private String fillStatus;
     private Integer fillPercentage;
     private String status;

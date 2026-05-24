@@ -1,11 +1,12 @@
 package com.military.doc.modules.template.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.military.doc.common.mybatis.JsonbTypeHandler;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doc_template_v2")
+@TableName(value = "doc_template_v2", autoResultMap = true)
 public class DocTemplateV2 {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -22,7 +23,10 @@ public class DocTemplateV2 {
     private String fileName;
     private Long fileSize;
     private String fileType;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String variablesSchema;
+
     private String status;
     private Integer versionNo;
 

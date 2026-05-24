@@ -1,12 +1,13 @@
 package com.military.doc.modules.document.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.military.doc.common.mybatis.JsonbTypeHandler;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("completeness_check_result")
+@TableName(value = "completeness_check_result", autoResultMap = true)
 public class CompletenessCheckResult {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -20,7 +21,10 @@ public class CompletenessCheckResult {
     private Integer warningItems;
     private Integer errorItems;
     private BigDecimal score;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String detailJson;
+
     private Long checkedBy;
     private LocalDateTime checkedAt;
 

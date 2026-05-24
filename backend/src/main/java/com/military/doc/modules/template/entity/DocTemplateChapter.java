@@ -1,11 +1,12 @@
 package com.military.doc.modules.template.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.military.doc.common.mybatis.JsonbTypeHandler;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doc_template_chapter")
+@TableName(value = "doc_template_chapter", autoResultMap = true)
 public class DocTemplateChapter {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -18,7 +19,10 @@ public class DocTemplateChapter {
     private Integer orderNum;
     private Boolean isRequired;
     private String applicabilityRule;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String contentSchema;
+
     private String standardClauseRef;
     private String description;
     private String writingTips;
