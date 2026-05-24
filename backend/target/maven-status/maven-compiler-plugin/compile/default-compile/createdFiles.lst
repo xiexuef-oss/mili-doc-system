@@ -106,7 +106,6 @@ com\military\doc\modules\project\mapper\ConfigurationBaselineMapper.class
 com\military\doc\common\result\Result.class
 com\military\doc\modules\project\entity\ConfigurationItem.class
 com\military\doc\modules\document\entity\DocChapter.class
-com\military\doc\ai\controller\TrainingDataController.class
 com\military\doc\modules\template\service\DocTemplateService.class
 com\military\doc\modules\knowledge\service\KnowledgeBaseService.class
 com\military\doc\modules\system\service\SysPermissionService.class
