@@ -55,6 +55,12 @@ public class TemplateStructureController {
         return Result.success(template);
     }
 
+    @DeleteMapping("/templates/{id}")
+    public Result<Void> deleteTemplate(@PathVariable Long id) {
+        templateV2Service.removeById(id);
+        return Result.success();
+    }
+
     // === Chapters ===
     @GetMapping("/templates/{templateId}/chapters")
     public Result<List<DocTemplateChapter>> getChapters(@PathVariable Long templateId) {
