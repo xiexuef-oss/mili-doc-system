@@ -12,6 +12,7 @@ import com.military.doc.modules.project.entity.ProjectStage;
 import com.military.doc.modules.project.mapper.ProjectInputFileMapper;
 import com.military.doc.modules.project.mapper.ProjectMapper;
 import com.military.doc.modules.project.mapper.ProjectStageMapper;
+import com.military.doc.modules.project.service.ProjectMasterDataService;
 import com.military.doc.modules.standard.entity.Standard;
 import com.military.doc.modules.standard.entity.StandardClause;
 import com.military.doc.modules.standard.mapper.StandardClauseMapper;
@@ -24,6 +25,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,6 +42,7 @@ public class ContextAssemblyService {
     private final FileTextExtractor fileTextExtractor;
     private final VectorIndexService vectorIndexService;
     private final EmbeddingProperties embeddingProperties;
+    private final ProjectMasterDataService masterDataService;
 
     private static final int MAX_CLAUSE_LENGTH = 500;
     private static final int MAX_INPUT_FILE_LENGTH = 3000;
@@ -53,7 +56,8 @@ public class ContextAssemblyService {
                                   FileStorageService fileStorageService,
                                   FileTextExtractor fileTextExtractor,
                                   VectorIndexService vectorIndexService,
-                                  EmbeddingProperties embeddingProperties) {
+                                  EmbeddingProperties embeddingProperties,
+                                  ProjectMasterDataService masterDataService) {
         this.projectMapper = projectMapper;
         this.inputFileMapper = inputFileMapper;
         this.projectStageMapper = projectStageMapper;
@@ -64,6 +68,7 @@ public class ContextAssemblyService {
         this.fileTextExtractor = fileTextExtractor;
         this.vectorIndexService = vectorIndexService;
         this.embeddingProperties = embeddingProperties;
+        this.masterDataService = masterDataService;
     }
 
     public String assembleContext(Long projectId) {
@@ -101,7 +106,27 @@ public class ContextAssemblyService {
             }
         }
 
-        // 3. Applicable standards and clauses (semantic RAG or exact match)
+        // 3. Master data
+        try {
+            Map<String, Object> masterData = masterDataService.getFlattenedData(projectId);
+            if (!masterData.isEmpty()) {
+                ctx.append("## 项目主数据\n");
+                for (Map.Entry<String, Object> entry : masterData.entrySet()) {
+                    Object value = entry.getValue();
+                    if (value == null) continue;
+                    String str = value instanceof String ? (String) value : value.toString();
+                    if (str.length() > 2000) {
+                        str = str.substring(0, 2000) + "\n...(已截断)";
+                    }
+                    ctx.append("- **").append(entry.getKey()).append("**: ").append(str).append("\n");
+                }
+                ctx.append("\n");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load master data for project {}: {}", projectId, e.getMessage());
+        }
+
+        // 4. Applicable standards and clauses (semantic RAG or exact match)
         if (embeddingProperties.isSemanticRagEnabled()) {
             String queryText = buildQueryText(project);
             List<SemanticMatch> clauses = vectorIndexService.searchSimilarClauses(queryText, 20);
@@ -154,7 +179,7 @@ public class ContextAssemblyService {
             }
         }
 
-        // 4. Knowledge base (semantic RAG or recent)
+        // 5. Knowledge base (semantic RAG or recent)
         if (embeddingProperties.isSemanticRagEnabled()) {
             String queryText = buildQueryText(project);
             List<SemanticMatch> articles = vectorIndexService.searchSimilarKnowledge(queryText, 5);
