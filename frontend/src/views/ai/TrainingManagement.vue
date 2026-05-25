@@ -238,7 +238,7 @@ async function loadData() {
     totalCount.value = pageData.total || 0
 
     // Load counts per quality
-    const [allRes, pendingRes, approvedRes, rejectedRes] = await Promise.all([
+    const [, pendingRes, approvedRes, rejectedRes] = await Promise.all([
       getTrainingExamples({ size: 1 }),
       getTrainingExamples({ quality: 'PENDING_REVIEW', size: 1 }),
       getTrainingExamples({ quality: 'APPROVED', size: 1 }),

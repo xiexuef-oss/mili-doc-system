@@ -355,7 +355,15 @@ async function handleBatchUpload() {
 async function handleDownload(row: TemplateItem) {
   try {
     const res = await getTemplateDownloadUrl(row.id!)
-    window.open(res.data.data, '_blank')
+    const url = res.data.data
+    // Fetch as blob, then trigger download with proper filename
+    const blobResp = await fetch(url)
+    const blob = await blobResp.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = row.fileName || row.templateName + (row.fileType || '.docx')
+    a.click()
+    URL.revokeObjectURL(a.href)
   } catch { /* ignore */ }
 }
 

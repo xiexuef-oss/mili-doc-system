@@ -13,6 +13,8 @@ export interface ReviewMeetingItem {
   attendeeUsers?: string
   expertGroup?: string
   status: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export function getReviewMeetings(params: {

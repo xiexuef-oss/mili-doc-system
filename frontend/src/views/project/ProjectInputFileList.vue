@@ -146,7 +146,14 @@ async function handleUpload() {
 async function handleDownload(row: any) {
   try {
     const res = await api.get(`/projects/${projectId.value}/input-files/${row.id}/download-url`)
-    window.open(res.data.data, '_blank')
+    const url = res.data.data
+    const blobResp = await fetch(url)
+    const blob = await blobResp.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = row.fileName || 'file'
+    a.click()
+    URL.revokeObjectURL(a.href)
   } catch { /* ignore */ }
 }
 

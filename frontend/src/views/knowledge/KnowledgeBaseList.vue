@@ -275,7 +275,14 @@ async function handleUpload() {
 async function handleDownload(row: KnowledgeBaseItem) {
   try {
     const res = await getKnowledgeBaseDownloadUrl(row.id!)
-    window.open(res.data.data, '_blank')
+    const url = res.data.data
+    const blobResp = await fetch(url)
+    const blob = await blobResp.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = row.fileName || row.title || 'knowledge.docx'
+    a.click()
+    URL.revokeObjectURL(a.href)
   } catch { /* ignore */ }
 }
 

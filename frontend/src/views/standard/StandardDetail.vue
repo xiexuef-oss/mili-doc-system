@@ -141,7 +141,14 @@ async function fetchClauses() {
 async function handleDownload() {
   try {
     const res = await getStandardDownloadUrl(id)
-    window.open(res.data.data, '_blank')
+    const url = res.data.data
+    const blobResp = await fetch(url)
+    const blob = await blobResp.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = standard.value?.fileName || standard.value?.standardName || 'standard.docx'
+    a.click()
+    URL.revokeObjectURL(a.href)
   } catch { /* ignore */ }
 }
 

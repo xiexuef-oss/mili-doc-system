@@ -148,14 +148,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowRight, Plus } from '@element-plus/icons-vue'
 import { getProjectStages, updateProjectStage, requestTransition, suspendStage, terminateStage, gateCheck, type ProjectStageItem } from '@/api/project-stage'
 import { getDocCatalogs, generateCatalogByStage, type DocCatalogItem } from '@/api/doc-catalog'
 import { generateCatalog, checkAiHealth } from '@/api/ai'
-import { getDictItems, type DictItem } from '@/api/dict'
+import { getDictItems } from '@/api/dict'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
