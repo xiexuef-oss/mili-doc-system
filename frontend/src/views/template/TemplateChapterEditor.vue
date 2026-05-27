@@ -19,7 +19,9 @@
           <template #header><span>章节结构树</span></template>
           <ChapterTreeViewer
             :tree-data="chapterTree"
+            :draggable="true"
             @node-click="selectChapter"
+            @reorder="handleReorder"
           />
         </el-card>
       </el-col>
@@ -119,6 +121,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Plus } from '@element-plus/icons-vue'
 import {
   getTemplate, getChapters, createChapter, updateChapter, deleteChapter,
+  reorderChapters,
   getChapterElements, attachElement, detachElement,
   getElements, type DocTemplateV2, type DocTemplateChapter
 } from '@/api/template-v2'
@@ -268,6 +271,14 @@ async function handleDetachElement(elementId: number) {
     ElMessage.success('已取消关联')
     loadChapterElements(selectedChapter.value.id)
   } catch { ElMessage.error('操作失败') }
+}
+
+async function handleReorder(orderedIds: number[]) {
+  try {
+    await reorderChapters(templateId, orderedIds)
+    ElMessage.success('排序已更新')
+    loadChapters()
+  } catch { ElMessage.error('排序更新失败') }
 }
 
 onMounted(() => { loadTemplate(); loadChapters(); loadElements() })

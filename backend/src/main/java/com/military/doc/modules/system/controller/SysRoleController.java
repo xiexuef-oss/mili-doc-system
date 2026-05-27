@@ -6,8 +6,8 @@ import com.military.doc.common.result.Result;
 import com.military.doc.modules.system.entity.SysRole;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.military.doc.modules.system.entity.SysRolePermission;
-import com.military.doc.modules.system.mapper.SysRoleMapper;
-import com.military.doc.modules.system.mapper.SysRolePermissionMapper;
+import com.military.doc.modules.system.service.SysRoleService;
+import com.military.doc.modules.system.service.SysRolePermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,10 +22,10 @@ import java.util.stream.Collectors;
 public class SysRoleController {
 
     @Autowired
-    private SysRoleMapper sysRoleMapper;
+    private SysRoleService sysRoleService;
 
     @Autowired
-    private SysRolePermissionMapper sysRolePermissionMapper;
+    private SysRolePermissionService sysRolePermissionService;
 
     @PostMapping
     @Operation(summary = "创建角色")
@@ -34,7 +34,7 @@ public class SysRoleController {
         if (role.getStatus() == null) {
             role.setStatus("ACTIVE");
         }
-        sysRoleMapper.insert(role);
+        sysRoleService.save(role);
         return Result.success(role);
     }
 
@@ -50,13 +50,13 @@ public class SysRoleController {
                 .or().like(SysRole::getRoleName, keyword));
         }
         wrapper.orderByAsc(SysRole::getOrderNum);
-        return Result.success(sysRoleMapper.selectPage(new Page<>(pageNo, pageSize), wrapper));
+        return Result.success(sysRoleService.page(new Page<>(pageNo, pageSize), wrapper));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "获取角色详情")
     public Result<SysRole> getById(@PathVariable Long id) {
-        return Result.success(sysRoleMapper.selectById(id));
+        return Result.success(sysRoleService.getById(id));
     }
 
     @PutMapping("/{id}")
@@ -64,22 +64,22 @@ public class SysRoleController {
     @PreAuthorize("hasRole('ADMIN')")
     public Result<SysRole> update(@PathVariable Long id, @RequestBody SysRole role) {
         role.setId(id);
-        sysRoleMapper.updateById(role);
-        return Result.success(sysRoleMapper.selectById(id));
+        sysRoleService.updateById(role);
+        return Result.success(sysRoleService.getById(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除角色")
     @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
-        sysRoleMapper.deleteById(id);
+        sysRoleService.removeById(id);
         return Result.success();
     }
 
     @GetMapping("/{id}/permissions")
     @Operation(summary = "获取角色的权限ID列表")
     public Result<List<Long>> getPermissions(@PathVariable Long id) {
-        List<SysRolePermission> rps = sysRolePermissionMapper.selectList(
+        List<SysRolePermission> rps = sysRolePermissionService.list(
                 new LambdaQueryWrapper<SysRolePermission>().eq(SysRolePermission::getRoleId, id));
         List<Long> permIds = rps.stream().map(SysRolePermission::getPermissionId).collect(Collectors.toList());
         return Result.success(permIds);
@@ -88,13 +88,16 @@ public class SysRoleController {
     @PutMapping("/{id}/permissions")
     @Operation(summary = "设置角色权限")
     public Result<Void> setPermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
-        sysRolePermissionMapper.delete(
+        sysRolePermissionService.remove(
                 new LambdaQueryWrapper<SysRolePermission>().eq(SysRolePermission::getRoleId, id));
-        for (Long permId : permissionIds) {
+        List<SysRolePermission> rps = permissionIds.stream().map(permId -> {
             SysRolePermission rp = new SysRolePermission();
             rp.setRoleId(id);
             rp.setPermissionId(permId);
-            sysRolePermissionMapper.insert(rp);
+            return rp;
+        }).collect(Collectors.toList());
+        if (!rps.isEmpty()) {
+            sysRolePermissionService.saveBatch(rps);
         }
         return Result.success();
     }

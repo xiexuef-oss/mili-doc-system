@@ -24,7 +24,18 @@
         label="GJB写作指南"
         style="margin-left:12px"
       />
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <el-button v-if="projectId" size="small" type="success" :loading="autoFilling" @click="handleAutoFill">
+          自动填充
+        </el-button>
+        <el-button v-if="projectId" size="small" type="warning" :loading="aiGenerating" @click="handleAiGenerate">
+          AI生成
+        </el-button>
+      </div>
     </div>
+
+    <!-- Three-library writing guide -->
+    <ChapterWritingGuide :context="writingContext" />
 
     <el-alert
       v-if="chapter && chapter.writingTips"
@@ -90,17 +101,25 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { getChapter, updateChapterContent, updateFillStatus } from '@/api/doc-chapter'
+import { getChapter, updateChapterContent, updateFillStatus,
+  getChapterWritingContext, generateChapter, autoFillChapter, type ChapterWritingContext } from '@/api/doc-chapter'
 import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
+import ChapterWritingGuide from '@/components/ChapterWritingGuide.vue'
 
 const route = useRoute()
 const chapterId = Number(route.params.chapterId)
+const projectId = Number(route.query.projectId || 0)
 
 const chapter = ref<any>(null)
 const content = ref('')
 const fillStatus = ref('EMPTY')
 const saving = ref(false)
 const contentData: Record<string, any> = reactive({})
+
+// Three-library fusion
+const writingContext = ref<ChapterWritingContext | null>(null)
+const aiGenerating = ref(false)
+const autoFilling = ref(false)
 
 const charCount = computed(() => content.value.length)
 
@@ -132,6 +151,13 @@ async function loadChapter() {
         } catch { /* ignore */ }
       }
     }
+    // Load writing context if projectId is provided
+    if (projectId) {
+      try {
+        const ctxRes = await getChapterWritingContext(chapterId, projectId)
+        writingContext.value = ctxRes.data.data
+      } catch { /* ignore */ }
+    }
   } catch { /* ignore */ }
 }
 
@@ -151,6 +177,39 @@ async function handleStatusChange() {
     await updateFillStatus(chapterId, fillStatus.value, fillPercent)
     ElMessage.success('状态已更新')
   } catch { /* ignore */ }
+}
+
+async function handleAiGenerate() {
+  if (!projectId) return
+  aiGenerating.value = true
+  try {
+    const res = await generateChapter(chapterId, projectId)
+    const generated = res.data.data
+    if (generated) {
+      content.value = generated
+      ElMessage.success('AI内容生成完成')
+    }
+  } catch { ElMessage.error('AI生成失败') }
+  aiGenerating.value = false
+}
+
+async function handleAutoFill() {
+  if (!projectId) return
+  autoFilling.value = true
+  try {
+    const res = await autoFillChapter(chapterId, projectId)
+    const updated = res.data.data
+    if (updated?.content) {
+      content.value = updated.content
+      ElMessage.success('占位符自动填充完成')
+    } else {
+      ElMessage.info('未发现可填充的占位符')
+    }
+    // Refresh writing context
+    const ctxRes = await getChapterWritingContext(chapterId, projectId)
+    writingContext.value = ctxRes.data.data
+  } catch { ElMessage.error('自动填充失败') }
+  autoFilling.value = false
 }
 
 onMounted(loadChapter)

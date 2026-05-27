@@ -35,9 +35,6 @@
             <el-option label="绝密" value="TOP_SECRET" />
           </el-select>
         </el-form-item>
-        <el-form-item label="适用标准">
-          <el-input v-model="form.applicableStandards" type="textarea" :rows="2" placeholder="如 GJB 6387-2008, GJB 0.2" />
-        </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="项目简要描述" />
         </el-form-item>
@@ -117,7 +114,7 @@ const projectTypes = ref<DictItem[]>([])
 
 const form = reactive({
   projectCode: '', projectName: '', projectType: 'MODEL',
-  securityLevel: 'INTERNAL', applicableStandards: '', description: '', startDate: ''
+  securityLevel: 'INTERNAL', applicableStandards: 'GJB 6387-2008, GJB 0.2-2001', description: '', startDate: ''
 })
 
 const inputFiles = ref<Array<{fileName: string; fileUrl: string}>>([])

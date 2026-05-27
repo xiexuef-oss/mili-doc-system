@@ -6,7 +6,7 @@ import com.military.doc.common.result.Result;
 import com.military.doc.modules.system.entity.SysUser;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.military.doc.modules.system.entity.SysUserRole;
-import com.military.doc.modules.system.mapper.SysUserRoleMapper;
+import com.military.doc.modules.system.service.SysUserRoleService;
 import com.military.doc.modules.system.service.SysUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +26,7 @@ public class SysUserController {
     private SysUserService sysUserService;
 
     @Autowired
-    private SysUserRoleMapper sysUserRoleMapper;
+    private SysUserRoleService sysUserRoleService;
 
     @PostMapping
     @Operation(summary = "创建用户")
@@ -98,7 +98,7 @@ public class SysUserController {
     @GetMapping("/{id}/roles")
     @Operation(summary = "获取用户的角色ID列表")
     public Result<List<Long>> getRoles(@PathVariable Long id) {
-        List<SysUserRole> urs = sysUserRoleMapper.selectList(
+        List<SysUserRole> urs = sysUserRoleService.list(
                 new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         List<Long> roleIds = urs.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
         return Result.success(roleIds);
@@ -107,13 +107,16 @@ public class SysUserController {
     @PutMapping("/{id}/roles")
     @Operation(summary = "设置用户角色")
     public Result<Void> setRoles(@PathVariable Long id, @RequestBody List<Long> roleIds) {
-        sysUserRoleMapper.delete(
+        sysUserRoleService.remove(
                 new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
-        for (Long roleId : roleIds) {
+        List<SysUserRole> urs = roleIds.stream().map(roleId -> {
             SysUserRole ur = new SysUserRole();
             ur.setUserId(id);
             ur.setRoleId(roleId);
-            sysUserRoleMapper.insert(ur);
+            return ur;
+        }).collect(Collectors.toList());
+        if (!urs.isEmpty()) {
+            sysUserRoleService.saveBatch(urs);
         }
         return Result.success();
     }

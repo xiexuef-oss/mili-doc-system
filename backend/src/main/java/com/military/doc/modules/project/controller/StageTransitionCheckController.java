@@ -5,7 +5,7 @@ import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.project.entity.StageTransitionCheck;
-import com.military.doc.modules.project.mapper.StageTransitionCheckMapper;
+import com.military.doc.modules.project.service.StageTransitionCheckService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ import java.util.Map;
 public class StageTransitionCheckController {
 
     @Autowired
-    private StageTransitionCheckMapper checkMapper;
+    private StageTransitionCheckService checkService;
 
     @Autowired
     private DocLedgerService docLedgerService;
@@ -35,14 +35,14 @@ public class StageTransitionCheckController {
         check.setCreatedBy(userId);
         check.setUpdatedBy(userId);
         if (check.getCheckStatus() == null) check.setCheckStatus("PENDING");
-        checkMapper.insert(check);
+        checkService.save(check);
         return Result.success(check);
     }
 
     @GetMapping("/project/{projectId}")
     @Operation(summary = "获取项目的所有转阶段检查")
     public Result<List<StageTransitionCheck>> listByProject(@PathVariable Long projectId) {
-        List<StageTransitionCheck> checks = checkMapper.selectList(
+        List<StageTransitionCheck> checks = checkService.list(
             new LambdaQueryWrapper<StageTransitionCheck>()
                 .eq(StageTransitionCheck::getProjectId, projectId)
                 .orderByDesc(StageTransitionCheck::getCreatedAt)
@@ -60,14 +60,14 @@ public class StageTransitionCheckController {
             check.setCheckedBy(userId);
             check.setCheckedAt(LocalDateTime.now());
         }
-        checkMapper.updateById(check);
-        return Result.success(checkMapper.selectById(id));
+        checkService.updateById(check);
+        return Result.success(checkService.getById(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除转阶段检查")
     public Result<Void> delete(@PathVariable Long id) {
-        checkMapper.deleteById(id);
+        checkService.removeById(id);
         return Result.success();
     }
 

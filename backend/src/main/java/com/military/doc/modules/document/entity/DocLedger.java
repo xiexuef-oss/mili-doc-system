@@ -13,6 +13,7 @@ public class DocLedger {
     private Long projectId;
     private Long stageId;
     private Long catalogId;
+    private Long checklistItemId;
     private String docCode;
     private String docName;
     private String docCategory;

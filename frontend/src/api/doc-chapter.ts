@@ -44,3 +44,66 @@ export function updateChapterContent(id: number, content: string, contentJson?: 
 export function updateFillStatus(id: number, fillStatus: string, fillPercentage?: number) {
   return api.put(`/doc-chapters/${id}/fill-status`, { fillStatus, fillPercentage })
 }
+
+// ========== Three-library fusion ==========
+
+export interface ChapterWritingContext {
+  docChapterId: number
+  templateChapterId: number
+  chapterNumber: string
+  chapterTitle: string
+  chapterLevel: number
+  templateDescription: string
+  writingTips: string
+  sampleContent: string
+  contentSchema: any
+  applicableClauses: StandardClauseRef[]
+  relevantCards: KnowledgeCardRef[]
+  relevantFields: MasterDataFieldRef[]
+}
+
+export interface StandardClauseRef {
+  clauseId: number
+  standardCode: string
+  standardName: string
+  clauseNumber: string
+  clauseTitle: string
+  clauseContent: string
+  linkType: string
+}
+
+export interface KnowledgeCardRef {
+  cardId: number
+  title: string
+  plainLanguage: string
+  gjbReference: string
+  tags: string
+}
+
+export interface MasterDataFieldRef {
+  masterDataPath: string
+  fieldLabel: string
+  required: boolean
+  currentValue: any
+  valueStatus: string
+}
+
+export function getChapterWritingContext(chapterId: number, projectId: number) {
+  return api.get(`/doc-chapters/${chapterId}/writing-context`, { params: { projectId } })
+}
+
+export function generateChapter(chapterId: number, projectId: number) {
+  return api.post(`/doc-chapters/${chapterId}/generate`, null, { params: { projectId } })
+}
+
+export function autoFillChapter(chapterId: number, projectId: number) {
+  return api.post(`/doc-chapters/${chapterId}/auto-fill`, null, { params: { projectId } })
+}
+
+export function autoFillAll(docLedgerId: number, projectId: number) {
+  return api.post('/doc-chapters/auto-fill-all', null, { params: { docLedgerId, projectId } })
+}
+
+export function extractMasterData(projectId: number) {
+  return api.post('/doc-chapters/extract-master-data', null, { params: { projectId } })
+}

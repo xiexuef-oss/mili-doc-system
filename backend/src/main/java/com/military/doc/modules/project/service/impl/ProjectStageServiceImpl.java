@@ -9,6 +9,7 @@ import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
 import com.military.doc.modules.document.service.DocLedgerService;
+import com.military.doc.modules.document.service.StageDocChecklistService;
 import com.military.doc.modules.project.constant.StageDefinition;
 import com.military.doc.modules.project.entity.*;
 import com.military.doc.modules.project.mapper.*;
@@ -54,6 +55,9 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
     @Autowired
     private CatalogGenerationService catalogGenerationService;
 
+    @Autowired
+    private StageDocChecklistService checklistService;
+
     private static final Set<String> IN_PROGRESS_LIKE = Set.of("IN_PROGRESS", "REVIEWING", "RECTIFYING", "BASELINING", "GATE_CHECKING");
     private static final Set<String> COMPLETABLE_STATUSES = Set.of("COMPLETED", "TERMINATED");
 
@@ -86,12 +90,12 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
         updateById(stage);
 
         // clear is_current on other stages
-        for (ProjectStage s : stages) {
-            if (!s.getId().equals(stageId) && Boolean.TRUE.equals(s.getIsCurrent())) {
-                s.setIsCurrent(false);
-                s.setUpdatedBy(operatorId);
-                updateById(s);
-            }
+        List<ProjectStage> toClear = stages.stream()
+            .filter(s -> !s.getId().equals(stageId) && Boolean.TRUE.equals(s.getIsCurrent()))
+            .peek(s -> { s.setIsCurrent(false); s.setUpdatedBy(operatorId); })
+            .toList();
+        if (!toClear.isEmpty()) {
+            updateBatchById(toClear);
         }
 
         recordEvent(projectId, stageId, null, "STAGE_START", "启动阶段: " + stage.getStageName(), "PROJECT_STAGE", stageId, operatorId);
@@ -351,6 +355,13 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
                 recordEvent(projectId, first.getId(), null, "STAGE_START", "项目创建，自动启动初始阶段: " + first.getStageName(), "PROJECT_STAGE", first.getId(), operatorId);
 
                 // AI catalog generation is triggered manually via the stage UI to avoid blocking project creation
+
+                // Auto-generate document checklist from GJB template library
+                try {
+                    checklistService.autoGenerateForStage(projectId, first.getId(), first.getStageCode());
+                } catch (Exception e) {
+                    log.warn("Failed to auto-generate checklist for stage {}: {}", first.getId(), e.getMessage());
+                }
             }
         }
         return created;
@@ -406,6 +417,13 @@ public class ProjectStageServiceImpl extends ServiceImpl<ProjectStageMapper, Pro
 
             int synced = docLedgerService.syncFromCatalog(projectId, nextStage.getId(), operatorId);
             log.info("Transition to stage {}: synced {} ledger entries from catalog", nextStage.getId(), synced);
+
+            // Auto-generate document checklist for the next stage
+            try {
+                checklistService.autoGenerateForStage(projectId, nextStage.getId(), nextStage.getStageCode());
+            } catch (Exception e) {
+                log.warn("Failed to auto-generate checklist for stage {}: {}", nextStage.getId(), e.getMessage());
+            }
 
             result.put("transitioned", true);
             result.put("fromStage", currentStage.getStageName());

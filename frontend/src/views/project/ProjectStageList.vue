@@ -40,43 +40,13 @@
             <el-button size="small" @click="showEditDialog(stage)">编辑</el-button>
           </div>
 
-          <!-- Document catalog section -->
-          <div class="stage-catalog">
-            <div class="catalog-toggle" @click="toggleCatalog(stage.id!)">
-              <el-icon v-if="catalogsExpanded[stage.id!]"><ArrowDown /></el-icon>
-              <el-icon v-else><ArrowRight /></el-icon>
-              <span>文档清单</span>
-              <el-tag size="small" type="info" style="margin-left:6px">{{ (catalogsMap[stage.id!] || []).length }} 项</el-tag>
-            </div>
-            <div v-show="catalogsExpanded[stage.id!]" class="catalog-list">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-                <el-button size="small" type="success" :loading="catalogsLoading[stage.id!]"
-                  @click.stop="handleGenerateByStage(stage)">
-                  <el-icon><Plus /></el-icon>GJB 5882 规则生成
-                </el-button>
-                <el-button size="small" type="primary" link :loading="catalogsLoading[stage.id!]"
-                  @click.stop="handleGenerateCatalog(stage.id!)">
-                  AI 补充生成
-                </el-button>
-                <el-tooltip :content="aiOnline ? `大模型已连接 (${aiModel})` : '大模型未连接，请确认 Ollama 已启动'" placement="top">
-                  <span :style="{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'11px',color:aiOnline?'#67c23a':'#f56c6c',cursor:'pointer'}" @click.stop="handleCheckHealth">
-                    <span :style="{width:'8px',height:'8px',borderRadius:'50%',background:aiOnline?'#67c23a':'#f56c6c',display:'inline-block'}"></span>
-                    {{ aiOnline ? 'AI 在线' : 'AI 离线' }}
-                  </span>
-                </el-tooltip>
-              </div>
-              <div v-if="(catalogsMap[stage.id!] || []).length === 0" class="catalog-empty">暂无文档清单，点击上方按钮由AI生成</div>
-              <div v-for="cat in catalogsMap[stage.id!]" :key="cat.id" class="catalog-item">
-                <el-tag :type="cat.requiredFlag ? 'danger' : 'info'" size="small" effect="plain">
-                  {{ cat.requiredFlag ? '必' : '选' }}
-                </el-tag>
-                <span class="catalog-code">{{ cat.docCode }}</span>
-                <span class="catalog-name">{{ cat.docName }}</span>
-                <el-tag v-if="cat.docCategory" size="small" type="success">{{ cat.docCategory }}</el-tag>
-                <el-tag size="small" type="">{{ docTypeLabel(cat.docType) }}</el-tag>
-              </div>
-            </div>
-          </div>
+          <!-- Document checklist section -->
+          <StageDocChecklist
+            v-if="stage.id && stage.stageCode"
+            :project-id="projectId"
+            :stage-id="stage.id"
+            :stage-code="stage.stageCode"
+          />
         </div>
         <div v-if="idx < items.length - 1" class="stage-connector">
           <span class="arrow-down">▼</span>
@@ -151,11 +121,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowRight, Plus } from '@element-plus/icons-vue'
 import { getProjectStages, updateProjectStage, requestTransition, suspendStage, terminateStage, gateCheck, type ProjectStageItem } from '@/api/project-stage'
-import { getDocCatalogs, generateCatalogByStage, type DocCatalogItem } from '@/api/doc-catalog'
-import { generateCatalog, checkAiHealth } from '@/api/ai'
-import { getDictItems } from '@/api/dict'
+import { checkAiHealth } from '@/api/ai'
+import StageDocChecklist from '@/views/project/StageDocChecklist.vue'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -172,11 +140,6 @@ const form = reactive<ProjectStageItem>({} as ProjectStageItem)
 // AI health
 const aiOnline = ref(false)
 const aiModel = ref('')
-
-// Document catalog per stage
-const catalogsMap = ref<Record<number, DocCatalogItem[]>>({})
-const catalogsExpanded = ref<Record<number, boolean>>({})
-const catalogsLoading = ref<Record<number, boolean>>({})
 
 const statusType = (s: string) => {
   const map: Record<string, string> = {
@@ -207,71 +170,7 @@ async function fetch() {
   loading.value = true
   try {
     const res = await getProjectStages(projectId); items.value = res.data.data || []
-    await fetchAllCatalogs()
   } finally { loading.value = false }
-}
-
-async function fetchAllCatalogs() {
-  for (const stage of items.value) {
-    if (!stage.id) continue
-    try {
-      const res = await getDocCatalogs({ projectId, stageId: stage.id })
-      catalogsMap.value[stage.id] = res.data.data?.records || []
-    } catch { catalogsMap.value[stage.id] = [] }
-  }
-}
-
-async function handleGenerateCatalog(stageId: number) {
-  catalogsLoading.value[stageId] = true
-  try {
-    await generateCatalog({ projectId, stageId, overwrite: true })
-    const res = await getDocCatalogs({ projectId, stageId })
-    const records = res.data.data?.records || []
-    catalogsMap.value[stageId] = records
-    catalogsExpanded.value[stageId] = true
-    ElMessage.success(`AI 生成完成，共 ${records.length} 项`)
-  } catch {
-    ElMessage.error('AI 生成失败，请确认 Ollama 服务是否正常运行')
-  } finally { catalogsLoading.value[stageId] = false }
-}
-
-function toggleCatalog(stageId: number) {
-  catalogsExpanded.value[stageId] = !catalogsExpanded.value[stageId]
-}
-
-const typeNameMap = ref<Record<string, string>>({})
-
-function docTypeLabel(t?: string) {
-  if (!t) return '-'
-  return typeNameMap.value[t] || t
-}
-
-async function loadDocTypeNames() {
-  try {
-    const res = await getDictItems('DOC_TYPE')
-    const types = res.data.data || []
-    for (const t of types) {
-      typeNameMap.value[t.dictCode] = t.dictName
-    }
-  } catch { /* ignore */ }
-}
-
-async function handleGenerateByStage(stage: ProjectStageItem) {
-  if (!stage.id || !stage.stageCode) {
-    ElMessage.warning('阶段缺少 stageCode，无法按模板生成')
-    return
-  }
-  catalogsLoading.value[stage.id] = true
-  try {
-    await generateCatalogByStage(projectId, stage.id, stage.stageCode, true)
-    const res = await getDocCatalogs({ projectId, stageId: stage.id })
-    const records = res.data.data?.records || []
-    catalogsMap.value[stage.id] = records
-    catalogsExpanded.value[stage.id] = true
-    ElMessage.success(`GJB 5882 模板生成完成，共 ${records.length} 项`)
-  } catch {
-    ElMessage.error('模板生成失败')
-  } finally { catalogsLoading.value[stage.id] = false }
 }
 
 async function handleRequestTransition(stage: ProjectStageItem) {
@@ -341,7 +240,7 @@ async function handleCheckHealth() {
   }
 }
 
-onMounted(() => { fetch(); handleCheckHealth(); loadDocTypeNames() })
+onMounted(() => { fetch(); handleCheckHealth() })
 </script>
 
 <style scoped>
@@ -379,15 +278,6 @@ onMounted(() => { fetch(); handleCheckHealth(); loadDocTypeNames() })
 
 .stage-def-item { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
 
-/* Catalog section */
-.stage-catalog { margin-top: 12px; border-top: 1px solid #ebeef5; padding-top: 10px; }
-.catalog-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px; color: #606266; user-select: none; }
-.catalog-toggle:hover { color: #409eff; }
-.catalog-list { margin-top: 8px; padding-left: 4px; }
-.catalog-empty { color: #c0c4cc; font-size: 12px; text-align: center; padding: 8px 0; }
-.catalog-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; }
-.catalog-code { color: #909399; font-family: monospace; min-width: 40px; }
-.catalog-name { flex: 1; color: #303133; }
 .stage-def-item:last-child { border-bottom: none; }
 .def-name { font-weight: 600; color: #303133; }
 .def-desc { color: #909399; font-size: 12px; }

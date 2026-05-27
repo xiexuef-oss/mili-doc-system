@@ -38,6 +38,14 @@ export function checkAiHealth() {
   return api.get('/ai/health')
 }
 
+export function getLlmProvider() {
+  return api.get('/ai/provider')
+}
+
+export function switchLlmProvider(provider: string) {
+  return api.put('/ai/provider', { provider })
+}
+
 export function saveDraft(params: {
   projectId: number
   catalogId?: number

@@ -1,6 +1,7 @@
 package com.military.doc.modules.project.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.military.doc.common.exception.BusinessException;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class ConfigurationManagementServiceImpl implements ConfigurationManagementService {
@@ -54,6 +57,7 @@ public class ConfigurationManagementServiceImpl implements ConfigurationManageme
                 .eq(DocLedger::getProjectId, projectId)
                 .eq(DocLedger::getStageId, stageId)
                 .in(DocLedger::getLifecycleStatus, "RELEASED", "ARCHIVED"));
+        List<ConfigurationBaselineItem> items = new java.util.ArrayList<>();
         for (DocLedger doc : docs) {
             ConfigurationBaselineItem item = new ConfigurationBaselineItem();
             item.setBaselineId(baseline.getId());
@@ -63,6 +67,9 @@ public class ConfigurationManagementServiceImpl implements ConfigurationManageme
             item.setItemName(doc.getDocName());
             item.setCreatedBy(operatorId);
             item.setUpdatedBy(operatorId);
+            items.add(item);
+        }
+        for (ConfigurationBaselineItem item : items) {
             baselineItemMapper.insert(item);
         }
 
@@ -104,16 +111,14 @@ public class ConfigurationManagementServiceImpl implements ConfigurationManageme
         }
 
         // supersede any currently effective baseline for this stage+type
-        var effectiveList = baselineMapper.selectList(new LambdaQueryWrapper<ConfigurationBaseline>()
+        ConfigurationBaseline supersedeUpdate = new ConfigurationBaseline();
+        supersedeUpdate.setBaselineStatus("SUPERSEDED");
+        supersedeUpdate.setUpdatedBy(operatorId);
+        baselineMapper.update(supersedeUpdate, new LambdaUpdateWrapper<ConfigurationBaseline>()
                 .eq(ConfigurationBaseline::getProjectId, baseline.getProjectId())
                 .eq(ConfigurationBaseline::getStageId, baseline.getStageId())
                 .eq(ConfigurationBaseline::getBaselineType, baseline.getBaselineType())
                 .eq(ConfigurationBaseline::getBaselineStatus, "EFFECTIVE"));
-        for (ConfigurationBaseline old : effectiveList) {
-            old.setBaselineStatus("SUPERSEDED");
-            old.setUpdatedBy(operatorId);
-            baselineMapper.updateById(old);
-        }
 
         baseline.setBaselineStatus("EFFECTIVE");
         baseline.setEffectiveTime(LocalDateTime.now());

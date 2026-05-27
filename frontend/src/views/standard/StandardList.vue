@@ -259,6 +259,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, UploadFilled } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/auth'
 import {
   getStandardList, createStandard, updateStandard, deleteStandard,
   batchUploadStandardFiles, parseStandardFile, getStandardDownloadUrl, getStandardTypes, getStandardCategories,
@@ -448,7 +449,9 @@ async function handleDownload(row: StandardItem) {
   try {
     const res = await getStandardDownloadUrl(row.id!)
     const url = res.data.data
-    const blobResp = await fetch(url)
+    const token = getToken()
+    const blobResp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!blobResp.ok) throw new Error('Download failed')
     const blob = await blobResp.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)

@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.entity.DocLedgerLog;
-import com.military.doc.modules.document.mapper.DocLedgerLogMapper;
+import com.military.doc.modules.document.service.DocLedgerLogService;
 import com.military.doc.modules.document.service.DocLedgerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,7 @@ public class DocLedgerController {
     private DocLedgerService docLedgerService;
 
     @Autowired
-    private DocLedgerLogMapper logMapper;
+    private DocLedgerLogService logService;
 
     @PostMapping
     @Operation(summary = "创建台账条目")
@@ -87,11 +88,19 @@ public class DocLedgerController {
     public Result<Map<String, List<DocLedger>>> kanban(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long stageId) {
+        List<DocLedger> all = docLedgerService.listByProject(projectId, stageId, null);
+
         String[] statuses = {"PLANNED", "DRAFTING", "CHECKING", "REVIEWING", "APPROVING", "RELEASED"};
         Map<String, List<DocLedger>> kanban = new LinkedHashMap<>();
         for (String status : statuses) {
-            List<DocLedger> items = docLedgerService.listByProject(projectId, stageId, status);
-            kanban.put(status, items);
+            kanban.put(status, new ArrayList<>());
+        }
+
+        for (DocLedger doc : all) {
+            List<DocLedger> bucket = kanban.get(doc.getLifecycleStatus());
+            if (bucket != null) {
+                bucket.add(doc);
+            }
         }
         return Result.success(kanban);
     }
@@ -99,7 +108,7 @@ public class DocLedgerController {
     @GetMapping("/{id}/logs")
     @Operation(summary = "操作日志")
     public Result<List<DocLedgerLog>> logs(@PathVariable Long id) {
-        List<DocLedgerLog> logs = logMapper.selectList(
+        List<DocLedgerLog> logs = logService.list(
             new LambdaQueryWrapper<DocLedgerLog>()
                 .eq(DocLedgerLog::getDocLedgerId, id)
                 .orderByDesc(DocLedgerLog::getOperatedAt));

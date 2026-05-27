@@ -1,6 +1,7 @@
 package com.military.doc.ai.controller;
 
 import com.military.doc.ai.llm.LlmClient;
+import com.military.doc.ai.llm.LlmProviderService;
 import com.military.doc.ai.context.VectorIndexService;
 import com.military.doc.ai.entity.EmbeddingIndexTask;
 import com.military.doc.ai.service.CatalogGenerationService;
@@ -98,6 +99,9 @@ public class AiAssistantController {
     private LlmProperties llmProperties;
 
     @Autowired
+    private LlmProviderService llmProviderService;
+
+    @Autowired
     private LlmClient llmClient;
 
     @Autowired
@@ -124,6 +128,27 @@ public class AiAssistantController {
 
         List<DocCatalog> catalogs = catalogGenerationService.generate(projectId, stageId, userId, overwrite);
         return Result.success(catalogs);
+    }
+
+    @GetMapping("/provider")
+    @Operation(summary = "获取当前大模型供应商信息")
+    public Result<Map<String, Object>> getProvider() {
+        return Result.success(llmProviderService.getStatus());
+    }
+
+    @PutMapping("/provider")
+    @Operation(summary = "切换大模型供应商（ollama/deepseek）")
+    public Result<Map<String, Object>> switchProvider(@RequestBody Map<String, String> body) {
+        String provider = body.get("provider");
+        if (provider == null || provider.isBlank()) {
+            return Result.error("PARAM_ERROR", "provider is required (ollama or deepseek)");
+        }
+        try {
+            llmProviderService.switchProvider(provider);
+            return Result.success(llmProviderService.getStatus());
+        } catch (IllegalArgumentException e) {
+            return Result.error("PARAM_ERROR", e.getMessage());
+        }
     }
 
     @GetMapping("/health")

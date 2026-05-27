@@ -78,10 +78,14 @@ public class TemplateStructureServiceImpl implements TemplateStructureService {
     @Override
     @Transactional
     public void reorderChapters(Long templateId, List<Long> chapterIdsInOrder) {
+        List<DocTemplateChapter> chapters = chapterMapper.selectBatchIds(chapterIdsInOrder);
+        java.util.Map<Long, Integer> orderMap = new java.util.HashMap<>();
         for (int i = 0; i < chapterIdsInOrder.size(); i++) {
-            DocTemplateChapter ch = chapterMapper.selectById(chapterIdsInOrder.get(i));
+            orderMap.put(chapterIdsInOrder.get(i), i * 10);
+        }
+        for (DocTemplateChapter ch : chapters) {
             if (ch != null && ch.getTemplateId().equals(templateId)) {
-                ch.setOrderNum(i * 10);
+                ch.setOrderNum(orderMap.getOrDefault(ch.getId(), ch.getOrderNum()));
                 chapterMapper.updateById(ch);
             }
         }

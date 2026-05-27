@@ -1,5 +1,33 @@
 <template>
   <div class="training-mgmt">
+    <!-- LLM Provider Selector -->
+    <el-card style="margin-bottom: 16px">
+      <div class="provider-bar">
+        <div class="provider-info">
+          <el-icon :size="20"><Cpu /></el-icon>
+          <span class="provider-label">大模型供应商</span>
+          <el-tag :type="healthOk ? 'success' : 'danger'" size="small" effect="dark">
+            {{ healthOk ? '已连接' : '未连接' }}
+          </el-tag>
+          <span class="provider-detail">
+            {{ useLocalModel ? 'Ollama 本地模型' : 'DeepSeek 在线模型' }}
+            <span v-if="providerModel" style="color:#909399;margin-left:4px">({{ providerModel }})</span>
+          </span>
+        </div>
+        <div class="provider-switch">
+          <span class="switch-label-left">在线</span>
+          <el-switch
+            v-model="useLocalModel"
+            :loading="switchingProvider"
+            active-text="本地"
+            inactive-text=""
+            inline-prompt
+            @change="handleProviderSwitch"
+          />
+        </div>
+      </div>
+    </el-card>
+
     <el-card>
       <template #header>
         <div class="card-header">
@@ -166,7 +194,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Cpu } from '@element-plus/icons-vue'
 import { getProjects, type ProjectItem } from '@/api/project'
 import { getDocFiles, type DocFileItem } from '@/api/doc-file'
 import {
@@ -175,8 +203,45 @@ import {
   rejectTrainingExample,
   collectTraining,
   exportTraining,
+  checkAiHealth,
+  switchLlmProvider,
   type TrainingExampleItem
 } from '@/api/ai'
+
+// LLM provider state
+const useLocalModel = ref(false)
+const switchingProvider = ref(false)
+const healthOk = ref(false)
+const providerModel = ref('')
+
+async function initProvider() {
+  try {
+    const res = await checkAiHealth()
+    healthOk.value = res.data.data?.connected === true
+    const provider = res.data.data?.provider
+    useLocalModel.value = provider === 'ollama'
+    providerModel.value = res.data.data?.model || ''
+  } catch { healthOk.value = false }
+}
+
+async function handleProviderSwitch(val: boolean) {
+  switchingProvider.value = true
+  try {
+    const provider = val ? 'ollama' : 'deepseek'
+    const res = await switchLlmProvider(provider)
+    if (res.data.code && res.data.code !== 'SUCCESS') {
+      throw new Error(res.data.message || '未知错误')
+    }
+    await initProvider()
+    ElMessage.success(`已切换到${val ? '本地模型 (Ollama)' : '在线模型 (DeepSeek)'}`)
+  } catch (e: any) {
+    useLocalModel.value = !val
+    const msg = e?.response?.data?.message || e?.message || '切换失败'
+    ElMessage.error('切换失败: ' + msg)
+  } finally {
+    switchingProvider.value = false
+  }
+}
 
 const examples = ref<TrainingExampleItem[]>([])
 const loading = ref(false)
@@ -339,6 +404,7 @@ async function handleExport() {
 }
 
 onMounted(() => {
+  initProvider()
   loadData()
   loadProjects()
 })
@@ -347,6 +413,33 @@ onMounted(() => {
 <style scoped>
 .training-mgmt {
   max-width: 1200px;
+}
+.provider-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.provider-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.provider-label {
+  font-weight: 500;
+  font-size: 15px;
+}
+.provider-detail {
+  color: #606266;
+  font-size: 13px;
+}
+.provider-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.switch-label-left {
+  font-size: 12px;
+  color: #909399;
 }
 .card-header {
   display: flex;

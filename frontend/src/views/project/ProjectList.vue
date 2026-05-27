@@ -114,11 +114,6 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="适用标准">
-          <el-select v-model="selectedStandards" multiple filterable placeholder="选择适用标准" style="width: 100%" clearable>
-            <el-option v-for="s in standards" :key="s.id" :label="`${s.standardCode} - ${s.standardName}`" :value="s.standardCode" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="项目描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
@@ -150,7 +145,7 @@ import { ElMessage } from 'element-plus'
 import { getProjects, createProject, updateProject, type ProjectItem } from '@/api/project'
 import { getDictItems, type DictItem } from '@/api/dict'
 import { getStageDefinitions, initializeStages, type StageDefinitionItem } from '@/api/project-stage'
-import { getStandardList, type StandardItem } from '@/api/standard'
+
 
 const loading = ref(false)
 const projectTypes = ref<DictItem[]>([])
@@ -163,8 +158,6 @@ const pageSize = ref(20)
 const keyword = ref('')
 const statusFilter = ref('')
 
-const standards = ref<StandardItem[]>([])
-const selectedStandards = ref<string[]>([])
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref()
@@ -176,7 +169,7 @@ const emptyForm = () => ({
   securityLevel: 'INTERNAL',
   status: 'IN_PROGRESS',
   ownerUserId: '',
-  applicableStandards: '',
+  applicableStandards: 'GJB 6387-2008, GJB 0.2-2001',
   startDate: '',
   endDate: '',
   description: '',
@@ -240,18 +233,18 @@ async function fetchData() {
   }
 }
 
-function showCreateDialog() {
+async function showCreateDialog() {
   editingId.value = null
   Object.assign(form, emptyForm())
-  form.initialStageCode = stageDefs.value[0]?.code || '' // default: first stage
-  selectedStandards.value = []
+  // Ensure stage definitions are loaded
+  if (stageDefs.value.length === 0) await fetchStageDefs()
+  form.initialStageCode = stageDefs.value[0]?.code || ''
   dialogVisible.value = true
 }
 
 function showEditDialog(row: ProjectItem) {
   editingId.value = row.id!
   Object.assign(form, row)
-  selectedStandards.value = row.applicableStandards ? row.applicableStandards.split(',').filter(Boolean) : []
   dialogVisible.value = true
 }
 
@@ -260,10 +253,9 @@ function resetForm() {
 }
 
 async function handleSave() {
-  await formRef.value?.validate()
-  form.applicableStandards = selectedStandards.value.join(',')
   saving.value = true
   try {
+    await formRef.value?.validate()
     if (editingId.value) {
       await updateProject(editingId.value, { ...form })
       ElMessage.success('更新成功')
@@ -272,12 +264,14 @@ async function handleSave() {
       const res = await createProject(projectData as ProjectItem)
       const newProjectId = res.data.data.id
       if (newProjectId && initialStageCode) {
-        await initializeStages(newProjectId, initialStageCode)
+        try { await initializeStages(newProjectId, initialStageCode) } catch { /* best-effort */ }
       }
       ElMessage.success('创建成功，阶段已初始化')
     }
     dialogVisible.value = false
     fetchData()
+  } catch {
+    // validation error or API error, handled by interceptor
   } finally {
     saving.value = false
   }
@@ -290,17 +284,9 @@ async function fetchStageDefs() {
   } catch { /* ignore */ }
 }
 
-async function fetchStandards() {
-  try {
-    const res = await getStandardList({ pageSize: 200 })
-    standards.value = res.data.data?.records || []
-  } catch { /* ignore */ }
-}
-
 onMounted(() => {
   fetchProjectTypes()
   fetchStageDefs()
-  fetchStandards()
   fetchData()
 })
 </script>

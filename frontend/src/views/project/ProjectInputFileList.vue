@@ -70,6 +70,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/auth'
 import api from '@/api/index'
 
 const route = useRoute()
@@ -147,7 +148,9 @@ async function handleDownload(row: any) {
   try {
     const res = await api.get(`/projects/${projectId.value}/input-files/${row.id}/download-url`)
     const url = res.data.data
-    const blobResp = await fetch(url)
+    const token = getToken()
+    const blobResp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!blobResp.ok) throw new Error('Download failed')
     const blob = await blobResp.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)

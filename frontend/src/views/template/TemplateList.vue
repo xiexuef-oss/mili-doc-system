@@ -171,6 +171,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, UploadFilled } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/auth'
 import {
   getTemplateList, createTemplate, updateTemplate, deleteTemplate,
   uploadTemplateFile, batchUploadTemplateFiles, getTemplateDownloadUrl,
@@ -357,7 +358,9 @@ async function handleDownload(row: TemplateItem) {
     const res = await getTemplateDownloadUrl(row.id!)
     const url = res.data.data
     // Fetch as blob, then trigger download with proper filename
-    const blobResp = await fetch(url)
+    const token = getToken()
+    const blobResp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!blobResp.ok) throw new Error('Download failed')
     const blob = await blobResp.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)

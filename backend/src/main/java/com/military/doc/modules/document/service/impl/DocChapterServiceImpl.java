@@ -1,6 +1,7 @@
 package com.military.doc.modules.document.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.military.doc.common.exception.BusinessException;
 import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.mapper.DocChapterMapper;
@@ -14,9 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 
 @Service
-public class DocChapterServiceImpl implements DocChapterService {
+public class DocChapterServiceImpl extends ServiceImpl<DocChapterMapper, DocChapter> implements DocChapterService {
 
-    @Autowired private DocChapterMapper docChapterMapper;
     @Autowired private DocTemplateChapterMapper templateChapterMapper;
 
     @Override
@@ -33,10 +33,8 @@ public class DocChapterServiceImpl implements DocChapterService {
             tcMap.put(tc.getId(), tc);
         }
 
-        // Map template chapter ID to new doc chapter ID
-        Map<Long, Long> tcToDc = new HashMap<>();
-        List<DocChapter> result = new ArrayList<>();
-
+        // First pass: create all doc chapters with parentId=0
+        List<DocChapter> chapters = new ArrayList<>();
         for (DocTemplateChapter tc : templateChapters) {
             DocChapter dc = new DocChapter();
             dc.setDocLedgerId(docLedgerId);
@@ -49,24 +47,39 @@ public class DocChapterServiceImpl implements DocChapterService {
             dc.setFillPercentage(0);
             dc.setCreatedBy(operatorId);
             dc.setUpdatedBy(operatorId);
+            dc.setParentId(0L);
+            chapters.add(dc);
+        }
+        saveBatch(chapters);
 
-            // Map parent: if template chapter has parent, find corresponding doc chapter
-            if (tc.getParentId() != null && tc.getParentId() > 0) {
-                Long newParentId = tcToDc.get(tc.getParentId());
-                dc.setParentId(newParentId != null ? newParentId : 0L);
-            }
-
-            docChapterMapper.insert(dc);
-            tcToDc.put(tc.getId(), dc.getId());
-            result.add(dc);
+        // Map template chapter ID -> new doc chapter ID (IDs are populated after saveBatch)
+        Map<Long, Long> tcToDc = new HashMap<>();
+        for (int i = 0; i < templateChapters.size(); i++) {
+            tcToDc.put(templateChapters.get(i).getId(), chapters.get(i).getId());
         }
 
-        return result;
+        // Second pass: resolve and update parent IDs
+        List<DocChapter> needParentUpdate = new ArrayList<>();
+        for (int i = 0; i < templateChapters.size(); i++) {
+            DocTemplateChapter tc = templateChapters.get(i);
+            if (tc.getParentId() != null && tc.getParentId() > 0) {
+                Long newParentId = tcToDc.get(tc.getParentId());
+                if (newParentId != null) {
+                    chapters.get(i).setParentId(newParentId);
+                    needParentUpdate.add(chapters.get(i));
+                }
+            }
+        }
+        if (!needParentUpdate.isEmpty()) {
+            updateBatchById(needParentUpdate);
+        }
+
+        return chapters;
     }
 
     @Override
     public List<DocChapter> listByDocLedger(Long docLedgerId) {
-        return docChapterMapper.selectList(new LambdaQueryWrapper<DocChapter>()
+        return baseMapper.selectList(new LambdaQueryWrapper<DocChapter>()
                 .eq(DocChapter::getDocLedgerId, docLedgerId)
                 .orderByAsc(DocChapter::getOrderNum));
     }
@@ -84,7 +97,7 @@ public class DocChapterServiceImpl implements DocChapterService {
     @Override
     @Transactional
     public DocChapter updateContent(Long chapterId, String content, String contentJson, Long operatorId) {
-        DocChapter dc = docChapterMapper.selectById(chapterId);
+        DocChapter dc = baseMapper.selectById(chapterId);
         if (dc == null) throw BusinessException.notFound("章节不存在: " + chapterId);
         dc.setContent(content);
         dc.setContentJson(contentJson);
@@ -93,18 +106,18 @@ public class DocChapterServiceImpl implements DocChapterService {
             dc.setFillStatus("PARTIAL");
             dc.setFillPercentage(50);
         }
-        docChapterMapper.updateById(dc);
+        baseMapper.updateById(dc);
         return dc;
     }
 
     @Override
     @Transactional
     public DocChapter updateFillStatus(Long chapterId, String fillStatus, Integer fillPercentage) {
-        DocChapter dc = docChapterMapper.selectById(chapterId);
+        DocChapter dc = baseMapper.selectById(chapterId);
         if (dc == null) throw BusinessException.notFound("章节不存在: " + chapterId);
         dc.setFillStatus(fillStatus);
         dc.setFillPercentage(fillPercentage);
-        docChapterMapper.updateById(dc);
+        baseMapper.updateById(dc);
         return dc;
     }
 
@@ -128,7 +141,7 @@ public class DocChapterServiceImpl implements DocChapterService {
 
     @Override
     public DocChapter getById(Long chapterId) {
-        DocChapter dc = docChapterMapper.selectById(chapterId);
+        DocChapter dc = baseMapper.selectById(chapterId);
         if (dc == null) throw BusinessException.notFound("章节不存在: " + chapterId);
         return dc;
     }

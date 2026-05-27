@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.system.entity.SysDict;
-import com.military.doc.modules.system.mapper.SysDictMapper;
+import com.military.doc.modules.system.service.SysDictService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,12 +19,12 @@ import java.util.List;
 public class SysDictController {
 
     @Autowired
-    private SysDictMapper sysDictMapper;
+    private SysDictService sysDictService;
 
     @GetMapping("/types")
     @Operation(summary = "获取所有字典类型")
     public Result<List<String>> listTypes() {
-        List<String> types = sysDictMapper.selectList(null).stream()
+        List<String> types = sysDictService.list().stream()
             .map(SysDict::getDictType)
             .distinct()
             .sorted()
@@ -43,7 +43,7 @@ public class SysDictController {
         if (parentCode != null && !parentCode.isEmpty()) {
             wrapper.eq(SysDict::getParentCode, parentCode);
         }
-        return Result.success(sysDictMapper.selectList(wrapper));
+        return Result.success(sysDictService.list(wrapper));
     }
 
     @PostMapping
@@ -53,7 +53,7 @@ public class SysDictController {
         if (dict.getStatus() == null) {
             dict.setStatus("ACTIVE");
         }
-        sysDictMapper.insert(dict);
+        sysDictService.save(dict);
         return Result.success(dict);
     }
 
@@ -68,7 +68,7 @@ public class SysDictController {
             wrapper.eq(SysDict::getDictType, dictType);
         }
         wrapper.orderByAsc(SysDict::getDictType, SysDict::getOrderNum);
-        return Result.success(sysDictMapper.selectPage(new Page<>(pageNo, pageSize), wrapper));
+        return Result.success(sysDictService.page(new Page<>(pageNo, pageSize), wrapper));
     }
 
     @PutMapping("/{id}")
@@ -76,15 +76,15 @@ public class SysDictController {
     @PreAuthorize("hasRole('ADMIN')")
     public Result<SysDict> update(@PathVariable Long id, @RequestBody SysDict dict) {
         dict.setId(id);
-        sysDictMapper.updateById(dict);
-        return Result.success(sysDictMapper.selectById(id));
+        sysDictService.updateById(dict);
+        return Result.success(sysDictService.getById(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除字典项")
     @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
-        sysDictMapper.deleteById(id);
+        sysDictService.removeById(id);
         return Result.success();
     }
 }

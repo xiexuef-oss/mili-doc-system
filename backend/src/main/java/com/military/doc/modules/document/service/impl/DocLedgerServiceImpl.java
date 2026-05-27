@@ -8,9 +8,12 @@ import com.military.doc.modules.document.entity.DocLedgerLog;
 import com.military.doc.modules.document.mapper.DocLedgerLogMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
 import com.military.doc.modules.document.service.DocChapterService;
+import com.military.doc.modules.document.service.DocLedgerLogService;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.entity.DocCatalog;
+import com.military.doc.modules.document.entity.ProjectDocChecklist;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
+import com.military.doc.modules.document.mapper.ProjectDocChecklistMapper;
 import com.military.doc.modules.project.entity.ConfigurationStatusAccounting;
 import com.military.doc.modules.project.mapper.ConfigurationStatusAccountingMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,10 +43,16 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
     private DocLedgerLogMapper logMapper;
 
     @Autowired
+    private DocLedgerLogService logService;
+
+    @Autowired
     private ConfigurationStatusAccountingMapper accountingMapper;
 
     @Autowired
     private DocCatalogMapper docCatalogMapper;
+
+    @Autowired
+    private ProjectDocChecklistMapper checklistMapper;
 
     @Autowired
     private DocChapterService docChapterService;
@@ -151,12 +161,11 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             .filter(cid -> cid != null)
             .collect(Collectors.toSet());
 
-        int created = 0;
+        List<DocLedger> newLedgers = new ArrayList<>();
         for (DocCatalog catalog : catalogs) {
             if (existingCatalogIds.contains(catalog.getId())) {
                 continue;
             }
-
             DocLedger ledger = new DocLedger();
             ledger.setProjectId(catalog.getProjectId());
             ledger.setStageId(catalog.getStageId());
@@ -173,20 +182,81 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             ledger.setLifecycleStatus("PLANNED");
             ledger.setCreatedBy(operatorId);
             ledger.setUpdatedBy(operatorId);
-            save(ledger);
-
-            DocLedgerLog log = new DocLedgerLog();
-            log.setDocLedgerId(ledger.getId());
-            log.setToStatus("PLANNED");
-            log.setOperatorId(operatorId);
-            log.setOperatedAt(LocalDateTime.now());
-            log.setRemark("从文档目录自动创建 (catalogId=" + catalog.getId() + ")");
-            logMapper.insert(log);
-
-            created++;
+            newLedgers.add(ledger);
         }
 
-        return created;
+        if (!newLedgers.isEmpty()) {
+            saveBatch(newLedgers);
+
+            List<DocLedgerLog> logs = new ArrayList<>();
+            for (DocLedger ledger : newLedgers) {
+                DocLedgerLog log = new DocLedgerLog();
+                log.setDocLedgerId(ledger.getId());
+                log.setToStatus("PLANNED");
+                log.setOperatorId(operatorId);
+                log.setOperatedAt(LocalDateTime.now());
+                log.setRemark("从文档目录自动创建 (catalogId=" + ledger.getCatalogId() + ")");
+                logs.add(log);
+            }
+            logService.saveBatch(logs);
+        }
+
+        return newLedgers.size();
+    }
+
+    @Override
+    @Transactional
+    public int syncFromChecklist(Long projectId, Long stageId, Long operatorId) {
+        List<ProjectDocChecklist> items = checklistMapper.selectList(
+            new LambdaQueryWrapper<ProjectDocChecklist>()
+                .eq(ProjectDocChecklist::getProjectId, projectId)
+                .eq(ProjectDocChecklist::getStageId, stageId)
+        );
+
+        Set<Long> existingItemIds = list(new LambdaQueryWrapper<DocLedger>()
+            .eq(DocLedger::getProjectId, projectId)
+            .eq(DocLedger::getStageId, stageId)
+            .isNotNull(DocLedger::getChecklistItemId))
+            .stream()
+            .map(DocLedger::getChecklistItemId)
+            .filter(cid -> cid != null)
+            .collect(Collectors.toSet());
+
+        List<DocLedger> newLedgers = new ArrayList<>();
+        for (ProjectDocChecklist item : items) {
+            if (existingItemIds.contains(item.getId())) {
+                continue;
+            }
+            DocLedger ledger = new DocLedger();
+            ledger.setProjectId(item.getProjectId());
+            ledger.setStageId(item.getStageId());
+            ledger.setStageCode(item.getStageCode());
+            ledger.setChecklistItemId(item.getId());
+            ledger.setDocName(item.getDocName());
+            ledger.setDocCategory(item.getCategory());
+            ledger.setLifecycleStatus("PLANNED");
+            ledger.setCreatedBy(operatorId);
+            ledger.setUpdatedBy(operatorId);
+            newLedgers.add(ledger);
+        }
+
+        if (!newLedgers.isEmpty()) {
+            saveBatch(newLedgers);
+
+            List<DocLedgerLog> logs = new ArrayList<>();
+            for (DocLedger ledger : newLedgers) {
+                DocLedgerLog log = new DocLedgerLog();
+                log.setDocLedgerId(ledger.getId());
+                log.setToStatus("PLANNED");
+                log.setOperatorId(operatorId);
+                log.setOperatedAt(LocalDateTime.now());
+                log.setRemark("从阶段文档清单自动创建 (checklistItemId=" + ledger.getChecklistItemId() + ")");
+                logs.add(log);
+            }
+            logService.saveBatch(logs);
+        }
+
+        return newLedgers.size();
     }
 
     @Override

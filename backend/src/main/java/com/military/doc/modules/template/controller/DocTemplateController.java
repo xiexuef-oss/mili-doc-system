@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.template.entity.DocTemplate;
-import com.military.doc.modules.template.mapper.DocTemplateMapper;
+import com.military.doc.modules.template.service.DocTemplateService;
 import com.military.doc.modules.template.service.TemplateGenerateService;
 import com.military.doc.modules.document.entity.DocFile;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +23,7 @@ import java.util.Map;
 public class DocTemplateController {
 
     @Autowired
-    private DocTemplateMapper docTemplateMapper;
+    private DocTemplateService docTemplateService;
 
     @Autowired
     private FileStorageService fileStorageService;
@@ -51,13 +51,13 @@ public class DocTemplateController {
                 .or().like(DocTemplate::getTemplateCode, keyword));
         }
         wrapper.orderByDesc(DocTemplate::getCreatedAt);
-        return Result.success(docTemplateMapper.selectPage(new Page<>(pageNo, pageSize), wrapper));
+        return Result.success(docTemplateService.page(new Page<>(pageNo, pageSize), wrapper));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "获取模版详情")
     public Result<DocTemplate> getById(@PathVariable Long id) {
-        return Result.success(docTemplateMapper.selectById(id));
+        return Result.success(docTemplateService.getById(id));
     }
 
     @PostMapping("/batch-upload")
@@ -74,9 +74,11 @@ public class DocTemplateController {
             template.setFileName(file.getOriginalFilename());
             template.setFileSize(file.getSize());
             template.setFileType(getExtension(file.getOriginalFilename()));
-            docTemplateMapper.insert(template);
             return template;
-        }).toList();
+        }).collect(java.util.stream.Collectors.toList());
+        if (!templates.isEmpty()) {
+            docTemplateService.saveBatch(templates);
+        }
         return Result.success(templates);
     }
 
@@ -95,7 +97,7 @@ public class DocTemplateController {
         if (template.getStatus() == null) {
             template.setStatus("ACTIVE");
         }
-        docTemplateMapper.insert(template);
+        docTemplateService.save(template);
         return Result.success(template);
     }
 
@@ -103,14 +105,14 @@ public class DocTemplateController {
     @Operation(summary = "更新模版")
     public Result<DocTemplate> update(@PathVariable Long id, @RequestBody DocTemplate template) {
         template.setId(id);
-        docTemplateMapper.updateById(template);
-        return Result.success(docTemplateMapper.selectById(id));
+        docTemplateService.updateById(template);
+        return Result.success(docTemplateService.getById(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除模版")
     public Result<Void> delete(@PathVariable Long id) {
-        docTemplateMapper.deleteById(id);
+        docTemplateService.removeById(id);
         return Result.success();
     }
 
@@ -118,7 +120,7 @@ public class DocTemplateController {
     @Operation(summary = "上传模版文件")
     public Result<DocTemplate> uploadFile(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         String objectId = fileStorageService.upload(file);
-        DocTemplate template = docTemplateMapper.selectById(id);
+        DocTemplate template = docTemplateService.getById(id);
         if (template == null) {
             return Result.error("NOT_FOUND", "模版不存在");
         }
@@ -129,14 +131,14 @@ public class DocTemplateController {
         template.setFileName(file.getOriginalFilename());
         template.setFileSize(file.getSize());
         template.setFileType(getExtension(file.getOriginalFilename()));
-        docTemplateMapper.updateById(template);
-        return Result.success(docTemplateMapper.selectById(id));
+        docTemplateService.updateById(template);
+        return Result.success(docTemplateService.getById(id));
     }
 
     @GetMapping("/{id}/download-url")
     @Operation(summary = "获取模版文件下载地址")
     public Result<String> getDownloadUrl(@PathVariable Long id) {
-        DocTemplate template = docTemplateMapper.selectById(id);
+        DocTemplate template = docTemplateService.getById(id);
         if (template == null || template.getFileObjectId() == null) {
             return Result.error("NOT_FOUND", "文件不存在");
         }
@@ -148,7 +150,7 @@ public class DocTemplateController {
     public Result<List<DocTemplate>> listTypes() {
         LambdaQueryWrapper<DocTemplate> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(DocTemplate::getTemplateType).groupBy(DocTemplate::getTemplateType);
-        return Result.success(docTemplateMapper.selectList(wrapper));
+        return Result.success(docTemplateService.list(wrapper));
     }
 
     private String getExtension(String filename) {

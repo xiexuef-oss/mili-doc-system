@@ -33,17 +33,24 @@ public class StandardParseService {
 
     private static final int OCR_FALLBACK_THRESHOLD = 100;
 
-    // Common Chinese military/industrial standard code regex patterns
+    // Military/industrial standard code patterns
+    // Order matters: more specific patterns first
     private static final Pattern[] CODE_PATTERNS = {
-        Pattern.compile("GJB/[A-Z]\\s*\\d+[-–—]\\d{4}"),
-        Pattern.compile("GJB\\s*\\d+[A-Za-z]?[-–—]\\d{4}"),
+        // GJB/Z variants: GJB/Z 183-2017, GJB-Z 114A-2005, GJB_Z 1391-2006, GJBZ 768A-1998, GJB Z 27-92, GJB Z1391-2006
+        Pattern.compile("GJB[-_/\\s]?Z\\s*\\d+[A-Za-z]*(?:\\.\\d+)?[A-Za-z]?[-–—]\\d{2,4}"),
+        // GJB standard: GJB 3206B-2022, GJB 1371-92, GJB190-1986
+        Pattern.compile("GJB\\s*\\d+[A-Za-z]*(?:\\.\\d+)?[A-Za-z]?[-–—]\\d{2,4}"),
+        // MIL-STD, MIL-PRF, MIL-DTL, MIL-HDBK
         Pattern.compile("MIL-(?:STD|PRF|DTL|HDBK)-\\d+[A-Z]?"),
-        Pattern.compile("GB/T\\s*\\d+\\.?\\d*[-–—]\\d{4}"),
-        Pattern.compile("GB\\s*\\d+[-–—]\\d{4}"),
-        Pattern.compile("QJ\\s*\\d+[A-Z]?[-–—]\\d{4}"),
-        Pattern.compile("HB\\s*\\d+[-–—]\\d{4}"),
-        Pattern.compile("SJ\\s*\\d+[-–—]\\d{4}"),
-        Pattern.compile("CB\\s*\\d+[-–—]\\d{4}"),
+        // GB/T
+        Pattern.compile("GB/T\\s*\\d+\\.?\\d*[-–—]\\d{2,4}"),
+        // GB
+        Pattern.compile("GB\\s*\\d+[-–—]\\d{2,4}"),
+        // QJ, HB, SJ, CB
+        Pattern.compile("QJ\\s*\\d+[A-Z]?[-–—]\\d{2,4}"),
+        Pattern.compile("HB\\s*\\d+[-–—]\\d{2,4}"),
+        Pattern.compile("SJ\\s*\\d+[-–—]\\d{2,4}"),
+        Pattern.compile("CB\\s*\\d+[-–—]\\d{2,4}"),
         Pattern.compile("ISO\\s*\\d+[:：]\\d{4}"),
     };
 
@@ -62,15 +69,17 @@ public class StandardParseService {
 
         Standard standard = new Standard();
 
-        String code = extractCode(text);
+        // Code: prefer filename (our naming convention is reliable), fall back to text
+        String code = extractCode(originalFilename);
         if (code == null || code.isEmpty()) {
-            code = extractCode(originalFilename);
+            code = extractCode(text);
         }
         standard.setStandardCode(code != null ? code : "");
 
-        String name = extractName(text);
-        if (name == null || name.isEmpty()) {
-            name = extractNameFromFilename(originalFilename);
+        // Name: derive from filename by stripping the code, fall back to text
+        String name = extractNameFromFilename(originalFilename);
+        if (name == null || name.isEmpty() || name.length() < 3) {
+            name = extractName(text);
         }
         standard.setStandardName(name != null ? name : "");
 
@@ -242,6 +251,9 @@ public class StandardParseService {
     List<StandardClauseExtract> extractClauses(String text) {
         if (text == null || text.isBlank()) return List.of();
 
+        // Normalize: replace tabs with spaces (common in DOCX extraction)
+        text = text.replace('\t', ' ');
+
         List<StandardClauseExtract> clauses = new ArrayList<>();
         String[] lines = text.split("\\r?\\n");
 
@@ -249,8 +261,8 @@ public class StandardParseService {
         StringBuilder currentContent = new StringBuilder();
         int orderNum = 0;
 
-        // Filter noise lines
-        Set<String> noiseLines = Set.of("", " ", "ICS", "备案号", "发布日期", "实施日期", "发布", "中华人民共和国");
+        // Filter noise lines (no "" or " " — empty lines already handled by isEmpty check above)
+        Set<String> noiseLines = Set.of("ICS", "备案号", "发布日期", "实施日期", "发布", "中华人民共和国");
         Pattern pageNoPattern = Pattern.compile("^\\s*[IVXLCDMivxlcdm]+\\s*$");
         Pattern punctuationOnly = Pattern.compile("^[\\s\\p{Punct}]+$");
 
@@ -286,7 +298,7 @@ public class StandardParseService {
 
                 currentClause = new StandardClauseExtract();
                 currentClause.clauseNumber = clauseNum;
-                currentClause.clauseTitle = clauseTitle;
+                currentClause.clauseTitle = cleanClauseTitle(clauseTitle);
                 currentClause.orderNum = orderNum++;
                 continue;
             }
@@ -386,18 +398,23 @@ public class StandardParseService {
         return String.valueOf(result);
     }
 
-    String extractCode(String text) {
+    public String extractCode(String text) {
         if (text == null || text.isEmpty()) return null;
         for (Pattern pattern : CODE_PATTERNS) {
             Matcher m = pattern.matcher(text);
             if (m.find()) {
-                return m.group().replaceAll("\\s+", " ").trim();
+                String code = m.group().replaceAll("\\s+", " ").trim();
+                // Normalize GJBZ / GJB-Z / GJB_Z / GJB Z → GJB/Z
+                code = code.replaceAll("GJB[-_\\s]?Z", "GJB/Z");
+                // Add space after GJB/Z if directly followed by digit
+                code = code.replaceAll("^(GJB/Z)(\\d)", "$1 $2");
+                return code;
             }
         }
         return null;
     }
 
-    String extractName(String text) {
+    public String extractName(String text) {
         if (text == null || text.isEmpty()) return null;
 
         // Try explicit name label first
@@ -445,25 +462,43 @@ public class StandardParseService {
         return name.replaceAll("^[\\s\\p{Punct}]+|[\\s\\p{Punct}]+$", "").trim();
     }
 
-    String extractNameFromFilename(String filename) {
+    private String cleanClauseTitle(String title) {
+        if (title == null) return "";
+        // Remove trailing page numbers / section references like " 1", " 23"
+        title = title.replaceAll("\\s+\\d{1,3}$", "");
+        // Remove trailing standalone digits after dash
+        title = title.replaceAll("\\s*[-–—]\\s*\\d{1,3}$", "");
+        return title.trim();
+    }
+
+    public String extractNameFromFilename(String filename) {
         if (filename == null) return null;
         String name = filename;
         // Remove extension
         int dot = name.lastIndexOf('.');
         if (dot > 0) name = name.substring(0, dot);
-        // Remove the standard code if present
-        String code = extractCode(name);
-        if (code != null) {
-            name = name.replace(code, "");
+        // Find and remove the standard code using regex position
+        // Search without normalization so replacement works on the original string
+        for (Pattern pattern : CODE_PATTERNS) {
+            Matcher m = pattern.matcher(name);
+            if (m.find()) {
+                // Remove the matched code and any separators around it
+                String before = name.substring(0, m.start());
+                String after = name.substring(m.end());
+                name = (before + " " + after).trim();
+                break;
+            }
         }
-        // Clean up separators
-        name = name.replaceAll("[-–—_\\.]+", " ").trim();
-        return name.isEmpty() ? null : name;
+        // Clean up common artifacts
+        name = name.replaceAll("[-–—_\\.]{2,}", " ").trim();
+        name = name.replaceAll("\\s+", " ").trim();
+        name = cleanName(name);
+        return (name == null || name.isEmpty() || name.length() < 2) ? null : name;
     }
 
-    String determineType(String code) {
+    public String determineType(String code) {
         if (code == null) return "";
-        if (code.startsWith("GJB/Z")) return "GJB/Z";
+        if (code.startsWith("GJB/Z") || code.startsWith("GJB Z")) return "GJB/Z";
         if (code.startsWith("GJB")) return "GJB";
         if (code.startsWith("MIL-STD") || code.startsWith("MIL-PRF") || code.startsWith("MIL-DTL")) return "MIL";
         if (code.startsWith("GB/T")) return "GB/T";
@@ -476,7 +511,7 @@ public class StandardParseService {
         return "";
     }
 
-    String extractVersion(String code) {
+    public String extractVersion(String code) {
         if (code == null) return "";
         Matcher m = Pattern.compile("(\\d{4})$").matcher(code);
         if (m.find()) return m.group(1);

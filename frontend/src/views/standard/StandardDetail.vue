@@ -96,6 +96,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getToken } from '@/utils/auth'
 import {
   getStandard, getStandardDownloadUrl, getStandardClauses, searchStandardClauses,
   extractStandardClauses, createStandardClause, updateStandardClause, deleteStandardClause,
@@ -142,7 +143,9 @@ async function handleDownload() {
   try {
     const res = await getStandardDownloadUrl(id)
     const url = res.data.data
-    const blobResp = await fetch(url)
+    const token = getToken()
+    const blobResp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!blobResp.ok) throw new Error('Download failed')
     const blob = await blobResp.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)

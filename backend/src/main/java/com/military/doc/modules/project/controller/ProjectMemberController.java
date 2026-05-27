@@ -3,7 +3,7 @@ package com.military.doc.modules.project.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.project.entity.ProjectMember;
-import com.military.doc.modules.project.mapper.ProjectMemberMapper;
+import com.military.doc.modules.project.service.ProjectMemberService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ import java.util.List;
 public class ProjectMemberController {
 
     @Autowired
-    private ProjectMemberMapper projectMemberMapper;
+    private ProjectMemberService projectMemberService;
 
     @PostMapping
     @Operation(summary = "添加项目成员")
@@ -27,14 +27,14 @@ public class ProjectMemberController {
         member.setCreatedBy(userId);
         member.setUpdatedBy(userId);
         if (member.getStatus() == null) member.setStatus("ACTIVE");
-        projectMemberMapper.insert(member);
+        projectMemberService.save(member);
         return Result.success(member);
     }
 
     @GetMapping("/project/{projectId}")
     @Operation(summary = "获取项目成员列表")
     public Result<List<ProjectMember>> listByProject(@PathVariable Long projectId) {
-        List<ProjectMember> members = projectMemberMapper.selectList(
+        List<ProjectMember> members = projectMemberService.list(
             new LambdaQueryWrapper<ProjectMember>()
                 .eq(ProjectMember::getProjectId, projectId)
                 .orderByAsc(ProjectMember::getCreatedAt)
@@ -48,14 +48,14 @@ public class ProjectMemberController {
         Long userId = (Long) authentication.getPrincipal();
         member.setId(id);
         member.setUpdatedBy(userId);
-        projectMemberMapper.updateById(member);
-        return Result.success(projectMemberMapper.selectById(id));
+        projectMemberService.updateById(member);
+        return Result.success(projectMemberService.getById(id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "移除项目成员")
     public Result<Void> delete(@PathVariable Long id) {
-        projectMemberMapper.deleteById(id);
+        projectMemberService.removeById(id);
         return Result.success();
     }
 }

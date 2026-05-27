@@ -52,7 +52,10 @@
           </template>
 
           <template v-if="selectedChapter">
-            <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+            <!-- Three-library writing guide -->
+            <ChapterWritingGuide :context="writingContext" />
+
+            <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <el-tag size="small" :type="statusType(selectedChapter.fillStatus)">
                 {{ statusLabel(selectedChapter.fillStatus) }}
               </el-tag>
@@ -67,8 +70,14 @@
                 v-if="selectedChapter.chapterTitle"
                 :keyword="selectedChapter.chapterTitle"
                 :label="'GJB参考'"
-                style="margin-left:auto"
               />
+
+              <el-button v-if="ledger?.projectId" size="small" type="success" :loading="autoFilling" @click="handleAutoFill">
+                自动填充
+              </el-button>
+              <el-button v-if="ledger?.projectId" size="small" type="warning" :loading="aiGenerating" @click="handleAiGenerate">
+                AI生成本章
+              </el-button>
             </div>
 
             <el-input
@@ -146,12 +155,14 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Download } from '@element-plus/icons-vue'
 import { getDocLedger, type DocLedgerItem } from '@/api/doc-ledger'
-import { getChapterTree, getCompletionSummary, updateChapterContent, initFromTemplate } from '@/api/doc-chapter'
+import { getChapterTree, getCompletionSummary, updateChapterContent, initFromTemplate,
+  getChapterWritingContext, generateChapter, autoFillChapter, type ChapterWritingContext } from '@/api/doc-chapter'
 import { getTemplates, type DocTemplateV2 } from '@/api/template-v2'
 import { getKnowledgeCards, type KnowledgeCard } from '@/api/knowledge-card'
 import ChapterTreeViewer from '@/components/ChapterTreeViewer.vue'
 import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
 import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
+import ChapterWritingGuide from '@/components/ChapterWritingGuide.vue'
 import DocxExportDialog from '@/components/DocxExportDialog.vue'
 
 const route = useRoute()
@@ -169,6 +180,11 @@ const knowledgeCards = ref<KnowledgeCard[]>([])
 const selectedCard = ref<KnowledgeCard | null>(null)
 
 const completionSummary = ref<{ total: number; filled: number; partial: number; empty: number; score: number }>({ total: 0, filled: 0, partial: 0, empty: 0, score: 0 })
+
+// Three-library fusion
+const writingContext = ref<ChapterWritingContext | null>(null)
+const aiGenerating = ref(false)
+const autoFilling = ref(false)
 
 const contentSchema = computed(() => {
   if (!selectedChapter.value?.contentSchema) return null
@@ -199,6 +215,8 @@ function statusLabel(s: string) {
 
 async function selectChapter(ch: any) {
   selectedChapter.value = ch
+  // Reset
+  writingContext.value = null
   // Load full chapter content
   try {
     const { getChapter } = await import('@/api/doc-chapter')
@@ -211,6 +229,13 @@ async function selectChapter(ch: any) {
       } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
+  // Load writing context (three-library fusion)
+  if (ledger.value?.projectId) {
+    try {
+      const ctxRes = await getChapterWritingContext(ch.id, ledger.value.projectId)
+      writingContext.value = ctxRes.data.data
+    } catch { /* ignore */ }
+  }
 }
 
 async function loadLedger() {
@@ -283,6 +308,39 @@ async function handleStatusChange() {
 
 async function handleFillPercentChange() {
   handleStatusChange()
+}
+
+async function handleAiGenerate() {
+  if (!selectedChapter.value?.id || !ledger.value?.projectId) return
+  aiGenerating.value = true
+  try {
+    const res = await generateChapter(selectedChapter.value.id, ledger.value.projectId)
+    const generated = res.data.data
+    if (generated) {
+      selectedChapter.value.content = generated
+      ElMessage.success('AI内容生成完成，请检查后保存')
+    }
+  } catch { ElMessage.error('AI生成失败') }
+  aiGenerating.value = false
+}
+
+async function handleAutoFill() {
+  if (!selectedChapter.value?.id || !ledger.value?.projectId) return
+  autoFilling.value = true
+  try {
+    const res = await autoFillChapter(selectedChapter.value.id, ledger.value.projectId)
+    const updated = res.data.data
+    if (updated?.content) {
+      selectedChapter.value.content = updated.content
+      ElMessage.success('占位符自动填充完成')
+    } else {
+      ElMessage.info('未发现可填充的占位符')
+    }
+    // Refresh writing context to show updated field statuses
+    const ctxRes = await getChapterWritingContext(selectedChapter.value.id, ledger.value.projectId)
+    writingContext.value = ctxRes.data.data
+  } catch { ElMessage.error('自动填充失败') }
+  autoFilling.value = false
 }
 
 onMounted(() => { loadLedger(); loadChapters(); loadSummary(); loadTemplates(); loadKnowledgeCards() })

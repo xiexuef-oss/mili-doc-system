@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.project.entity.ProjectInputFile;
-import com.military.doc.modules.project.mapper.ProjectInputFileMapper;
+import com.military.doc.modules.project.service.ProjectInputFileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +19,7 @@ import java.util.List;
 public class ProjectInputFileController {
 
     @Autowired
-    private ProjectInputFileMapper inputFileMapper;
+    private ProjectInputFileService inputFileService;
 
     @Autowired
     private FileStorageService fileStorageService;
@@ -27,7 +27,7 @@ public class ProjectInputFileController {
     @GetMapping
     @Operation(summary = "获取项目输入文件列表")
     public Result<List<ProjectInputFile>> list(@PathVariable Long projectId) {
-        return Result.success(inputFileMapper.selectList(
+        return Result.success(inputFileService.list(
             new LambdaQueryWrapper<ProjectInputFile>()
                 .eq(ProjectInputFile::getProjectId, projectId)
                 .orderByDesc(ProjectInputFile::getUploadedAt)
@@ -50,25 +50,25 @@ public class ProjectInputFileController {
         entity.setFileType(getExtension(file.getOriginalFilename()));
         entity.setInputType(inputType);
         entity.setDescription(description);
-        inputFileMapper.insert(entity);
+        inputFileService.save(entity);
         return Result.success(entity);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除输入文件")
     public Result<Void> delete(@PathVariable Long projectId, @PathVariable Long id) {
-        ProjectInputFile entity = inputFileMapper.selectById(id);
+        ProjectInputFile entity = inputFileService.getById(id);
         if (entity != null && entity.getFileObjectId() != null) {
             fileStorageService.delete(entity.getFileObjectId());
         }
-        inputFileMapper.deleteById(id);
+        inputFileService.removeById(id);
         return Result.success();
     }
 
     @GetMapping("/{id}/download-url")
     @Operation(summary = "获取输入文件下载地址")
     public Result<String> getDownloadUrl(@PathVariable Long projectId, @PathVariable Long id) {
-        ProjectInputFile entity = inputFileMapper.selectById(id);
+        ProjectInputFile entity = inputFileService.getById(id);
         if (entity == null || entity.getFileObjectId() == null) {
             return Result.error("NOT_FOUND", "文件不存在");
         }

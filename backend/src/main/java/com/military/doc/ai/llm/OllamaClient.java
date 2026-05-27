@@ -14,20 +14,23 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 @Slf4j
-@Component
-@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("'${llm.provider:ollama}'.equals('ollama')")
+@Component("ollamaClient")
 public class OllamaClient implements LlmClient {
 
     private final OkHttpClient httpClient;
     private final LlmProperties properties;
     private final ObjectMapper objectMapper;
+    private final LlmProviderService providerService;
 
     public static final MediaType JSON_MEDIA = MediaType.get("application/json; charset=utf-8");
 
-    public OllamaClient(OkHttpClient httpClient, LlmProperties properties, ObjectMapper objectMapper) {
+    public OllamaClient(OkHttpClient httpClient, LlmProperties properties,
+                         ObjectMapper objectMapper, LlmProviderService providerService) {
         this.httpClient = httpClient;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.providerService = providerService;
+        this.providerService.registerClient("ollama", this);
     }
 
     private Map<String, Object> buildRequestBody(String systemPrompt, String userPrompt, boolean stream) {

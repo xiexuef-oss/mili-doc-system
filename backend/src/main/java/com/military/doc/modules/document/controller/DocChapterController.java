@@ -1,19 +1,31 @@
 package com.military.doc.modules.document.controller;
 
+import com.military.doc.ai.context.ChapterWritingContext;
+import com.military.doc.ai.context.ChapterWritingContextService;
+import com.military.doc.ai.service.DraftGenerationService;
+import com.military.doc.ai.service.MasterDataExtractionService;
+import com.military.doc.ai.service.VariableMappingService;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.service.DocChapterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 @RestController
 @RequestMapping("/api/v1/doc-chapters")
 public class DocChapterController {
 
     @Autowired private DocChapterService docChapterService;
+    @Autowired(required = false) private ChapterWritingContextService chapterContextService;
+    @Autowired(required = false) private DraftGenerationService draftGenerationService;
+    @Autowired(required = false) private VariableMappingService variableMappingService;
+    @Autowired(required = false) private MasterDataExtractionService masterDataExtractionService;
 
     @PostMapping("/init")
     public Result<List<DocChapter>> initFromTemplate(@RequestParam Long docLedgerId,
@@ -57,5 +69,62 @@ public class DocChapterController {
                 id,
                 (String) body.get("fillStatus"),
                 body.get("fillPercentage") != null ? ((Number) body.get("fillPercentage")).intValue() : null));
+    }
+
+    // ========== Three-library fusion endpoints ==========
+
+    @GetMapping("/{id}/writing-context")
+    public Result<ChapterWritingContext> getWritingContext(@PathVariable Long id,
+                                                           @RequestParam Long projectId) {
+        return Result.success(chapterContextService.assembleForChapter(id, projectId));
+    }
+
+    @PostMapping("/{id}/generate")
+    public Result<String> generateChapter(@PathVariable Long id,
+                                           @RequestParam Long projectId) {
+        String content = draftGenerationService.generateChapter(id, projectId);
+        if (content != null && !content.isBlank()) {
+            docChapterService.updateContent(id, content, null, 0L);
+        }
+        return Result.success(content);
+    }
+
+    @GetMapping("/{id}/generate/stream")
+    public SseEmitter generateChapterStream(@PathVariable Long id,
+                                             @RequestParam Long projectId) {
+        SseEmitter emitter = new SseEmitter(300000L); // 5 min timeout
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                draftGenerationService.generateChapterStream(id, projectId, chunk -> {
+                    try {
+                        emitter.send(SseEmitter.event().data(chunk));
+                    } catch (IOException e) {
+                        emitter.completeWithError(e);
+                    }
+                });
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+        return emitter;
+    }
+
+    @PostMapping("/{id}/auto-fill")
+    public Result<DocChapter> autoFillChapter(@PathVariable Long id,
+                                               @RequestParam Long projectId) {
+        return Result.success(variableMappingService.autoFillChapter(id, projectId));
+    }
+
+    @PostMapping("/auto-fill-all")
+    public Result<Map<String, Object>> autoFillAll(@RequestParam Long docLedgerId,
+                                                    @RequestParam Long projectId) {
+        int count = variableMappingService.autoFillAll(docLedgerId, projectId);
+        return Result.success(Map.of("filledCount", count));
+    }
+
+    @PostMapping("/extract-master-data")
+    public Result<Map<String, Object>> extractMasterData(@RequestParam Long projectId) {
+        return Result.success(masterDataExtractionService.extractFromInputFiles(projectId));
     }
 }

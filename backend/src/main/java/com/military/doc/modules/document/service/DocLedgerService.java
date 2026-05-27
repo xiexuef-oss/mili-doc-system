@@ -24,4 +24,9 @@ public interface DocLedgerService extends IService<DocLedger> {
      * 从V2模板初始化文档章节结构
      */
     void initChaptersFromTemplate(Long docLedgerId, Long templateId, Long operatorId);
+
+    /**
+     * 从阶段文档清单同步创建台账条目。已存在的(同checklistItemId)跳过，返回新创建的条目数。
+     */
+    int syncFromChecklist(Long projectId, Long stageId, Long operatorId);
 }

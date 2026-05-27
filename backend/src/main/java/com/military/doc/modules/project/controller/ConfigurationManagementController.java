@@ -3,8 +3,7 @@ package com.military.doc.modules.project.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.project.entity.*;
-import com.military.doc.modules.project.mapper.*;
-import com.military.doc.modules.project.service.ConfigurationManagementService;
+import com.military.doc.modules.project.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,22 +21,22 @@ public class ConfigurationManagementController {
     private ConfigurationManagementService configService;
 
     @Autowired
-    private ConfigurationBaselineMapper baselineMapper;
+    private ConfigurationBaselineService baselineService;
 
     @Autowired
-    private ConfigurationBaselineItemMapper baselineItemMapper;
+    private ConfigurationBaselineItemService baselineItemService;
 
     @Autowired
-    private ConfigurationChangeRequestMapper changeRequestMapper;
+    private ConfigurationChangeRequestService changeRequestService;
 
     @Autowired
-    private ConfigurationStatusAccountingMapper accountingMapper;
+    private ConfigurationStatusAccountingService accountingService;
 
     @Autowired
-    private ConfigurationAuditMapper auditMapper;
+    private ConfigurationAuditService auditService;
 
     @Autowired
-    private ConfigurationItemMapper ciMapper;
+    private ConfigurationItemService ciService;
 
     // ---- 技术状态项 ----
 
@@ -51,7 +50,7 @@ public class ConfigurationManagementController {
         if (stageId != null) {
             qw.eq(ConfigurationItem::getStageId, stageId);
         }
-        return Result.success(ciMapper.selectList(qw));
+        return Result.success(ciService.list(qw));
     }
 
     @PostMapping("/projects/{projectId}/configuration-items")
@@ -63,7 +62,7 @@ public class ConfigurationManagementController {
         ci.setProjectId(projectId);
         ci.setCreatedBy(userId);
         ci.setUpdatedBy(userId);
-        ciMapper.insert(ci);
+        ciService.save(ci);
         return Result.success(ci);
     }
 
@@ -71,8 +70,8 @@ public class ConfigurationManagementController {
     @Operation(summary = "更新技术状态项")
     public Result<ConfigurationItem> updateCi(@PathVariable Long id, @RequestBody ConfigurationItem ci) {
         ci.setId(id);
-        ciMapper.updateById(ci);
-        return Result.success(ciMapper.selectById(id));
+        ciService.updateById(ci);
+        return Result.success(ciService.getById(id));
     }
 
     // ---- 基线管理 ----
@@ -91,7 +90,7 @@ public class ConfigurationManagementController {
     @Operation(summary = "查询阶段基线列表")
     public Result<List<ConfigurationBaseline>> listBaselines(@PathVariable Long projectId,
                                                               @PathVariable Long stageId) {
-        return Result.success(baselineMapper.selectList(new LambdaQueryWrapper<ConfigurationBaseline>()
+        return Result.success(baselineService.list(new LambdaQueryWrapper<ConfigurationBaseline>()
                 .eq(ConfigurationBaseline::getProjectId, projectId)
                 .eq(ConfigurationBaseline::getStageId, stageId)
                 .orderByDesc(ConfigurationBaseline::getCreatedAt)));
@@ -100,13 +99,13 @@ public class ConfigurationManagementController {
     @GetMapping("/baselines/{id}")
     @Operation(summary = "获取基线详情")
     public Result<ConfigurationBaseline> getBaseline(@PathVariable Long id) {
-        return Result.success(baselineMapper.selectById(id));
+        return Result.success(baselineService.getById(id));
     }
 
     @GetMapping("/baselines/{id}/items")
     @Operation(summary = "获取基线项列表")
     public Result<List<ConfigurationBaselineItem>> listBaselineItems(@PathVariable Long id) {
-        return Result.success(baselineItemMapper.selectList(new LambdaQueryWrapper<ConfigurationBaselineItem>()
+        return Result.success(baselineItemService.list(new LambdaQueryWrapper<ConfigurationBaselineItem>()
                 .eq(ConfigurationBaselineItem::getBaselineId, id)));
     }
 
@@ -148,7 +147,7 @@ public class ConfigurationManagementController {
         if (stageId != null) {
             qw.eq(ConfigurationChangeRequest::getStageId, stageId);
         }
-        return Result.success(changeRequestMapper.selectList(qw));
+        return Result.success(changeRequestService.list(qw));
     }
 
     @PutMapping("/change-requests/{id}/process")
@@ -173,7 +172,7 @@ public class ConfigurationManagementController {
         if (stageId != null) {
             qw.eq(ConfigurationStatusAccounting::getStageId, stageId);
         }
-        return Result.success(accountingMapper.selectList(qw));
+        return Result.success(accountingService.list(qw));
     }
 
     // ---- 技术状态审核 ----
@@ -198,7 +197,7 @@ public class ConfigurationManagementController {
         if (stageId != null) {
             qw.eq(ConfigurationAudit::getStageId, stageId);
         }
-        return Result.success(auditMapper.selectList(qw));
+        return Result.success(auditService.list(qw));
     }
 
     @PutMapping("/audits/{id}/complete")

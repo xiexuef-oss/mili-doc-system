@@ -5,8 +5,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocFile;
-import com.military.doc.modules.document.mapper.DocFileMapper;
 import com.military.doc.modules.document.service.DocCatalogService;
+import com.military.doc.modules.document.service.DocFileService;
 import com.military.doc.modules.document.service.StageCatalogTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,8 +14,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/doc-catalogs")
@@ -29,10 +31,10 @@ public class DocCatalogController {
     private StageCatalogTemplateService stageCatalogTemplateService;
 
     @Autowired
-    private DocFileMapper docFileMapper;
+    private DocFileService docFileService;
 
     private boolean hasDraft(Long catalogId) {
-        Long count = docFileMapper.selectCount(
+        Long count = docFileService.count(
             new LambdaQueryWrapper<DocFile>().eq(DocFile::getCatalogId, catalogId));
         return count != null && count > 0;
     }
@@ -115,11 +117,21 @@ public class DocCatalogController {
     @GetMapping("/draft-status")
     @Operation(summary = "批量查询目录条目是否已有初稿，返回 Map<catalogId, hasDraft>")
     public Result<Map<Long, Boolean>> draftStatus(@RequestParam Long projectId) {
-        Map<Long, Boolean> status = new java.util.LinkedHashMap<>();
         List<DocCatalog> catalogs = docCatalogService.list(
             new LambdaQueryWrapper<DocCatalog>().eq(DocCatalog::getProjectId, projectId));
+
+        List<Long> catalogIds = catalogs.stream().map(DocCatalog::getId).toList();
+        Set<Long> draftCatalogIds = new HashSet<>();
+        if (!catalogIds.isEmpty()) {
+            draftCatalogIds = docFileService.list(new LambdaQueryWrapper<DocFile>()
+                    .in(DocFile::getCatalogId, catalogIds)
+                    .select(DocFile::getCatalogId))
+                .stream().map(DocFile::getCatalogId).collect(java.util.stream.Collectors.toSet());
+        }
+
+        Map<Long, Boolean> status = new java.util.LinkedHashMap<>();
         for (DocCatalog c : catalogs) {
-            status.put(c.getId(), hasDraft(c.getId()));
+            status.put(c.getId(), draftCatalogIds.contains(c.getId()));
         }
         return Result.success(status);
     }

@@ -15,8 +15,12 @@
       :filter-node-method="filterNode"
       :default-expanded-keys="defaultExpanded"
       :expand-on-click-node="true"
+      :draggable="draggable"
+      :allow-drag="allowDrag"
+      :allow-drop="allowDrop"
       highlight-current
       @node-click="handleNodeClick"
+      @node-drag-end="handleDragEnd"
     >
       <template #default="{ data }">
         <span class="tree-node" :class="fillClass(data)">
@@ -38,10 +42,12 @@ import type { ElTree } from 'element-plus'
 const props = defineProps<{
   treeData: any[]
   defaultExpanded?: number[]
+  draggable?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'node-click', node: any): void
+  (e: 'reorder', orderedIds: number[]): void
 }>()
 
 const treeRef = ref<InstanceType<typeof ElTree>>()
@@ -60,6 +66,31 @@ watch(filterText, (val) => {
 
 function handleNodeClick(data: any) {
   emit('node-click', data)
+}
+
+function allowDrag(_node: any) {
+  return props.draggable === true
+}
+
+function allowDrop(_draggingNode: any, _dropNode: any, type: string) {
+  return type !== 'inner'
+}
+
+function handleDragEnd(_draggingNode: any, _dropNode: any, _dropType: string) {
+  if (!props.draggable) return
+  const orderedIds = collectOrderedIds(treeRef.value?.store.data || [])
+  emit('reorder', orderedIds)
+}
+
+function collectOrderedIds(nodes: any[]): number[] {
+  const ids: number[] = []
+  for (const node of nodes) {
+    ids.push(node.data?.id ?? node.id)
+    if (node.childNodes && node.childNodes.length > 0) {
+      ids.push(...collectOrderedIds(node.childNodes))
+    }
+  }
+  return ids
 }
 
 function fillClass(data: any) {

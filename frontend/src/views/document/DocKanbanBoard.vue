@@ -6,6 +6,10 @@
         <el-select v-model="selectedStageId" placeholder="筛选阶段" clearable style="width:220px" @change="loadKanban">
           <el-option v-for="s in stages" :key="s.id" :label="s.stageName" :value="s.id" />
         </el-select>
+        <el-select v-model="selectedCategory" placeholder="筛选类别" clearable style="width:180px">
+          <el-option v-for="cat in availableCategories" :key="cat" :label="cat" :value="cat" />
+        </el-select>
+        <el-switch v-model="groupByCategory" active-text="按类别分组" inactive-text="列表" size="small" />
       </div>
       <div class="header-right">
         <el-button type="success" :loading="syncing" @click="handleSyncFromCatalog" :disabled="!selectedStageId">
@@ -20,7 +24,7 @@
     <!-- Kanban columns -->
     <div class="kanban-board">
       <div
-        v-for="col in columns"
+        v-for="col in enrichedColumns"
         :key="col.key"
         class="kanban-column"
         :class="{ 'drag-over': dragOverColumn === col.key }"
@@ -33,52 +37,56 @@
           <el-tag size="small" :type="col.tagType">{{ getColumnCount(col.key) }}</el-tag>
         </div>
         <div class="column-body">
-          <div
-            v-for="item in getColumnItems(col.key)"
-            :key="item.id"
-            class="kanban-card"
-            :draggable="canTransitionFrom(col.key)"
-            @dragstart="handleDragStart($event, item)"
-            @click="showDetail(item)"
-          >
-            <div class="card-code">
-              <span v-if="item.catalogId" class="catalog-badge" title="来自文档目录">📋</span>
-              {{ item.docCode || '—' }}
+          <template v-for="grp in col.groups" :key="grp.category || '__flat__'">
+            <div v-if="groupByCategory && grp.category" class="col-cat-header">
+              <span>{{ grp.category }}</span>
+              <el-tag size="small">{{ grp.items.length }}</el-tag>
             </div>
-            <div class="card-name">{{ item.docName }}</div>
-            <div class="card-tags">
-              <el-tag v-if="item.docCategory" size="small" type="success">{{ item.docCategory }}</el-tag>
-              <el-tag size="small" type="info">{{ docTypeLabel(item.docType) }}</el-tag>
-              <el-tag v-if="item.stageCode" size="small" type="warning">{{ item.stageCode }}</el-tag>
-              <el-tag v-if="item.securityLevel" size="small" :type="item.securityLevel === 'TOP_SECRET' || item.securityLevel === 'SECRET' ? 'danger' : 'warning'">
-                {{ securityLabel(item.securityLevel) }}
-              </el-tag>
+            <div
+              v-for="item in grp.items"
+              :key="item.id"
+              class="kanban-card"
+              :draggable="canTransitionFrom(col.key)"
+              @dragstart="handleDragStart($event, item)"
+              @click="showDetail(item)"
+            >
+              <div class="card-code">
+                <span v-if="item.catalogId" class="catalog-badge" title="来自文档目录">📋</span>
+                {{ item.docCode || '—' }}
+              </div>
+              <div class="card-name">{{ item.docName }}</div>
+              <div class="card-tags">
+                <el-tag v-if="item.docCategory" size="small" type="success">{{ item.docCategory }}</el-tag>
+                <el-tag size="small" type="info">{{ docTypeLabel(item.docType) }}</el-tag>
+                <el-tag v-if="item.stageCode" size="small" type="warning">{{ item.stageCode }}</el-tag>
+                <el-tag v-if="item.securityLevel" size="small" :type="item.securityLevel === 'TOP_SECRET' || item.securityLevel === 'SECRET' ? 'danger' : 'warning'">
+                  {{ securityLabel(item.securityLevel) }}
+                </el-tag>
+              </div>
+              <div v-if="completenessMap.get(item.id!)" class="card-completeness" @click.stop="goAssembly(item)">
+                <CompletenessProgressBar
+                  :passed="completenessMap.get(item.id!)!.passed"
+                  :warnings="completenessMap.get(item.id!)!.warnings"
+                  :errors="completenessMap.get(item.id!)!.errors"
+                  :total="completenessMap.get(item.id!)!.total"
+                />
+              </div>
+              <div v-if="col.key === 'PLANNED'" class="card-actions">
+                <el-button size="small" type="primary" link @click.stop="generateDraft(item)">AI 生成初稿</el-button>
+              </div>
+              <div v-if="col.key === 'RELEASED'" class="card-actions">
+                <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
+              </div>
+              <div v-if="col.key === 'DRAFTING'" class="card-actions">
+                <el-button size="small" type="primary" link @click.stop="goAssembly(item)">章节编辑</el-button>
+                <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
+                <el-button size="small" type="warning" link @click.stop="aiProofread(item)">AI 校对</el-button>
+              </div>
+              <div v-if="col.key === 'CHECKING'" class="card-actions">
+                <el-button size="small" type="warning" link @click.stop="aiPreReview(item)">AI 预评审</el-button>
+              </div>
             </div>
-            <!-- Completeness indicator -->
-            <div v-if="completenessMap.get(item.id!)" class="card-completeness" @click.stop="goAssembly(item)">
-              <CompletenessProgressBar
-                :passed="completenessMap.get(item.id!)!.passed"
-                :warnings="completenessMap.get(item.id!)!.warnings"
-                :errors="completenessMap.get(item.id!)!.errors"
-                :total="completenessMap.get(item.id!)!.total"
-              />
-            </div>
-            <!-- AI buttons per column -->
-            <div v-if="col.key === 'PLANNED'" class="card-actions">
-              <el-button size="small" type="primary" link @click.stop="generateDraft(item)">AI 生成初稿</el-button>
-            </div>
-            <div v-if="col.key === 'RELEASED'" class="card-actions">
-              <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
-            </div>
-            <div v-if="col.key === 'DRAFTING'" class="card-actions">
-              <el-button size="small" type="primary" link @click.stop="goAssembly(item)">章节编辑</el-button>
-              <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
-              <el-button size="small" type="warning" link @click.stop="aiProofread(item)">AI 校对</el-button>
-            </div>
-            <div v-if="col.key === 'CHECKING'" class="card-actions">
-              <el-button size="small" type="warning" link @click.stop="aiPreReview(item)">AI 预评审</el-button>
-            </div>
-          </div>
+          </template>
           <div v-if="getColumnCount(col.key) === 0" class="column-empty">拖拽卡片至此列</div>
         </div>
       </div>
@@ -299,7 +307,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
@@ -345,6 +353,8 @@ const TRANSITIONS: Record<string, string[]> = {
 const kanbanData = ref<Record<string, DocLedgerItem[]>>({})
 const stages = ref<ProjectStageItem[]>([])
 const selectedStageId = ref<number | null>(null)
+const selectedCategory = ref('')
+const groupByCategory = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const showDrawer = ref(false)
@@ -371,8 +381,41 @@ function onCreateCategoryChange(categoryCode: string) {
     : []
 }
 
-function getColumnItems(key: string) { return kanbanData.value[key] || [] }
-function getColumnCount(key: string) { return (kanbanData.value[key] || []).length }
+function getColumnItems(key: string) {
+  let items = kanbanData.value[key] || []
+  if (selectedCategory.value) {
+    items = items.filter(i => i.docCategory === selectedCategory.value)
+  }
+  return items
+}
+function getColumnCount(key: string) { return getColumnItems(key).length }
+
+const enrichedColumns = computed(() => {
+  return columns.map(col => {
+    const items = getColumnItems(col.key)
+    if (!groupByCategory.value) {
+      return { ...col, groups: [{ category: '', items }] }
+    }
+    const map = new Map<string, DocLedgerItem[]>()
+    for (const item of items) {
+      const cat = item.docCategory || '其他'
+      if (!map.has(cat)) map.set(cat, [])
+      map.get(cat)!.push(item)
+    }
+    const groups = Array.from(map.entries()).map(([category, catItems]) => ({ category, items: catItems }))
+    return { ...col, groups }
+  })
+})
+
+const availableCategories = computed(() => {
+  const cats = new Set<string>()
+  for (const col of columns) {
+    for (const item of (kanbanData.value[col.key] || [])) {
+      if (item.docCategory) cats.add(item.docCategory)
+    }
+  }
+  return Array.from(cats).sort()
+})
 
 function securityLabel(s: string) {
   const map: Record<string, string> = {
@@ -420,21 +463,25 @@ const showExportDialog = ref(false)
 const showExportItem = ref<DocLedgerItem | null>(null)
 
 async function loadCompletenessForAll() {
-  const allItems = Object.values(kanbanData.value).flat()
-  for (const item of allItems) {
-    if (!item.id) continue
-    try {
-      const res = await getCompletionSummary(item.id)
-      const s = res.data.data
-      if (s && s.total > 0) {
-        completenessMap.value.set(item.id, {
-          passed: s.filled || 0,
-          warnings: s.partial || 0,
-          errors: s.empty || 0,
-          total: s.total
-        })
-      }
-    } catch { /* skip */ }
+  const allItems = Object.values(kanbanData.value).flat().filter(i => i.id)
+  if (allItems.length === 0) return
+  const results = await Promise.allSettled(
+    allItems.map(async item => {
+      const res = await getCompletionSummary(item.id!)
+      return { id: item.id!, data: res.data.data }
+    })
+  )
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue
+    const { id, data: s } = r.value
+    if (s && s.total > 0) {
+      completenessMap.value.set(id, {
+        passed: s.filled || 0,
+        warnings: s.partial || 0,
+        errors: s.empty || 0,
+        total: s.total
+      })
+    }
   }
 }
 
@@ -740,6 +787,7 @@ onMounted(() => { loadKanban(); loadStages(); checkHealth(); loadDocDicts() })
 .card-tags { display:flex; gap:4px; flex-wrap:wrap; }
 .card-actions { margin-top:8px; padding-top:6px; border-top:1px solid var(--el-border-color-lighter); }
 .header-left, .header-right { display:flex; align-items:center; gap:8px; }
+.col-cat-header { display:flex; justify-content:space-between; align-items:center; padding:4px 6px; margin:2px 0 4px; background:rgba(0,0,0,.04); border-radius:4px; font-size:12px; font-weight:500; color:var(--el-text-color-secondary); }
 
 .draft-output { margin-top:16px; border:1px solid var(--el-border-color); border-radius:6px; overflow:hidden; }
 .draft-output-header { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:var(--el-fill-color-light); border-bottom:1px solid var(--el-border-color); font-size:13px; }
