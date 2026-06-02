@@ -26,6 +26,9 @@ public interface DocChapterService extends IService<DocChapter> {
     /** Get completion summary for a document */
     Map<String, Object> getCompletionSummary(Long docLedgerId);
 
+    /** Get completion summaries for multiple documents (batch) */
+    Map<Long, Map<String, Object>> getCompletionSummaryBatch(List<Long> docLedgerIds);
+
     /** Get chapter by id */
     DocChapter getById(Long chapterId);
 }

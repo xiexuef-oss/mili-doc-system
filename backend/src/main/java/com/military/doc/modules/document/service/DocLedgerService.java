@@ -29,4 +29,14 @@ public interface DocLedgerService extends IService<DocLedger> {
      * 从阶段文档清单同步创建台账条目。已存在的(同checklistItemId)跳过，返回新创建的条目数。
      */
     int syncFromChecklist(Long projectId, Long stageId, Long operatorId);
+
+    /**
+     * 级联删除文档台账及其关联的章节、日志、完整性检查、技术状态记录
+     */
+    void deleteLedger(Long id);
+
+    /**
+     * 根据checklistItemId级联删除对应的文档台账条目，返回删除数量
+     */
+    int deleteByChecklistItemId(Long checklistItemId);
 }

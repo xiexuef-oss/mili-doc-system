@@ -116,7 +116,7 @@ public class DocxGenerationService {
             if (highlightType != null) {
                 GjbStyleHelper.addHighlightedParagraph(doc, content, highlightType);
             } else {
-                GjbStyleHelper.addBodyText(doc, content);
+                GjbStyleHelper.writeMarkdownContent(doc, content, level);
             }
         } else if (showHighlights && chapter.getFillStatus() != null && !"FILLED".equals(chapter.getFillStatus())) {
             String msg = "【缺项】此章节内容未填写";

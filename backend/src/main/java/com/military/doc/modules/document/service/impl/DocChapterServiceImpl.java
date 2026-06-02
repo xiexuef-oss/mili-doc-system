@@ -140,6 +140,34 @@ public class DocChapterServiceImpl extends ServiceImpl<DocChapterMapper, DocChap
     }
 
     @Override
+    public Map<Long, Map<String, Object>> getCompletionSummaryBatch(List<Long> docLedgerIds) {
+        if (docLedgerIds == null || docLedgerIds.isEmpty()) return Map.of();
+        // Query all chapters for all docLedgerIds in one query
+        List<DocChapter> allChapters = lambdaQuery().in(DocChapter::getDocLedgerId, docLedgerIds).list();
+        // Group by docLedgerId
+        Map<Long, List<DocChapter>> grouped = allChapters.stream()
+            .collect(java.util.stream.Collectors.groupingBy(DocChapter::getDocLedgerId));
+
+        Map<Long, Map<String, Object>> result = new java.util.LinkedHashMap<>();
+        for (Long docLedgerId : docLedgerIds) {
+            List<DocChapter> chapters = grouped.getOrDefault(docLedgerId, List.of());
+            int total = chapters.size();
+            long filled = chapters.stream().filter(c -> "FILLED".equals(c.getFillStatus())).count();
+            long partial = chapters.stream().filter(c -> "PARTIAL".equals(c.getFillStatus())).count();
+            long empty = chapters.stream().filter(c -> "EMPTY".equals(c.getFillStatus())).count();
+            double score = total > 0 ? Math.round((double) filled / total * 100.0) : 0;
+            result.put(docLedgerId, Map.of(
+                "total", total,
+                "filled", filled,
+                "partial", partial,
+                "empty", empty,
+                "completionScore", score
+            ));
+        }
+        return result;
+    }
+
+    @Override
     public DocChapter getById(Long chapterId) {
         DocChapter dc = baseMapper.selectById(chapterId);
         if (dc == null) throw BusinessException.notFound("章节不存在: " + chapterId);

@@ -33,8 +33,6 @@ public class VectorIndexService {
     private final EmbeddingIndexTaskMapper taskMapper;
     private final JdbcTemplate jdbcTemplate;
 
-    private static final int PAGE_SIZE = 50;
-
     public VectorIndexService(EmbeddingClient embeddingClient,
                               EmbeddingProperties embeddingProperties,
                               StandardClauseMapper clauseMapper,
@@ -60,15 +58,16 @@ public class VectorIndexService {
             task.setStartedAt(LocalDateTime.now());
             taskMapper.updateById(task);
 
+            int batchSize = embeddingProperties.getBatchSize();
             int total = 0;
             int completed = 0;
             int failed = 0;
-            int offset = 0;
             while (true) {
                 List<StandardClause> page = clauseMapper.selectList(
                     new LambdaQueryWrapper<StandardClause>()
+                        .notInSql(StandardClause::getId, "SELECT clause_id FROM standard_clause_embedding")
                         .orderByAsc(StandardClause::getId)
-                        .last("LIMIT " + PAGE_SIZE + " OFFSET " + offset)
+                        .last("LIMIT " + batchSize)
                 );
                 if (page.isEmpty()) break;
                 total += page.size();
@@ -82,6 +81,8 @@ public class VectorIndexService {
                 }
 
                 try {
+                    log.info("Embedding clauses batch: firstId={}, chars={}, count={}",
+                        ids.get(0), texts.stream().mapToInt(String::length).sum(), texts.size());
                     List<float[]> embeddings = embeddingClient.embedBatch(texts);
                     for (int i = 0; i < ids.size(); i++) {
                         String hash = sha256(texts.get(i));
@@ -89,17 +90,20 @@ public class VectorIndexService {
                         completed++;
                     }
                 } catch (Exception e) {
-                    log.error("Batch embed failed at offset {}: {}", offset, e.getMessage());
+                    log.error("Batch embed clauses failed at batch {} (first id={}, chars={}): {}",
+                        total, ids.isEmpty() ? -1 : ids.get(0),
+                        texts.stream().mapToInt(String::length).sum(),
+                        e.getMessage());
                     failed += texts.size();
+                    task.setErrorMessage("Clause batch failed: " + e.getMessage());
                 }
 
-                offset += PAGE_SIZE;
                 task.setTotalCount(total);
                 task.setCompletedCount(completed);
                 task.setFailedCount(failed);
                 taskMapper.updateById(task);
 
-                if (page.size() < PAGE_SIZE) break;
+                if (page.size() < batchSize) break;
             }
 
             task.setStatus("COMPLETED");
@@ -120,15 +124,16 @@ public class VectorIndexService {
             task.setStartedAt(LocalDateTime.now());
             taskMapper.updateById(task);
 
+            int batchSize = embeddingProperties.getBatchSize();
             int total = 0;
             int completed = 0;
             int failed = 0;
-            int offset = 0;
             while (true) {
                 List<KnowledgeBase> page = kbMapper.selectList(
                     new LambdaQueryWrapper<KnowledgeBase>()
+                        .notInSql(KnowledgeBase::getId, "SELECT kb_id FROM knowledge_base_embedding")
                         .orderByAsc(KnowledgeBase::getId)
-                        .last("LIMIT " + PAGE_SIZE + " OFFSET " + offset)
+                        .last("LIMIT " + batchSize)
                 );
                 if (page.isEmpty()) break;
                 total += page.size();
@@ -149,17 +154,17 @@ public class VectorIndexService {
                         completed++;
                     }
                 } catch (Exception e) {
-                    log.error("Batch embed KB failed at offset {}: {}", offset, e.getMessage());
+                    log.error("Batch embed KB failed at batch {}: {}", total, e.getMessage());
                     failed += texts.size();
+                    task.setErrorMessage("KB batch failed: " + e.getMessage());
                 }
 
-                offset += PAGE_SIZE;
                 task.setTotalCount(total);
                 task.setCompletedCount(completed);
                 task.setFailedCount(failed);
                 taskMapper.updateById(task);
 
-                if (page.size() < PAGE_SIZE) break;
+                if (page.size() < batchSize) break;
             }
 
             task.setStatus("COMPLETED");
@@ -329,7 +334,7 @@ public class VectorIndexService {
         if (c.getClauseTitle() != null) sb.append(c.getClauseTitle()).append(" ");
         if (c.getClauseContent() != null) {
             String content = c.getClauseContent();
-            if (content.length() > 2000) content = content.substring(0, 2000);
+            if (content.length() > 500) content = content.substring(0, 500);
             sb.append(content);
         }
         return sb.toString().trim();
@@ -341,7 +346,7 @@ public class VectorIndexService {
         if (kb.getCategory() != null) sb.append(kb.getCategory()).append(" ");
         if (kb.getContent() != null) {
             String content = kb.getContent();
-            if (content.length() > 2000) content = content.substring(0, 2000);
+            if (content.length() > 500) content = content.substring(0, 500);
             sb.append(content);
         }
         return sb.toString().trim();
@@ -374,12 +379,12 @@ public class VectorIndexService {
     }
 
     static String toPgVector(float[] vec) {
-        StringBuilder sb = new StringBuilder("ARRAY[");
+        StringBuilder sb = new StringBuilder("{");
         for (int i = 0; i < vec.length; i++) {
             if (i > 0) sb.append(",");
             sb.append(vec[i]);
         }
-        sb.append("]::double precision[]");
+        sb.append("}");
         return sb.toString();
     }
 

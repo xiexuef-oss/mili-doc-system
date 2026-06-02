@@ -74,6 +74,14 @@ export function checkDocuments(projectId: number, fromStageId: number) {
   return api.post('/stage-transitions/check-documents', { projectId, fromStageId })
 }
 
+export function deleteDocLedger(id: number) {
+  return api.delete(`/doc-ledgers/${id}`)
+}
+
 export function syncFromCatalog(projectId: number, stageId: number) {
   return api.post('/doc-ledgers/sync-from-catalog', null, { params: { projectId, stageId } })
+}
+
+export function syncFromChecklist(projectId: number, stageId: number) {
+  return api.post(`/projects/${projectId}/stages/${stageId}/checklist/sync-to-ledger`)
 }

@@ -49,6 +49,11 @@ public class DocChapterController {
         return Result.success(docChapterService.getCompletionSummary(docLedgerId));
     }
 
+    @PostMapping("/ledger/summary/batch")
+    public Result<Map<Long, Map<String, Object>>> getSummaryBatch(@RequestBody Map<String, List<Long>> body) {
+        return Result.success(docChapterService.getCompletionSummaryBatch(body.get("docLedgerIds")));
+    }
+
     @GetMapping("/{id}")
     public Result<DocChapter> getById(@PathVariable Long id) {
         return Result.success(docChapterService.getById(id));

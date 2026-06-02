@@ -26,6 +26,7 @@ public class DocLedger {
     private String changeReason;
     private Long responsibleUserId;
     private String securityLevel;
+    private String specType;
     private String lifecycleStatus;
     private String fileObjectId;
     private Long contentSize;

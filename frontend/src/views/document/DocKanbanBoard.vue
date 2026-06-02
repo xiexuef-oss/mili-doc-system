@@ -9,7 +9,11 @@
         <el-select v-model="selectedCategory" placeholder="筛选类别" clearable style="width:180px">
           <el-option v-for="cat in availableCategories" :key="cat" :label="cat" :value="cat" />
         </el-select>
-        <el-switch v-model="groupByCategory" active-text="按类别分组" inactive-text="列表" size="small" />
+        <el-radio-group v-model="viewMode" size="small">
+          <el-radio-button value="kanban">看板</el-radio-button>
+          <el-radio-button value="list">列表</el-radio-button>
+          <el-radio-button value="tree">树形</el-radio-button>
+        </el-radio-group>
       </div>
       <div class="header-right">
         <el-button type="success" :loading="syncing" @click="handleSyncFromCatalog" :disabled="!selectedStageId">
@@ -21,8 +25,70 @@
       </div>
     </div>
 
+    <!-- Tree view -->
+    <div v-if="viewMode === 'tree'" class="tree-view">
+      <div class="tree-toolbar">
+        <el-input v-model="treeFilter" placeholder="搜索文档..." clearable size="small" style="width:300px" />
+        <el-button size="small" @click="expandAll">全部展开</el-button>
+        <el-button size="small" @click="collapseAll">全部折叠</el-button>
+      </div>
+      <div class="tree-card">
+        <el-tree
+          ref="treeRef"
+          :key="treeRenderKey"
+          :data="treeData"
+          :props="treeProps"
+          :default-expanded-keys="expandedKeys"
+          node-key="key"
+          :filter-node-method="filterTreeNode"
+          :default-expand-all="false"
+          highlight-current
+          @node-click="handleTreeNodeClick"
+        >
+          <template #default="{ data }">
+            <div class="tree-node-content">
+              <!-- Category node -->
+              <template v-if="data.type === 'category'">
+                <el-icon style="margin-right:6px;color:var(--el-color-success)"><FolderOpened /></el-icon>
+                <span class="tree-cat-label">{{ data.label }}</span>
+                <el-tag size="small" type="success" style="margin-left:8px">{{ data.children?.length || 0 }} 份</el-tag>
+              </template>
+              <!-- Document node -->
+              <template v-else>
+                <span class="tree-doc-code">{{ data.docCode || '—' }}</span>
+                <span class="tree-doc-name">{{ data.docName }}</span>
+                <el-tag v-if="data.docType" size="small" type="info" style="margin-left:4px">{{ docTypeLabel(data.docType) }}</el-tag>
+                <el-tag size="small" :type="statusTagType(data.lifecycleStatus)" style="margin-left:4px">{{ statusLabel(data.lifecycleStatus) }}</el-tag>
+                <el-tag v-if="data.securityLevel" size="small" :type="data.securityLevel === 'TOP_SECRET' || data.securityLevel === 'SECRET' ? 'danger' : 'warning'" style="margin-left:4px">
+                  {{ securityLabel(data.securityLevel) }}
+                </el-tag>
+                <span class="tree-actions" @click.stop>
+                  <el-button v-if="data.lifecycleStatus === 'PLANNED'" size="small" type="primary" link @click="generateDraft(data)">AI生成</el-button>
+                  <el-button v-if="data.lifecycleStatus === 'DRAFTING'" size="small" type="primary" link @click="goAssembly(data)">章节编辑</el-button>
+                  <el-button v-if="data.lifecycleStatus === 'DRAFTING'" size="small" type="success" link @click="exportDocx(data)">导出</el-button>
+                  <el-button v-if="data.lifecycleStatus === 'DRAFTING'" size="small" type="warning" link @click="aiProofread(data)">校对</el-button>
+                  <el-button v-if="data.lifecycleStatus === 'CHECKING'" size="small" type="warning" link @click="aiPreReview(data)">预评审</el-button>
+                  <el-button v-if="data.lifecycleStatus === 'RELEASED'" size="small" type="success" link @click="exportDocx(data)">导出</el-button>
+                  <el-select
+                    v-if="canTransitionFrom(data.lifecycleStatus)"
+                    :model-value="''"
+                    placeholder="转移"
+                    size="small"
+                    style="width:80px;margin-left:4px"
+                    @change="(val: string) => doTransition(data.id!, val)"
+                  >
+                    <el-option v-for="t in allowedTransitions(data.lifecycleStatus)" :key="t" :label="statusLabel(t)" :value="t" />
+                  </el-select>
+                </span>
+              </template>
+            </div>
+          </template>
+        </el-tree>
+      </div>
+    </div>
+
     <!-- Kanban columns -->
-    <div class="kanban-board">
+    <div v-show="viewMode !== 'tree'" class="kanban-board">
       <div
         v-for="col in enrichedColumns"
         :key="col.key"
@@ -38,7 +104,7 @@
         </div>
         <div class="column-body">
           <template v-for="grp in col.groups" :key="grp.category || '__flat__'">
-            <div v-if="groupByCategory && grp.category" class="col-cat-header">
+            <div v-if="viewMode === 'kanban' && grp.category" class="col-cat-header">
               <span>{{ grp.category }}</span>
               <el-tag size="small">{{ grp.items.length }}</el-tag>
             </div>
@@ -73,6 +139,7 @@
               </div>
               <div v-if="col.key === 'PLANNED'" class="card-actions">
                 <el-button size="small" type="primary" link @click.stop="generateDraft(item)">AI 生成初稿</el-button>
+                <el-button size="small" type="danger" link @click.stop="handleDelete(item)">删除</el-button>
               </div>
               <div v-if="col.key === 'RELEASED'" class="card-actions">
                 <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
@@ -81,6 +148,7 @@
                 <el-button size="small" type="primary" link @click.stop="goAssembly(item)">章节编辑</el-button>
                 <el-button size="small" type="success" link @click.stop="exportDocx(item)">导出.docx</el-button>
                 <el-button size="small" type="warning" link @click.stop="aiProofread(item)">AI 校对</el-button>
+                <el-button size="small" type="danger" link @click.stop="handleDelete(item)">删除</el-button>
               </div>
               <div v-if="col.key === 'CHECKING'" class="card-actions">
                 <el-button size="small" type="warning" link @click.stop="aiPreReview(item)">AI 预评审</el-button>
@@ -208,13 +276,19 @@
         <el-tag size="small" type="info">{{ draftItem.docCode }}</el-tag>
         <span style="margin-left:8px;font-weight:500">{{ draftItem.docName }}</span>
       </div>
+      <el-alert v-if="!healthOk" title="AI 服务未连接，无法生成初稿" type="error" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form label-width="100px">
-        <el-form-item label="目录条目">
-          <el-select v-model="draftCatalogId" placeholder="选择文档目录条目" filterable style="width:100%" :disabled="draftStreaming">
-            <el-option v-for="c in catalogEntries" :key="c.id" :label="`${c.docCode} - ${c.docName}`" :value="c.id!" />
-          </el-select>
+        <el-form-item label="参考目录">
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <el-select v-model="draftCatalogId" placeholder="可选，选择目录条目提供更精确的文档规格" filterable clearable style="flex:1" :disabled="draftStreaming" :loading="catalogLoading">
+              <el-option v-for="c in catalogEntries" :key="c.id" :label="`${c.docCode} - ${c.docName}`" :value="c.id!" />
+            </el-select>
+            <el-icon v-if="catalogLoading" class="is-loading"><Loading /></el-icon>
+          </div>
+          <div style="font-size:12px;color:var(--el-text-color-secondary);margin-top:4px">可选：选择目录条目可提供更精确的文档规格。不选时使用当前文档元数据，AI 仍会参考模板、输入文件和军标来生成。</div>
         </el-form-item>
       </el-form>
+      <el-alert v-if="!catalogLoading && catalogEntries.length === 0" :title="`该项目暂无目录条目，将使用当前文档元数据生成（仍会参考输入文件和军标）`" type="info" :closable="false" show-icon style="margin-top:8px" />
       <div v-if="draftContent || draftStreaming" class="draft-output">
         <div class="draft-output-header">
           <span>生成结果</span>
@@ -226,7 +300,7 @@
       </div>
       <template #footer>
         <el-button @click="showDraftDialog = false" :disabled="draftStreaming">关闭</el-button>
-        <el-button v-if="!draftStreaming" type="primary" @click="startDraftGeneration" :disabled="!draftCatalogId">开始生成</el-button>
+        <el-button v-if="!draftStreaming" type="primary" @click="startDraftGeneration" :disabled="!healthOk">开始生成</el-button>
         <el-button v-else type="danger" plain @click="stopDraftGeneration">停止生成</el-button>
         <el-button v-if="draftContent && !draftStreaming" type="success" :loading="draftSaving" @click="handleSaveDraft">保存为文档</el-button>
       </template>
@@ -267,6 +341,8 @@
       v-model="showExportDialog"
       :doc-ledger-id="showExportItem.id!"
       :doc-name="showExportItem.docName"
+      :chapter-count="exportChapterCount"
+      :fill-rate="exportFillRate"
       @done="loadKanban"
     />
 
@@ -307,15 +383,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Plus, RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, RefreshRight, FolderOpened, Loading } from '@element-plus/icons-vue'
 import {
-  getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromCatalog,
+  getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
 } from '@/api/doc-ledger'
-import { getCompletionSummary } from '@/api/doc-chapter'
+import { getCompletionSummaryBatch, getCompletionSummary } from '@/api/doc-chapter'
 import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
 import DocxExportDialog from '@/components/DocxExportDialog.vue'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
@@ -354,7 +430,7 @@ const kanbanData = ref<Record<string, DocLedgerItem[]>>({})
 const stages = ref<ProjectStageItem[]>([])
 const selectedStageId = ref<number | null>(null)
 const selectedCategory = ref('')
-const groupByCategory = ref(false)
+const viewMode = ref<'kanban' | 'list' | 'tree'>('kanban')
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const showDrawer = ref(false)
@@ -393,9 +469,10 @@ function getColumnCount(key: string) { return getColumnItems(key).length }
 const enrichedColumns = computed(() => {
   return columns.map(col => {
     const items = getColumnItems(col.key)
-    if (!groupByCategory.value) {
+    if (viewMode.value === 'list') {
       return { ...col, groups: [{ category: '', items }] }
     }
+    // kanban mode: group by category
     const map = new Map<string, DocLedgerItem[]>()
     for (const item of items) {
       const cat = item.docCategory || '其他'
@@ -416,6 +493,111 @@ const availableCategories = computed(() => {
   }
   return Array.from(cats).sort()
 })
+
+// ---- Tree view ----
+const treeFilter = ref('')
+const treeRef = ref<any>(null)
+const expandedKeys = ref<string[]>([])
+const treeRenderKey = ref(0)
+
+interface TreeNode {
+  key: string
+  label: string
+  type: 'category' | 'document'
+  children?: TreeNode[]
+  // document leaf props
+  docCode?: string
+  docName?: string
+  docType?: string
+  securityLevel?: string
+  lifecycleStatus?: string
+  id?: number
+  catalogId?: number
+}
+
+const treeProps = { children: 'children', label: 'label' }
+
+const treeData = computed<TreeNode[]>(() => {
+  const allItems: DocLedgerItem[] = []
+  // In tree mode, ignore column grouping — collect all items across all statuses
+  for (const col of columns) {
+    for (const item of (kanbanData.value[col.key] || [])) {
+      if (selectedCategory.value && item.docCategory !== selectedCategory.value) continue
+      allItems.push(item)
+    }
+  }
+
+  // Group: category → documents (2-level tree)
+  const catMap = new Map<string, DocLedgerItem[]>()
+  for (const item of allItems) {
+    const cat = item.docCategory || '其他'
+    if (!catMap.has(cat)) catMap.set(cat, [])
+    catMap.get(cat)!.push(item)
+  }
+
+  const nodes: TreeNode[] = []
+  const sortedCats = Array.from(catMap.keys()).sort()
+  for (const cat of sortedCats) {
+    const docItems = catMap.get(cat)!
+    const catLabel = categoryNameMap.value[cat] || cat
+    const docNodes: TreeNode[] = docItems.map(doc => ({
+      key: `doc-${doc.id}`,
+      label: `${doc.docCode || '—'} ${doc.docName}`,
+      type: 'document' as const,
+      docCode: doc.docCode,
+      docName: doc.docName,
+      docType: doc.docType,
+      securityLevel: doc.securityLevel,
+      lifecycleStatus: doc.lifecycleStatus,
+      id: doc.id,
+      catalogId: doc.catalogId
+    }))
+    nodes.push({
+      key: `cat-${cat}`,
+      label: catLabel,
+      type: 'category',
+      children: docNodes
+    })
+  }
+  return nodes
+})
+
+function filterTreeNode(value: string, data: TreeNode): boolean {
+  if (!value) return true
+  const lower = value.toLowerCase()
+  if (data.label.toLowerCase().includes(lower)) return true
+  if (data.docCode?.toLowerCase().includes(lower)) return true
+  if (data.docName?.toLowerCase().includes(lower)) return true
+  return false
+}
+
+function expandAll() {
+  const keys = treeData.value.map(n => n.key)
+  expandedKeys.value = keys
+  treeRenderKey.value++
+}
+
+function collapseAll() {
+  expandedKeys.value = []
+  treeRenderKey.value++
+}
+
+function handleTreeNodeClick(data: TreeNode) {
+  if (data.type === 'document') {
+    const item: DocLedgerItem = {
+      id: data.id,
+      projectId,
+      docCode: data.docCode,
+      docName: data.docName || '',
+      docType: data.docType,
+      docCategory: data.label,
+      securityLevel: data.securityLevel,
+      lifecycleStatus: data.lifecycleStatus,
+      catalogId: data.catalogId
+    }
+    showDetail(item)
+  }
+}
 
 function securityLabel(s: string) {
   const map: Record<string, string> = {
@@ -442,8 +624,8 @@ function statusLabel(s: string) {
 }
 function statusTagType(s: string) {
   const map: Record<string, string> = {
-    PLANNED:'',DRAFTING:'info',CHECKING:'warning',REVIEWING:'warning',
-    APPROVING:'',RELEASED:'success',ARCHIVED:'info'
+    PLANNED:'info',DRAFTING:'info',CHECKING:'warning',REVIEWING:'warning',
+    APPROVING:'warning',RELEASED:'success',ARCHIVED:'info'
   }
   return map[s] || 'info'
 }
@@ -456,40 +638,77 @@ function goAssembly(item: DocLedgerItem) {
 
 function exportDocx(item: DocLedgerItem) {
   showExportItem.value = item
+
+  const cached = completenessMap.value.get(item.id!)
+  if (cached) {
+    exportChapterCount.value = cached.total
+    exportFillRate.value = cached.total > 0 ? Math.round(cached.passed / cached.total * 100) : 0
+  } else {
+    fetchExportStats(item.id!)
+  }
+
   showExportDialog.value = true
+}
+
+async function fetchExportStats(ledgerId: number) {
+  try {
+    const res = await getCompletionSummary(ledgerId)
+    const s = res.data.data
+    if (s) {
+      exportChapterCount.value = s.total || 0
+      exportFillRate.value = s.total > 0 ? Math.round((s.filled || 0) / s.total * 100) : 0
+    }
+  } catch { /* ignore */ }
 }
 
 const showExportDialog = ref(false)
 const showExportItem = ref<DocLedgerItem | null>(null)
+const exportChapterCount = ref(0)
+const exportFillRate = ref(0)
+
+async function handleDelete(item: DocLedgerItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除文档"${item.docName}"吗？此操作将同时删除关联的章节内容和状态日志，不可恢复。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteDocLedger(item.id!)
+    ElMessage.success('已删除')
+    await loadKanban()
+  } catch {
+    // user cancelled or error
+  }
+}
 
 async function loadCompletenessForAll() {
   const allItems = Object.values(kanbanData.value).flat().filter(i => i.id)
   if (allItems.length === 0) return
-  const results = await Promise.allSettled(
-    allItems.map(async item => {
-      const res = await getCompletionSummary(item.id!)
-      return { id: item.id!, data: res.data.data }
-    })
-  )
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue
-    const { id, data: s } = r.value
-    if (s && s.total > 0) {
-      completenessMap.value.set(id, {
-        passed: s.filled || 0,
-        warnings: s.partial || 0,
-        errors: s.empty || 0,
-        total: s.total
-      })
+  try {
+    const ids = allItems.map(i => i.id!)
+    const res = await getCompletionSummaryBatch(ids)
+    const batch: Record<number, any> = res.data.data || {}
+    // Build new map and replace in one operation to minimize reactive updates
+    const newMap = new Map<number, { passed: number; warnings: number; errors: number; total: number }>()
+    for (const [key, s] of Object.entries(batch)) {
+      const id = Number(key)
+      if (s && (s.total > 0 || s.filled > 0 || s.partial > 0 || s.empty > 0)) {
+        newMap.set(id, {
+          passed: s.filled || 0,
+          warnings: s.partial || 0,
+          errors: s.empty || 0,
+          total: s.total || 0
+        })
+      }
     }
-  }
+    completenessMap.value = newMap
+  } catch { /* ignore */ }
 }
 
 async function loadKanban() {
   try {
     const res = await getKanbanData(projectId, selectedStageId.value || undefined)
     kanbanData.value = res.data.data
-    loadCompletenessForAll()
   } catch { /* ignore */ }
 }
 async function loadStages() {
@@ -541,9 +760,9 @@ async function handleSyncFromCatalog() {
   if (!selectedStageId.value) { ElMessage.warning('请先选择阶段'); return }
   syncing.value = true
   try {
-    const res = await syncFromCatalog(projectId, selectedStageId.value)
+    const res = await syncFromChecklist(projectId, selectedStageId.value)
     const count = res.data?.data?.syncedCount || 0
-    ElMessage.success(`已从目录同步创建 ${count} 个台账条目`)
+    ElMessage.success(`已从阶段文档清单同步 ${count} 个台账条目`)
     loadKanban()
   } catch {
     ElMessage.error('同步失败')
@@ -589,27 +808,30 @@ const draftSaving = ref(false)
 const catalogEntries = ref<DocCatalogItem[]>([])
 let draftAbortController: AbortController | null = null
 
+const catalogLoading = ref(false)
+
 async function generateDraft(item: DocLedgerItem) {
   draftItem.value = item
   draftContent.value = ''
   draftCharCount.value = 0
   draftCatalogId.value = item.catalogId || null
+  catalogEntries.value = []
+  catalogLoading.value = true
   showDraftDialog.value = true
-  // Load catalog entries for selection
   try {
     const res = await getDocCatalogsByProject(projectId)
     catalogEntries.value = res.data.data || []
+    // Auto-select if document has no catalogId and there's exactly one entry
+    if (!draftCatalogId.value && catalogEntries.value.length === 1) {
+      draftCatalogId.value = catalogEntries.value[0].id!
+    }
   } catch { catalogEntries.value = [] }
+  finally { catalogLoading.value = false }
 }
 
 function startDraftGeneration() {
   if (!healthOk.value) {
     ElMessage.error('本地大模型未连接，无法生成初稿')
-    return
-  }
-  const catId = draftCatalogId.value
-  if (!catId) {
-    ElMessage.warning('请先选择文档目录条目')
     return
   }
 
@@ -618,7 +840,9 @@ function startDraftGeneration() {
   draftCharCount.value = 0
 
   draftAbortController = streamDraft(
-    projectId, catId,
+    projectId,
+    draftCatalogId.value,
+    draftItem.value?.id ?? null,
     (chunk: string) => {
       draftContent.value += chunk
       draftCharCount.value = draftContent.value.length
@@ -650,6 +874,7 @@ async function handleSaveDraft() {
   try {
     await saveDraft({
       projectId,
+      docLedgerId: draftItem.value.id ?? undefined,
       catalogId: draftCatalogId.value ?? undefined,
       stageId: selectedStageId.value ?? undefined,
       docName: draftItem.value.docName || 'AI 生成文档',
@@ -757,7 +982,22 @@ async function loadDocDicts() {
   } catch { /* ignore */ }
 }
 
-onMounted(() => { loadKanban(); loadStages(); checkHealth(); loadDocDicts() })
+const completenessLoaded = ref(false)
+
+onMounted(() => {
+  loadKanban(); loadStages(); checkHealth(); loadDocDicts()
+  // Lazy-load completeness data after initial render to avoid blocking
+  setTimeout(() => {
+    if (!completenessLoaded.value) {
+      completenessLoaded.value = true
+      loadCompletenessForAll()
+    }
+  }, 2000)
+})
+
+watch(treeFilter, (val) => {
+  treeRef.value?.filter(val)
+})
 </script>
 
 <style scoped>
@@ -800,4 +1040,20 @@ onMounted(() => { loadKanban(); loadStages(); checkHealth(); loadDocDicts() })
 .markdown-body :deep(ul) { margin:4px 0; padding-left:24px; }
 .markdown-body :deep(li) { margin:2px 0; }
 .markdown-body :deep(strong) { font-weight:600; }
+
+/* Tree view */
+.tree-view { padding:4px 0; }
+.tree-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.tree-card {
+  background:var(--el-fill-color-lighter); border-radius:8px; padding:8px 12px;
+  max-height:calc(100vh - 240px); overflow-y:auto;
+}
+.tree-card :deep(.el-tree-node__content) { height:auto; padding:2px 0; }
+.tree-card :deep(.el-tree-node__expand-icon) { color:var(--el-text-color-secondary); }
+.tree-node-content { display:flex; align-items:center; gap:4px; flex-wrap:wrap; width:100%; }
+.tree-cat-label { font-weight:600; font-size:14px; color:var(--el-text-color-primary); }
+.tree-doc-code { font-size:11px; color:var(--el-text-color-placeholder); min-width:80px; }
+.tree-doc-name { font-size:13px; font-weight:500; flex:1; }
+.tree-actions { display:flex; align-items:center; gap:2px; margin-left:auto; }
+.tree-actions :deep(.el-select) { width:80px; }
 </style>

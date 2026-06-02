@@ -19,12 +19,15 @@ import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.config.LlmProperties;
 import com.military.doc.modules.document.entity.DocCatalog;
+import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.entity.DocFile;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.entity.DocVersion;
+import com.military.doc.modules.document.service.DocChapterService;
 import com.military.doc.modules.document.service.DocFileService;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.service.DocVersionService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,12 +37,14 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -94,6 +99,9 @@ public class AiAssistantController {
 
     @Autowired
     private FileStorageService fileStorageService;
+
+    @Autowired
+    private DocChapterService docChapterService;
 
     @Autowired
     private LlmProperties llmProperties;
@@ -212,15 +220,20 @@ public class AiAssistantController {
     @GetMapping("/draft/stream")
     @Operation(summary = "流式生成文档初稿（SSE）")
     public SseEmitter streamDraft(@RequestParam Long projectId,
-                                   @RequestParam Long catalogId,
+                                   @RequestParam(required = false) Long catalogId,
+                                   @RequestParam(required = false) Long docLedgerId,
                                    Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         SseEmitter emitter = new SseEmitter(300000L);
-        log.info("Draft stream requested: projectId={}, catalogId={}, userId={}", projectId, catalogId, userId);
+        log.info("Draft stream requested: projectId={}, catalogId={}, docLedgerId={}, userId={}", projectId, catalogId, docLedgerId, userId);
+
+        // Capture security context for async thread
+        var securityContext = SecurityContextHolder.getContext();
 
         CompletableFuture.runAsync(() -> {
+            SecurityContextHolder.setContext(securityContext);
             try {
-                draftGenerationService.generateStream(projectId, catalogId, chunk -> {
+                draftGenerationService.generateStream(projectId, catalogId, docLedgerId, chunk -> {
                     try {
                         emitter.send(SseEmitter.event().name("chunk").data(chunk));
                     } catch (IOException e) {
@@ -236,6 +249,8 @@ public class AiAssistantController {
             } catch (Exception e) {
                 log.error("Draft stream failed", e);
                 emitter.completeWithError(e);
+            } finally {
+                SecurityContextHolder.clearContext();
             }
         });
 
@@ -246,7 +261,7 @@ public class AiAssistantController {
     }
 
     @PostMapping("/draft/save")
-    @Operation(summary = "保存生成的文档初稿，内容存储为 Markdown 文件并创建版本记录")
+    @Operation(summary = "保存AI生成初稿，新建起草台账（策划列原条目不动），同目录多次生成则覆盖")
     public Result<DocFile> saveDraft(@RequestBody Map<String, Object> body,
                                       Authentication authentication) {
         Long projectId = toLong(body.get("projectId"));
@@ -262,7 +277,56 @@ public class AiAssistantController {
             return Result.error("PARAM_ERROR", "projectId is required");
         }
 
-        // 1. Create DocFile metadata record (backward compat)
+        // 1. Find existing DRAFTING ledger by projectId + catalogId (not by docLedgerId,
+        //    so the PLANNED catalog card stays in place). If not found, create new.
+        DocLedger existingDraft = null;
+        if (catalogId != null) {
+            existingDraft = docLedgerService.getOne(new LambdaQueryWrapper<DocLedger>()
+                .eq(DocLedger::getProjectId, projectId)
+                .eq(DocLedger::getCatalogId, catalogId)
+                .eq(DocLedger::getLifecycleStatus, "DRAFTING")
+                .orderByDesc(DocLedger::getId)
+                .last("LIMIT 1"));
+        }
+
+        boolean isNew = (existingDraft == null);
+        DocLedger ledger;
+        if (isNew) {
+            ledger = new DocLedger();
+            ledger.setProjectId(projectId);
+            ledger.setStageId(stageId);
+            ledger.setCatalogId(catalogId);
+            ledger.setDocName(docName != null ? docName : "AI 生成文档");
+            ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
+            ledger.setSecurityLevel(securityLevel);
+            ledger.setLifecycleStatus("DRAFTING");
+            ledger.setRequiredFlag(true);
+            ledger.setCreatedBy(userId);
+            ledger.setUpdatedBy(userId);
+            ledger.setCreatedAt(LocalDateTime.now());
+            ledger.setUpdatedAt(LocalDateTime.now());
+            docLedgerService.save(ledger);
+        } else {
+            ledger = existingDraft;
+            if (docName != null && !docName.equals(ledger.getDocName())) {
+                ledger.setDocName(docName);
+            }
+            if (docType != null) ledger.setDocType(docType);
+            ledger.setStageId(stageId);
+            ledger.setUpdatedBy(userId);
+            ledger.setUpdatedAt(LocalDateTime.now());
+            docLedgerService.updateById(ledger);
+        }
+
+        // 2. Upload content as .md file
+        String fileObjectId = null;
+        if (content != null && !content.isBlank()) {
+            String filename = (docName != null ? docName : "draft") + ".md";
+            fileObjectId = fileStorageService.upload(
+                content.getBytes(StandardCharsets.UTF_8), filename);
+        }
+
+        // 3. Create DocFile snapshot record
         DocFile docFile = new DocFile();
         docFile.setProjectId(projectId);
         docFile.setCatalogId(catalogId);
@@ -275,43 +339,120 @@ public class AiAssistantController {
         docFile.setCreatedAt(LocalDateTime.now());
         docFileService.save(docFile);
 
-        // 2. Save content as .md file
-        String fileObjectId = null;
-        if (content != null && !content.isBlank()) {
-            String filename = (docName != null ? docName : "draft") + ".md";
-            fileObjectId = fileStorageService.upload(
-                content.getBytes(StandardCharsets.UTF_8), filename);
-        }
+        // 4. Version number from generation count
+        long genCount = docFileService.count(new LambdaQueryWrapper<DocFile>()
+            .eq(DocFile::getProjectId, projectId)
+            .eq(catalogId != null, DocFile::getCatalogId, catalogId));
+        String versionNo = "V0." + genCount + "-AI";
 
-        // 3. Create initial version record
+        // 5. Create version record
         DocVersion version = new DocVersion();
         version.setDocFileId(docFile.getId());
-        version.setVersionNo("V0.1-AI");
+        version.setVersionNo(versionNo);
         version.setSourceType("AI_GENERATED");
         version.setFileObjectId(fileObjectId);
         version.setVersionStatus("DRAFT");
         version.setOptimisticVersion(1);
         version.setSubmitUserId(userId);
         version.setSubmitTime(LocalDateTime.now());
-        version.setChangeSummary("AI 自动生成初稿");
+        version.setChangeSummary("AI 自动生成初稿 (" + versionNo + ")");
         version.setCreatedBy(userId);
         version.setCreatedAt(LocalDateTime.now());
         docVersionService.save(version);
 
-        // 4. Create/update DocLedger with DRAFTING status
-        DocLedger ledger = new DocLedger();
-        ledger.setProjectId(projectId);
-        ledger.setStageId(stageId);
-        ledger.setCatalogId(catalogId);
-        ledger.setDocName(docName != null ? docName : "AI 生成文档");
-        ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
-        ledger.setSecurityLevel(securityLevel);
+        // 6. Update ledger file reference to latest
         ledger.setFileObjectId(fileObjectId);
-        docLedgerService.createLedger(ledger, userId);
-        docLedgerService.transitionStatus(ledger.getId(), "DRAFTING", userId, "AI 生成初稿后自动转入起草状态");
+        ledger.setUpdatedBy(userId);
+        docLedgerService.updateById(ledger);
 
-        log.info("Draft saved: docFileId={}, ledgerId={}, versionId={}, catalogId={}",
-            docFile.getId(), ledger.getId(), version.getId(), catalogId);
+        // 7. Parse markdown into hierarchical chapter tree
+        if (content != null && !content.isBlank()) {
+            String safeContent = content.length() > 100_000 ? content.substring(0, 100_000) : content;
+
+            // Delete old chapters when overwriting
+            if (!isNew) {
+                docChapterService.remove(new LambdaQueryWrapper<DocChapter>()
+                    .eq(DocChapter::getDocLedgerId, ledger.getId()));
+            }
+
+            List<Map<String, Object>> segments = parseMarkdownToSegments(safeContent);
+
+            if (segments.isEmpty()) {
+                // No headings found — create a single fallback chapter
+                DocChapter chapter = new DocChapter();
+                chapter.setDocLedgerId(ledger.getId());
+                chapter.setChapterNumber("1");
+                chapter.setChapterTitle("初稿内容");
+                chapter.setChapterLevel(1);
+                chapter.setOrderNum(1);
+                chapter.setParentId(0L);
+                chapter.setContent(safeContent);
+                chapter.setFillStatus("DRAFT");
+                chapter.setFillPercentage(100);
+                chapter.setCreatedBy(userId);
+                chapter.setUpdatedBy(userId);
+                docChapterService.save(chapter);
+                log.info("Created single fallback chapter for ledger {}", ledger.getId());
+            } else {
+                // Build chapters from parsed segments
+                List<DocChapter> chapters = new ArrayList<>();
+                for (int i = 0; i < segments.size(); i++) {
+                    Map<String, Object> seg = segments.get(i);
+                    DocChapter dc = new DocChapter();
+                    dc.setDocLedgerId(ledger.getId());
+                    dc.setChapterNumber(String.valueOf(i + 1)); // placeholder, recomputed below
+                    dc.setChapterTitle((String) seg.get("title"));
+                    dc.setChapterLevel((Integer) seg.get("level"));
+                    dc.setOrderNum(i + 1);
+                    dc.setParentId(0L); // placeholder, resolved below
+                    String chapterBody = (String) seg.get("body");
+                    dc.setContent(chapterBody);
+                    dc.setFillStatus("DRAFT");
+                    dc.setFillPercentage(chapterBody != null && !chapterBody.isBlank() ? 100 : 0);
+                    dc.setCreatedBy(userId);
+                    dc.setUpdatedBy(userId);
+                    chapters.add(dc);
+                }
+                docChapterService.saveBatch(chapters);
+
+                // Resolve parent IDs: each chapter's parent is the nearest prior chapter with a lower level
+                for (int i = 0; i < chapters.size(); i++) {
+                    DocChapter dc = chapters.get(i);
+                    int level = dc.getChapterLevel();
+                    for (int j = i - 1; j >= 0; j--) {
+                        if (chapters.get(j).getChapterLevel() < level) {
+                            dc.setParentId(chapters.get(j).getId());
+                            break;
+                        }
+                    }
+                }
+
+                // Compute hierarchical chapter numbers (1, 1.1, 1.2, 2, 2.1, ...)
+                java.util.Map<Long, Integer> counters = new java.util.LinkedHashMap<>();
+                for (DocChapter dc : chapters) {
+                    Long pid = dc.getParentId();
+                    int counter = counters.getOrDefault(pid, 0) + 1;
+                    counters.put(pid, counter);
+
+                    StringBuilder num = new StringBuilder();
+                    if (pid != 0L) {
+                        String parentNum = "";
+                        for (DocChapter c : chapters) {
+                            if (c.getId().equals(pid)) { parentNum = c.getChapterNumber(); break; }
+                        }
+                        if (!parentNum.isEmpty()) num.append(parentNum).append(".");
+                    }
+                    num.append(counter);
+                    dc.setChapterNumber(num.toString());
+                }
+
+                docChapterService.updateBatchById(chapters);
+                log.info("Created {} chapters from markdown for ledger {}", chapters.size(), ledger.getId());
+            }
+        }
+
+        log.info("Draft saved: docFileId={}, ledgerId={}, version={}, catalogId={}, isNew={}",
+            docFile.getId(), ledger.getId(), versionNo, catalogId, isNew);
         return Result.success(docFile);
     }
 
@@ -562,4 +703,69 @@ public class AiAssistantController {
             return null;
         }
     }
+
+    /**
+     * Parse markdown content into heading-body segments.
+     * Each returned map has keys: "level" (Integer), "title" (String), "body" (String).
+     * Content before the first heading becomes a preamble segment with level 1.
+     */
+    private List<Map<String, Object>> parseMarkdownToSegments(String markdown) {
+        List<Map<String, Object>> segments = new ArrayList<>();
+        String[] lines = markdown.split("\n");
+
+        int currentLevel = 0;
+        String currentTitle = null;
+        StringBuilder currentBody = new StringBuilder();
+
+        for (String line : lines) {
+            int headingLevel = getHeadingLevel(line);
+            if (headingLevel > 0) {
+                // Flush previous segment
+                if (currentTitle != null || currentBody.length() > 0) {
+                    Map<String, Object> seg = new java.util.LinkedHashMap<>();
+                    seg.put("level", currentLevel > 0 ? currentLevel : 1);
+                    seg.put("title", currentTitle != null ? currentTitle : "文档内容");
+                    seg.put("body", currentBody.toString().trim());
+                    segments.add(seg);
+                }
+                currentLevel = headingLevel;
+                currentTitle = line.substring(headingLevel).trim().replaceAll("\\s*#+\\s*$", "");
+                currentBody = new StringBuilder();
+            } else if (currentTitle != null || currentBody.length() > 0) {
+                if (currentBody.length() > 0) currentBody.append("\n");
+                currentBody.append(line);
+            }
+        }
+
+        // Flush last segment
+        if (currentTitle != null || currentBody.length() > 0) {
+            Map<String, Object> seg = new java.util.LinkedHashMap<>();
+            seg.put("level", currentLevel > 0 ? currentLevel : 1);
+            seg.put("title", currentTitle != null ? currentTitle : "文档内容");
+            seg.put("body", currentBody.toString().trim());
+            segments.add(seg);
+        }
+
+        return segments;
+    }
+
+    /** Returns 1-6 for ATX headings like "# Title", "## Subtitle", or "##Title" (without space), or 0 if not a heading. */
+    private int getHeadingLevel(String line) {
+        if (line == null || line.isBlank()) return 0;
+        int level = 0;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '#') {
+                level++;
+            } else if (c == ' ' || c == '\t') {
+                return (level >= 1 && level <= 6) ? level : 0;
+            } else {
+                // Non-space/non-# character immediately after # markers → treat as heading text
+                // e.g., "##Title" or "#1. Scope" should still be recognized
+                return (level >= 1 && level <= 6) ? level : 0;
+            }
+        }
+        return (level >= 1 && level <= 6) ? level : 0;
+    }
+
 }

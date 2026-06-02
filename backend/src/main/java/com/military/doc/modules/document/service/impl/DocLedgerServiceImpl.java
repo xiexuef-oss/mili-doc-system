@@ -12,8 +12,10 @@ import com.military.doc.modules.document.service.DocLedgerLogService;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.ProjectDocChecklist;
+import com.military.doc.modules.document.entity.StageDocChecklistTemplate;
 import com.military.doc.modules.document.mapper.DocCatalogMapper;
 import com.military.doc.modules.document.mapper.ProjectDocChecklistMapper;
+import com.military.doc.modules.document.mapper.StageDocChecklistTemplateMapper;
 import com.military.doc.modules.project.entity.ConfigurationStatusAccounting;
 import com.military.doc.modules.project.mapper.ConfigurationStatusAccountingMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +57,13 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
     private ProjectDocChecklistMapper checklistMapper;
 
     @Autowired
+    private StageDocChecklistTemplateMapper checklistTemplateMapper;
+
+    @Autowired
     private DocChapterService docChapterService;
+
+    @Autowired
+    private com.military.doc.modules.document.mapper.CompletenessCheckResultMapper completenessCheckResultMapper;
 
     @Override
     @Transactional
@@ -161,9 +169,33 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             .filter(cid -> cid != null)
             .collect(Collectors.toSet());
 
+        // Build map of existing ledgers by catalogId for quick lookup
+        Map<Long, DocLedger> existingByCatalog = list(new LambdaQueryWrapper<DocLedger>()
+            .eq(DocLedger::getProjectId, projectId)
+            .eq(stageId != null, DocLedger::getStageId, stageId)
+            .isNotNull(DocLedger::getCatalogId))
+            .stream()
+            .filter(l -> l.getCatalogId() != null)
+            .collect(Collectors.toMap(DocLedger::getCatalogId, l -> l, (a, b) -> a));
+
         List<DocLedger> newLedgers = new ArrayList<>();
+        int updatedCount = 0;
         for (DocCatalog catalog : catalogs) {
-            if (existingCatalogIds.contains(catalog.getId())) {
+            DocLedger existing = existingByCatalog.get(catalog.getId());
+            if (existing != null) {
+                // Overwrite metadata from catalog
+                existing.setDocCode(catalog.getDocCode());
+                existing.setDocName(catalog.getDocName());
+                existing.setDocType(catalog.getDocType());
+                existing.setRequiredFlag(catalog.getRequiredFlag());
+                existing.setMeetingUsage(catalog.getMeetingUsage());
+                existing.setUsageSource(catalog.getUsageSource());
+                existing.setUsageAdjustReason(catalog.getUsageAdjustReason());
+                existing.setChangeReason(catalog.getChangeReason());
+                existing.setResponsibleUserId(catalog.getResponsibleUserId());
+                existing.setUpdatedBy(operatorId);
+                updateById(existing);
+                updatedCount++;
                 continue;
             }
             DocLedger ledger = new DocLedger();
@@ -201,7 +233,7 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             logService.saveBatch(logs);
         }
 
-        return newLedgers.size();
+        return newLedgers.size() + updatedCount;
     }
 
     @Override
@@ -237,6 +269,15 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             ledger.setLifecycleStatus("PLANNED");
             ledger.setCreatedBy(operatorId);
             ledger.setUpdatedBy(operatorId);
+
+            // 从模板同步specType
+            if (item.getTemplateId() != null) {
+                StageDocChecklistTemplate tmpl = checklistTemplateMapper.selectById(item.getTemplateId());
+                if (tmpl != null && tmpl.getSpecType() != null) {
+                    ledger.setSpecType(tmpl.getSpecType());
+                }
+            }
+
             newLedgers.add(ledger);
         }
 
@@ -268,5 +309,42 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
         ledger.setLifecycleStatus("DRAFTING");
         ledger.setUpdatedBy(operatorId);
         updateById(ledger);
+    }
+
+    @Override
+    @Transactional
+    public void deleteLedger(Long id) {
+        DocLedger ledger = getById(id);
+        if (ledger == null) throw BusinessException.notFound("文档台账条目不存在: " + id);
+
+        // 1. Delete chapters
+        docChapterService.remove(new LambdaQueryWrapper<com.military.doc.modules.document.entity.DocChapter>()
+            .eq(com.military.doc.modules.document.entity.DocChapter::getDocLedgerId, id));
+
+        // 2. Delete completeness check results
+        completenessCheckResultMapper.delete(new LambdaQueryWrapper<com.military.doc.modules.document.entity.CompletenessCheckResult>()
+            .eq(com.military.doc.modules.document.entity.CompletenessCheckResult::getDocLedgerId, id));
+
+        // 3. Delete configuration status accounting records
+        accountingMapper.delete(new LambdaQueryWrapper<ConfigurationStatusAccounting>()
+            .eq(ConfigurationStatusAccounting::getDocLedgerId, id));
+
+        // 4. Delete status transition logs
+        logMapper.delete(new LambdaQueryWrapper<DocLedgerLog>()
+            .eq(DocLedgerLog::getDocLedgerId, id));
+
+        // 5. Delete the ledger itself
+        removeById(id);
+    }
+
+    @Override
+    @Transactional
+    public int deleteByChecklistItemId(Long checklistItemId) {
+        List<DocLedger> ledgers = list(new LambdaQueryWrapper<DocLedger>()
+            .eq(DocLedger::getChecklistItemId, checklistItemId));
+        for (DocLedger ledger : ledgers) {
+            deleteLedger(ledger.getId());
+        }
+        return ledgers.size();
     }
 }

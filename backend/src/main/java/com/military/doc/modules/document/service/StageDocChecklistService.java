@@ -81,6 +81,15 @@ public class StageDocChecklistService {
         }
 
         // Delete existing auto-generated items (keep custom ones)
+        // First cascade-delete corresponding DocLedger entries
+        List<ProjectDocChecklist> oldItems = checklistMapper.selectList(new LambdaQueryWrapper<ProjectDocChecklist>()
+            .eq(ProjectDocChecklist::getProjectId, projectId)
+            .eq(ProjectDocChecklist::getStageId, stageId)
+            .eq(ProjectDocChecklist::getIsCustom, false));
+        for (ProjectDocChecklist oldItem : oldItems) {
+            docLedgerService.deleteByChecklistItemId(oldItem.getId());
+        }
+        // Then delete the checklist items themselves
         checklistMapper.delete(new LambdaQueryWrapper<ProjectDocChecklist>()
             .eq(ProjectDocChecklist::getProjectId, projectId)
             .eq(ProjectDocChecklist::getStageId, stageId)
@@ -211,7 +220,7 @@ public class StageDocChecklistService {
     }
 
     /**
-     * Delete checklist item
+     * Delete checklist item and cascade-delete corresponding doc ledger entries.
      */
     @Transactional
     public void deleteItem(Long itemId) {
@@ -219,8 +228,11 @@ public class StageDocChecklistService {
         if (item == null) {
             throw new IllegalArgumentException("未找到检查清单项: " + itemId);
         }
+        // 级联删除对应的文档台账条目
+        int ledgerDeleted = docLedgerService.deleteByChecklistItemId(itemId);
         checklistMapper.deleteById(itemId);
-        log.info("Deleted checklist item: {} (id={})", item.getDocName(), itemId);
+        log.info("Deleted checklist item: {} (id={}), cascade-deleted {} ledger entries",
+            item.getDocName(), itemId, ledgerDeleted);
     }
 
     /**

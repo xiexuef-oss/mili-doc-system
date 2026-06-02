@@ -126,6 +126,13 @@ public class DocLedgerController {
         return Result.success(Map.of("syncedCount", created));
     }
 
+    @DeleteMapping("/{id}")
+    @Operation(summary = "级联删除文档台账及其关联数据")
+    public Result<?> delete(@PathVariable Long id) {
+        docLedgerService.deleteLedger(id);
+        return Result.success();
+    }
+
     public static class StatusTransitionRequest {
         private String targetStatus;
         private String remark;

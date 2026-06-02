@@ -49,6 +49,7 @@ export function switchLlmProvider(provider: string) {
 export function saveDraft(params: {
   projectId: number
   catalogId?: number
+  docLedgerId?: number
   stageId?: number
   docName: string
   docType: string
@@ -60,14 +61,17 @@ export function saveDraft(params: {
 
 export function streamDraft(
   projectId: number,
-  catalogId: number,
+  catalogId: number | null,
+  docLedgerId: number | null,
   onChunk: (text: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
 ): AbortController {
   const controller = new AbortController()
   const token = getToken()
-  const url = `/api/v1/ai/draft/stream?projectId=${projectId}&catalogId=${catalogId}`
+  let url = `/api/v1/ai/draft/stream?projectId=${projectId}`
+  if (catalogId) url += `&catalogId=${catalogId}`
+  if (docLedgerId) url += `&docLedgerId=${docLedgerId}`
 
   let fullText = ''
 
@@ -102,7 +106,9 @@ export function streamDraft(
         if (line.startsWith('event:')) {
           eventType = line.substring(6).trim()
         } else if (line.startsWith('data:')) {
-          const data = line.substring(5).trim()
+          // SSE format: "data: <payload>". Strip the "data:" (5 chars) plus exactly one space delimiter.
+          const raw = line.substring(5)
+          const data = raw.startsWith(' ') ? raw.substring(1) : raw
           if (eventType === 'chunk') {
             fullText += data
             onChunk(data)
@@ -262,7 +268,9 @@ export function streamChat(
         if (line.startsWith('event:')) {
           eventType = line.substring(6).trim()
         } else if (line.startsWith('data:')) {
-          const data = line.substring(5).trim()
+          // SSE format: "data: <payload>". Strip the "data:" (5 chars) plus exactly one space delimiter.
+          const raw = line.substring(5)
+          const data = raw.startsWith(' ') ? raw.substring(1) : raw
           if (eventType === 'chunk') {
             fullText += data
             onChunk(data)

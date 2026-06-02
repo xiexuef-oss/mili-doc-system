@@ -3,7 +3,6 @@ package com.military.doc.ai.llm;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.config.EmbeddingProperties;
-import com.military.doc.config.LlmProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
@@ -19,16 +18,14 @@ import java.util.Map;
 public class EmbeddingClient {
 
     private final OkHttpClient httpClient;
-    private final LlmProperties llmProperties;
     private final EmbeddingProperties embeddingProperties;
     private final ObjectMapper objectMapper;
 
     public static final MediaType JSON_MEDIA = MediaType.get("application/json; charset=utf-8");
 
-    public EmbeddingClient(OkHttpClient httpClient, LlmProperties llmProperties,
+    public EmbeddingClient(OkHttpClient httpClient,
                            EmbeddingProperties embeddingProperties, ObjectMapper objectMapper) {
         this.httpClient = httpClient;
-        this.llmProperties = llmProperties;
         this.embeddingProperties = embeddingProperties;
         this.objectMapper = objectMapper;
     }
@@ -36,10 +33,8 @@ public class EmbeddingClient {
     @PostConstruct
     void ensureModelAvailable() {
         try {
-            Request request = new Request.Builder()
-                .url(llmProperties.getBaseUrl() + "/api/tags")
-                .get()
-                .build();
+            String url = embeddingProperties.getBaseUrl() + "/api/tags";
+            Request request = new Request.Builder().url(url).get().build();
             try (Response response = httpClient.newCall(request).execute()) {
                 if (response.isSuccessful() && response.body() != null) {
                     JsonNode node = objectMapper.readTree(response.body().string());
@@ -82,13 +77,14 @@ public class EmbeddingClient {
             );
             String json = objectMapper.writeValueAsString(body);
             Request request = new Request.Builder()
-                .url(llmProperties.getBaseUrl() + "/api/embed")
+                .url(embeddingProperties.getBaseUrl() + "/api/embed")
                 .post(RequestBody.create(json, JSON_MEDIA))
                 .build();
 
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    String msg = String.format("Ollama embed API error: %d %s", response.code(), response.message());
+                    String respBody = response.body() != null ? response.body().string() : "(no body)";
+                    String msg = String.format("Ollama embed API error: %d %s, body: %s", response.code(), response.message(), respBody.length() > 500 ? respBody.substring(0, 500) : respBody);
                     log.error(msg);
                     throw new RuntimeException(msg);
                 }
