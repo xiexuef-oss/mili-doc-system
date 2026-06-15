@@ -56,6 +56,24 @@ const router = createRouter({
               meta: { title: '文档台账' }
             },
             {
+              path: 'ai-chat',
+              name: 'ChatPage',
+              component: () => import('@/views/project/ChatPage.vue'),
+              meta: { title: 'AI 对话' }
+            },
+            {
+              path: 'ai-generate',
+              name: 'BatchGeneratePage',
+              component: () => import('@/views/project/BatchGeneratePage.vue'),
+              meta: { title: 'AI批量生成' }
+            },
+            {
+              path: 'reliability',
+              name: 'ReliabilityWorkbench',
+              component: () => import('@/views/project/ReliabilityWorkbench.vue'),
+              meta: { title: '可靠性设计' }
+            },
+            {
               path: 'reviews',
               name: 'ProjectReviews',
               component: () => import('@/views/review/MeetingList.vue'),
@@ -174,6 +192,12 @@ const router = createRouter({
           name: 'EmbeddingManagement',
           component: () => import('@/views/system/EmbeddingManagement.vue'),
           meta: { title: '向量索引' }
+        },
+        {
+          path: 'ai-audit-logs',
+          name: 'AiAuditLogs',
+          component: () => import('@/views/system/AiAuditLogList.vue'),
+          meta: { title: 'AI审计日志' }
         },
         // AI 模型训练
         {

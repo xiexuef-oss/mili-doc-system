@@ -37,12 +37,22 @@ export interface ProjectDocChecklistItem {
   updatedAt?: string
 }
 
-export function getTemplates(stageCode: string) {
-  return api.get('/stage-checklist/templates', { params: { stageCode } })
+export function getTemplates(stageCode: string, equipmentType?: string) {
+  return api.get('/stage-checklist/templates', { params: { stageCode, equipmentType } })
 }
 
-export function getTemplatesByCategory(stageCode: string) {
-  return api.get('/stage-checklist/templates/by-category', { params: { stageCode } })
+export function getTemplatesByCategory(stageCode: string, equipmentType?: string) {
+  return api.get('/stage-checklist/templates/by-category', { params: { stageCode, equipmentType } })
+}
+
+export interface EquipmentType {
+  label: string
+  stageFlow: string
+  stageCodes: string[]
+}
+
+export function getEquipmentTypes() {
+  return api.get('/equipment-types')
 }
 
 export function generateChecklist(projectId: number, stageId: number) {

@@ -41,6 +41,7 @@
             <div class="chat-msg-content">
               <div class="chat-msg-text">{{ msg.content }}</div>
               <div v-if="msg.role === 'assistant' && idx === messages.length - 1 && streaming" class="typing-indicator">
+                <div v-if="progressText" style="font-size:12px;color:#909399;margin-bottom:4px">{{ progressText }}</div>
                 <span class="dot" />
                 <span class="dot" />
                 <span class="dot" />
@@ -74,9 +75,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue'
+import { ref, nextTick, onMounted, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ChatDotRound, Cpu, User, Close } from '@element-plus/icons-vue'
-import { streamChat, checkAiHealth } from '@/api/ai'
+import { checkAiHealth } from '@/api/ai'
+import { sendMessage, pollTask } from '@/api/chat'
+
+const route = useRoute()
+const projectId = computed(() => {
+  const id = Number(route.params.projectId)
+  return id > 0 ? id : undefined
+})
 
 const open = ref(false)
 const healthOk = ref(false)
@@ -84,7 +93,7 @@ const streaming = ref(false)
 const userInput = ref('')
 const messages = ref<{ role: string; content: string }[]>([])
 const chatBodyRef = ref<HTMLElement>()
-let chatAbortController: AbortController | null = null
+const progressText = ref('')
 
 function scrollToBottom() {
   nextTick(() => {
@@ -103,28 +112,48 @@ async function sendMessage() {
   scrollToBottom()
 
   streaming.value = true
-
-  // Add empty assistant message that we'll fill
   const assistantIdx = messages.value.length
   messages.value.push({ role: 'assistant', content: '' })
+  progressText.value = '思考中...'
 
-  chatAbortController = streamChat(
-    text,
-    messages.value.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
-    (chunk: string) => {
-      messages.value[assistantIdx].content += chunk
-      scrollToBottom()
-    },
-    (fullText: string) => {
-      messages.value[assistantIdx].content = fullText
+  try {
+    if (!projectId.value) {
+      messages.value[assistantIdx].content = '请先进入一个项目。'
       streaming.value = false
-      scrollToBottom()
-    },
-    (err: Error) => {
-      messages.value[assistantIdx].content = `抱歉，请求失败: ${err.message}`
-      streaming.value = false
+      return
     }
-  )
+    const { taskId } = await sendMessage(projectId.value, text)
+    let failed = 0
+    while (failed < 30) {
+      await new Promise(r => setTimeout(r, 1500))
+      try {
+        const task = await pollTask(taskId)
+        failed = 0
+        if (task.progress) progressText.value = task.progress
+        if (task.status === 'done') {
+          progressText.value = ''
+          const r = task.result
+          if (r?.response) {
+            let t = r.response
+            if (r.actions?.length) {
+              for (const a of r.actions) {
+                if (a.type === 'generate_doc' && a.success) t += '\n\n✅ ' + a.docName + ' 已生成 (' + a.contentSize + '字)'
+              }
+            }
+            messages.value[assistantIdx].content = t
+          }
+          break
+        }
+        if (task.status === 'error') { messages.value[assistantIdx].content = '请求失败'; break }
+      } catch { failed++ }
+    }
+  } catch {
+    messages.value[assistantIdx].content = '抱歉，请求失败，请重试。'
+  } finally {
+    streaming.value = false
+    progressText.value = ''
+    scrollToBottom()
+  }
 }
 
 function clearChat() {

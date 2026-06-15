@@ -1,10 +1,12 @@
 package com.military.doc.modules.document.controller;
 
+import com.military.doc.ai.service.CompletenessDashboardService;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.ProjectDocChecklist;
 import com.military.doc.modules.document.entity.StageDocChecklistTemplate;
 import com.military.doc.modules.document.service.DocLedgerService;
 import com.military.doc.modules.document.service.StageDocChecklistService;
+import com.military.doc.modules.project.constant.EquipmentType;
 import com.military.doc.modules.project.constant.StageDefinition;
 import com.military.doc.modules.project.entity.ProjectStage;
 import com.military.doc.modules.project.mapper.ProjectStageMapper;
@@ -23,25 +25,30 @@ public class StageDocChecklistController {
     private final StageDocChecklistService checklistService;
     private final DocLedgerService docLedgerService;
     private final ProjectStageMapper stageMapper;
+    private final CompletenessDashboardService dashboardService;
 
     public StageDocChecklistController(StageDocChecklistService checklistService,
                                         DocLedgerService docLedgerService,
-                                        ProjectStageMapper stageMapper) {
+                                        ProjectStageMapper stageMapper,
+                                        CompletenessDashboardService dashboardService) {
         this.checklistService = checklistService;
         this.docLedgerService = docLedgerService;
         this.stageMapper = stageMapper;
+        this.dashboardService = dashboardService;
     }
 
     @GetMapping("/stage-checklist/templates")
-    @Operation(summary = "获取指定阶段的文档清单模板（复用GJB编写指南全部15大类约190个文档）")
-    public Result<List<StageDocChecklistTemplate>> getTemplates(@RequestParam String stageCode) {
-        return Result.success(checklistService.getTemplatesByStage(stageCode));
+    @Operation(summary = "获取指定阶段的文档清单模板（按装备类型过滤）")
+    public Result<List<StageDocChecklistTemplate>> getTemplates(@RequestParam String stageCode,
+                                                                 @RequestParam(required = false) String equipmentType) {
+        return Result.success(checklistService.getTemplatesByStage(stageCode, equipmentType));
     }
 
     @GetMapping("/stage-checklist/templates/by-category")
     @Operation(summary = "按类别分组获取阶段文档清单模板")
-    public Result<Map<String, List<StageDocChecklistTemplate>>> getTemplatesByCategory(@RequestParam String stageCode) {
-        return Result.success(checklistService.getTemplatesByCategory(stageCode));
+    public Result<Map<String, List<StageDocChecklistTemplate>>> getTemplatesByCategory(@RequestParam String stageCode,
+                                                                                        @RequestParam(required = false) String equipmentType) {
+        return Result.success(checklistService.getTemplatesByCategory(stageCode, equipmentType));
     }
 
     @PostMapping("/projects/{projectId}/stages/{stageId}/checklist/generate")
@@ -123,9 +130,30 @@ public class StageDocChecklistController {
             map.put("order", def.order());
             map.put("description", def.description());
             map.put("defaultBaselineType", def.defaultBaselineType());
-            map.put("templateCount", checklistService.getTemplatesByStage(def.code()).size());
+            map.put("templateCount", checklistService.getTemplatesByStage(def.code(), null).size());
             list.add(map);
         }
         return Result.success(list);
+    }
+
+    @GetMapping("/equipment-types")
+    @Operation(summary = "获取装备类型列表（GJB 2993）")
+    public Result<List<Map<String, Object>>> getEquipmentTypes() {
+        List<Map<String, Object>> list = new java.util.ArrayList<>();
+        for (EquipmentType et : EquipmentType.ALL) {
+            Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("label", et.getLabel());
+            map.put("stageFlow", et.getStageFlow());
+            map.put("stageCodes", et.getStageCodes());
+            list.add(map);
+        }
+        return Result.success(list);
+    }
+
+    @GetMapping("/projects/{projectId}/stages/{stageId}/completeness-dashboard")
+    @Operation(summary = "主数据完整性看板 - 字段填充率/XXX占位符/缺失字段定位")
+    public Result<Map<String, Object>> completenessDashboard(@PathVariable Long projectId,
+                                                              @PathVariable Long stageId) {
+        return Result.success(dashboardService.buildDashboard(projectId, stageId));
     }
 }

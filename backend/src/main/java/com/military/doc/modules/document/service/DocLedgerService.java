@@ -39,4 +39,11 @@ public interface DocLedgerService extends IService<DocLedger> {
      * 根据checklistItemId级联删除对应的文档台账条目，返回删除数量
      */
     int deleteByChecklistItemId(Long checklistItemId);
+
+    /**
+     * 查找或创建起草状态台账：先按 catalogId 查找已有 DRAFTING 条目，找不到则新建。
+     * 统一 BatchGenerationService 和 AiAssistantController 中的重复逻辑。
+     */
+    DocLedger findOrCreateDraftLedger(Long projectId, Long stageId, Long catalogId,
+                                      String docName, String docType, Long operatorId);
 }

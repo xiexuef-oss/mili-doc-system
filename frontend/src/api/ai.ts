@@ -26,12 +26,34 @@ export interface DocFileSummary {
   status: string
 }
 
+export interface CatalogGenerateResult {
+  catalogs: DocCatalog[]
+  totalNew: number
+  mode: string
+}
+
+export interface CatalogPreviewResult {
+  totalGenerated: number
+  newCount: number
+  conflictCount: number
+  existingCount: number
+  newItems: { docCode: string; docName: string; docType: string }[]
+  conflictItems: { docCode: string; docName: string; docType: string }[]
+}
+
 export function generateCatalog(params: {
   projectId: number
   stageId?: number
   overwrite?: boolean
 }) {
   return api.post('/ai/catalog/generate', params)
+}
+
+export function previewCatalog(params: {
+  projectId: number
+  stageId?: number
+}) {
+  return api.post('/ai/catalog/preview', params)
 }
 
 export function checkAiHealth() {
@@ -106,7 +128,7 @@ export function streamDraft(
         if (line.startsWith('event:')) {
           eventType = line.substring(6).trim()
         } else if (line.startsWith('data:')) {
-          // SSE format: "data: <payload>". Strip the "data:" (5 chars) plus exactly one space delimiter.
+          // SSE format: "data: <payload>". Strip the "data:" (5 chars).
           const raw = line.substring(5)
           const data = raw.startsWith(' ') ? raw.substring(1) : raw
           if (eventType === 'chunk') {
@@ -116,7 +138,7 @@ export function streamDraft(
             onDone(fullText)
             return
           }
-          eventType = ''
+          // DO NOT reset eventType here - multiple data: lines belong to same event
         }
       }
     }
@@ -219,6 +241,38 @@ export function getIndexTasks() {
   return api.get('/ai/embedding/tasks')
 }
 
+// ---- AI Locality & Audit ----
+
+export interface LocalityInfo {
+  provider: string
+  locality: string
+  isLocal: boolean
+  model: string
+  baseUrl: string
+  desensitizationEnabled: boolean
+}
+
+export function getAiLocality() {
+  return api.get('/ai/locality')
+}
+
+export interface AuditLogParams {
+  projectId?: number
+  taskType?: string
+  from?: string
+  to?: string
+  page?: number
+  size?: number
+}
+
+export function getAiAuditLogs(params: AuditLogParams) {
+  return api.get('/ai/audit-logs', { params })
+}
+
+export function getAiAuditStats(projectId?: number) {
+  return api.get('/ai/audit-stats', { params: { projectId } })
+}
+
 // ---- General AI Chat ----
 
 export function streamChat(
@@ -281,7 +335,7 @@ export function streamChat(
             onError(new Error(data))
             return
           }
-          eventType = ''
+          // DO NOT reset eventType here - multiple data: lines belong to same event
         }
       }
     }
@@ -292,5 +346,112 @@ export function streamChat(
     }
   })
 
+  return controller
+}
+
+// ---- Batch Generation ----
+
+export interface BatchEvent {
+  type: string
+  current: number
+  total: number
+  docName?: string
+  docCode?: string
+  docLedgerId?: number
+  status?: string
+  message?: string
+  phase?: string
+  estimatedTotalSeconds?: number
+}
+
+export function cancelBatchGenerate(projectId: number, stageId: number) {
+  return api.post(`/ai/batch-generate/${projectId}/${stageId}/cancel`)
+}
+
+// ---- Generation Feedback ----
+
+export function submitFeedback(params: {
+  projectId: number
+  docLedgerId?: number
+  taskType?: string
+  rating: number
+  feedbackText?: string
+  categories?: string[]
+  willUseAgain?: boolean
+}) {
+  return api.post('/ai/feedback', params)
+}
+
+export function getFeedbackStats(projectId?: number) {
+  return api.get('/ai/feedback/stats', { params: { projectId } })
+}
+
+// ---- Incremental Generation ----
+
+export function regenerateChapter(docChapterId: number, projectId: number) {
+  return api.post(`/ai/chapter/${docChapterId}/regenerate`, { projectId })
+}
+
+export function rewriteSelection(docChapterId: number, params: {
+  selectedText: string
+  instruction?: string
+  chapterContent?: string
+  projectId: number
+}) {
+  return api.post(`/ai/chapter/${docChapterId}/rewrite`, params)
+}
+
+export function streamBatchGenerate(
+  projectId: number,
+  stageId: number,
+  onEvent: (event: BatchEvent) => void,
+  onDone: () => void,
+  onError: (err: Error) => void
+): AbortController {
+  const controller = new AbortController()
+  const token = getToken()
+  const url = `/api/v1/ai/batch-generate/${projectId}/${stageId}`
+
+  fetch(url, {
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Accept': 'text/event-stream'
+    },
+    signal: controller.signal
+  }).then(async response => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('Response body not readable')
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      let eventType = ''
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventType = line.substring(6).trim()
+        } else if (line.startsWith('data:')) {
+          const raw = line.substring(5)
+          const data = raw.startsWith(' ') ? raw.substring(1) : raw
+          try {
+            const parsed = JSON.parse(data) as BatchEvent
+            parsed.type = eventType || parsed.type
+            onEvent(parsed)
+            if (parsed.type === 'batch_complete') { onDone(); return }
+          } catch { /* skip */ }
+          eventType = ''
+        }
+      }
+    }
+    onDone()
+  }).catch(err => {
+    if (err.name !== 'AbortError') onError(err)
+  })
   return controller
 }

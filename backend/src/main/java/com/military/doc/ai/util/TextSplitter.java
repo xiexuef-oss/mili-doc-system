@@ -23,8 +23,8 @@ public class TextSplitter {
         Pattern.MULTILINE
     );
 
-    private static final int MIN_CHUNK_SIZE = 200;
-    private static final int MAX_CHUNK_SIZE = 8000;
+    private static final int MIN_CHUNK_SIZE = 50;
+    private static final int MAX_CHUNK_SIZE = 16000; // 内网部署，增大chunk
 
     public List<TextChunk> split(String text, String defaultCategory) {
         List<TextChunk> chunks = new ArrayList<>();
@@ -119,9 +119,25 @@ public class TextSplitter {
         return new TextChunk(title, body.trim());
     }
 
+    // ---- Metadata-aware chunk result ----
+
+    public List<TextChunk> split(String text, String defaultCategory, String sourceFileName, Integer pageNumber) {
+        List<TextChunk> chunks = split(text, defaultCategory);
+        for (TextChunk chunk : chunks) {
+            chunk.setSourceFile(sourceFileName);
+            chunk.setPageNumber(pageNumber);
+        }
+        return chunks;
+    }
+
     public static class TextChunk {
         private final String title;
         private String content;
+        // 元数据增强
+        private String sourceFile;
+        private Integer pageNumber;
+        private String chapterPath;
+        private List<String> detectedStandardRefs;
 
         public TextChunk(String title, String content) {
             this.title = title;
@@ -131,5 +147,27 @@ public class TextSplitter {
         public String title() { return title; }
         public String content() { return content; }
         public void setContent(String content) { this.content = content; }
+        public String getSourceFile() { return sourceFile; }
+        public void setSourceFile(String f) { this.sourceFile = f; }
+        public Integer getPageNumber() { return pageNumber; }
+        public void setPageNumber(Integer p) { this.pageNumber = p; }
+        public String getChapterPath() { return chapterPath; }
+        public void setChapterPath(String p) { this.chapterPath = p; }
+        public List<String> getDetectedStandardRefs() { return detectedStandardRefs; }
+        public void setDetectedStandardRefs(List<String> refs) { this.detectedStandardRefs = refs; }
+
+        /** Generate structured metadata for embedding */
+        public String toEmbeddingText() {
+            StringBuilder sb = new StringBuilder();
+            if (sourceFile != null) sb.append("[来源] ").append(sourceFile).append("\n");
+            if (pageNumber != null) sb.append("[页码] ").append(pageNumber).append("\n");
+            if (chapterPath != null) sb.append("[路径] ").append(chapterPath).append("\n");
+            if (detectedStandardRefs != null && !detectedStandardRefs.isEmpty()) {
+                sb.append("[标准] ").append(String.join(", ", detectedStandardRefs)).append("\n");
+            }
+            sb.append("[标题] ").append(title).append("\n");
+            sb.append("[内容] ").append(content);
+            return sb.toString();
+        }
     }
 }

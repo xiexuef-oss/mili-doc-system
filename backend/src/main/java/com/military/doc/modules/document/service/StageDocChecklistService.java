@@ -40,31 +40,53 @@ public class StageDocChecklistService {
     }
 
     /**
-     * Get all templates applicable for a given stage code
+     * Get all templates applicable for a given stage code, optionally filtered by equipment type.
+     *
+     * @param stageCode     stage code (e.g., "ARGUMENTATION")
+     * @param equipmentType equipment type label (e.g., "常规武器"), null means no filter
      */
-    public List<StageDocChecklistTemplate> getTemplatesByStage(String stageCode) {
+    @org.springframework.cache.annotation.Cacheable("stageTemplates")
+    public List<StageDocChecklistTemplate> getTemplatesByStage(String stageCode, String equipmentType) {
         List<StageDocChecklistTemplate> all = templateMapper.selectList(
             new LambdaQueryWrapper<StageDocChecklistTemplate>()
                 .orderByAsc(StageDocChecklistTemplate::getOrderNum));
 
         return all.stream()
-            .filter(t -> {
-                try {
-                    @SuppressWarnings("unchecked")
-                    List<String> stages = objectMapper.readValue(t.getApplicableStages(), List.class);
-                    return stages != null && stages.contains(stageCode);
-                } catch (Exception e) {
-                    return false;
-                }
-            })
+            .filter(t -> matchesStage(t, stageCode))
+            .filter(t -> matchesEquipmentType(t, equipmentType))
             .collect(Collectors.toList());
     }
 
+    private boolean matchesStage(StageDocChecklistTemplate t, String stageCode) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> stages = objectMapper.readValue(t.getApplicableStages(), List.class);
+            return stages != null && stages.contains(stageCode);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean matchesEquipmentType(StageDocChecklistTemplate t, String equipmentType) {
+        // null or empty means no filter — return all
+        if (equipmentType == null || equipmentType.isBlank()) return true;
+        // If equipmentTypes field is null/empty, treat as "applies to all types"
+        if (t.getEquipmentTypes() == null || t.getEquipmentTypes().isBlank()) return true;
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> types = objectMapper.readValue(t.getEquipmentTypes(), List.class);
+            return types != null && types.contains(equipmentType);
+        } catch (Exception e) {
+            // Unparseable → treat as applies to all
+            return true;
+        }
+    }
+
     /**
-     * Get all templates grouped by category
+     * Get all templates grouped by category, with optional equipment type filter.
      */
-    public Map<String, List<StageDocChecklistTemplate>> getTemplatesByCategory(String stageCode) {
-        return getTemplatesByStage(stageCode).stream()
+    public Map<String, List<StageDocChecklistTemplate>> getTemplatesByCategory(String stageCode, String equipmentType) {
+        return getTemplatesByStage(stageCode, equipmentType).stream()
             .collect(Collectors.groupingBy(StageDocChecklistTemplate::getCategory,
                 LinkedHashMap::new, Collectors.toList()));
     }
@@ -96,7 +118,7 @@ public class StageDocChecklistService {
             .eq(ProjectDocChecklist::getIsCustom, false));
 
         // Get templates for this stage
-        List<StageDocChecklistTemplate> templates = getTemplatesByStage(stageCode);
+        List<StageDocChecklistTemplate> templates = getTemplatesByStage(stageCode, null);
 
         if (templates.isEmpty()) {
             log.warn("No checklist templates found for stageCode={}", stageCode);

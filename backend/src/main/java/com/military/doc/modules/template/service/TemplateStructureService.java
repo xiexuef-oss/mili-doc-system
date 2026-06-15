@@ -26,6 +26,12 @@ public interface TemplateStructureService {
     /** Delete a chapter and its children */
     void deleteChapter(Long chapterId);
 
+    /** Delete all chapters for a template */
+    void deleteChaptersByTemplateId(Long templateId);
+
+    /** Get a single chapter by ID */
+    DocTemplateChapter getChapterById(Long chapterId);
+
     /** Reorder chapters */
     void reorderChapters(Long templateId, List<Long> chapterIdsInOrder);
 

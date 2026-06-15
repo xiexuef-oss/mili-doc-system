@@ -63,7 +63,32 @@ public class LlmProviderService {
             "provider", activeProvider,
             "availableProviders", clients.keySet().stream().sorted().toList(),
             "model", properties.getModel(),
-            "baseUrl", properties.getBaseUrl()
+            "baseUrl", properties.getBaseUrl(),
+            "locality", getLocality(),
+            "isLocal", isLocal()
         );
+    }
+
+    /**
+     * 获取当前模型的位置标识。
+     * @return OLLAMA_LOCAL / DEEPSEEK_CLOUD / UNKNOWN
+     */
+    public String getLocality() {
+        if ("ollama".equals(activeProvider)) {
+            return "OLLAMA_LOCAL";
+        }
+        String baseUrl = properties.getBaseUrl();
+        if (baseUrl != null && (baseUrl.contains("localhost") || baseUrl.contains("127.0.0.1"))) {
+            return "OLLAMA_LOCAL";
+        }
+        if ("deepseek".equals(activeProvider)) {
+            return "DEEPSEEK_CLOUD";
+        }
+        return "UNKNOWN";
+    }
+
+    /** 当前模型是否运行在本地 */
+    public boolean isLocal() {
+        return "OLLAMA_LOCAL".equals(getLocality());
     }
 }

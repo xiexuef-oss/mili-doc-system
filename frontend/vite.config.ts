@@ -15,7 +15,16 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy: any) => {
+          proxy.on('proxyRes', (_proxyRes: any, req: any) => {
+            // Prevent buffering for SSE endpoints
+            if (req.url?.includes('/chat/message') || req.url?.includes('/draft/stream')) {
+              _proxyRes.headers['cache-control'] = 'no-cache'
+              _proxyRes.headers['x-accel-buffering'] = 'no'
+            }
+          })
+        }
       }
     }
   }

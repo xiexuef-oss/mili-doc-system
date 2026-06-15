@@ -235,17 +235,25 @@ public class StandardParseService {
         };
     }
 
-    // Pattern for GJB-style clause numbering: "1", "1.2", "3.1.2", "A.1", etc.
+    // Pattern for GJB-style clause numbering: "1", "1.2", "3.1.2", "A.1", "A.1.2.3" etc.
     private static final Pattern CLAUSE_HEADER = Pattern.compile(
         "^\\s*([A-Z]?\\d+(?:\\.\\d+)*)\\s+(.+?)(?:\\s*$)"
     );
-    // Chinese numbering: 一、二、... 十、
+    // Chinese numbering: 一、二、... 十、十二、
     private static final Pattern CHINESE_NUM_HEADER = Pattern.compile(
-        "^\\s*([一二三四五六七八九十]+)[、，,]\\s*(.+)"
+        "^\\s*([一二三四五六七八九十百]+)[、，,]\\s*(.+)"
     );
-    // Appendix pattern
+    // Appendix pattern: 附录A, 附录 B, 附录C 等
     private static final Pattern APPENDIX_HEADER = Pattern.compile(
         "^\\s*(附录\\s*[A-Z]?)\\s*(.*)"
+    );
+    // GJB/Z-style numbering: GJB/Z 1391-2006 section pattern
+    private static final Pattern GJBZ_CLAUSE_HEADER = Pattern.compile(
+        "^\\s*(GJB[/_\\-]?Z\\s*\\d+[A-Za-z]*(?:\\.\\d+)?[A-Za-z]?[-–—]\\d{2,4})\\s+(.+?)(?:\\s*$)"
+    );
+    // Cross-reference pattern: "按X.X条规定", "见X.X", "应符合X.X条要求"
+    private static final Pattern CROSS_REF = Pattern.compile(
+        "(?:按|见|参见|参照|符合|满足)\\s*(\\d+(?:\\.\\d+)*)\\s*(?:条|节|章|规定|要求|条款)"
     );
 
     List<StandardClauseExtract> extractClauses(String text) {
@@ -261,9 +269,9 @@ public class StandardParseService {
         StringBuilder currentContent = new StringBuilder();
         int orderNum = 0;
 
-        // Filter noise lines (no "" or " " — empty lines already handled by isEmpty check above)
+        // Filter noise lines
         Set<String> noiseLines = Set.of("ICS", "备案号", "发布日期", "实施日期", "发布", "中华人民共和国");
-        Pattern pageNoPattern = Pattern.compile("^\\s*[IVXLCDMivxlcdm]+\\s*$");
+        Pattern pageNoPattern = Pattern.compile("^\\s*[IVXLCDMivxlcdm]+\\s*$|^\\s*-?\\s*\\d{1,4}\\s*-?\\s*$");
         Pattern punctuationOnly = Pattern.compile("^[\\s\\p{Punct}]+$");
 
         for (String line : lines) {
@@ -280,8 +288,10 @@ public class StandardParseService {
             if (punctuationOnly.matcher(trimmed).matches()) continue;
             if (trimmed.length() < 2) continue;
 
-            // Try GJB-style clause header
-            Matcher m = CLAUSE_HEADER.matcher(trimmed);
+            Matcher m;
+
+            // Try GJB-style clause header (e.g., "1 Scope", "3.1.2 术语")
+            m = CLAUSE_HEADER.matcher(trimmed);
             if (m.matches()) {
                 String clauseNum = m.group(1);
                 String clauseTitle = m.group(2).trim();
@@ -292,6 +302,8 @@ public class StandardParseService {
                 // Save previous clause
                 if (currentClause != null) {
                     currentClause.clauseContent = currentContent.toString().trim();
+                    // Extract cross-references from accumulated content
+                    currentClause.crossReferences = extractCrossRefs(currentClause.clauseContent);
                     clauses.add(currentClause);
                 }
                 currentContent.setLength(0);
@@ -303,11 +315,12 @@ public class StandardParseService {
                 continue;
             }
 
-            // Try Chinese numbering
+            // Try Chinese numbering (一、二、...)
             m = CHINESE_NUM_HEADER.matcher(trimmed);
             if (m.matches()) {
                 if (currentClause != null) {
                     currentClause.clauseContent = currentContent.toString().trim();
+                    currentClause.crossReferences = extractCrossRefs(currentClause.clauseContent);
                     clauses.add(currentClause);
                 }
                 currentContent.setLength(0);
@@ -319,11 +332,12 @@ public class StandardParseService {
                 continue;
             }
 
-            // Try appendix
+            // Try appendix (附录 A, 附录B)
             m = APPENDIX_HEADER.matcher(trimmed);
             if (m.matches()) {
                 if (currentClause != null) {
                     currentClause.clauseContent = currentContent.toString().trim();
+                    currentClause.crossReferences = extractCrossRefs(currentClause.clauseContent);
                     clauses.add(currentClause);
                 }
                 currentContent.setLength(0);
@@ -331,6 +345,22 @@ public class StandardParseService {
                 currentClause = new StandardClauseExtract();
                 currentClause.clauseNumber = m.group(1).trim();
                 currentClause.clauseTitle = m.group(2).trim();
+                currentClause.orderNum = orderNum++;
+                continue;
+            }
+
+            // Try explicit "第X章" pattern (章 detection)
+            if (trimmed.matches("^第[一二三四五六七八九十百\\d]+章.*")) {
+                if (currentClause != null) {
+                    currentClause.clauseContent = currentContent.toString().trim();
+                    currentClause.crossReferences = extractCrossRefs(currentClause.clauseContent);
+                    clauses.add(currentClause);
+                }
+                currentContent.setLength(0);
+
+                currentClause = new StandardClauseExtract();
+                currentClause.clauseNumber = extractChapterNumber(trimmed);
+                currentClause.clauseTitle = trimmed;
                 currentClause.orderNum = orderNum++;
                 continue;
             }
@@ -345,13 +375,68 @@ public class StandardParseService {
         // Save last clause
         if (currentClause != null) {
             currentClause.clauseContent = currentContent.toString().trim();
+            currentClause.crossReferences = extractCrossRefs(currentClause.clauseContent);
             clauses.add(currentClause);
         }
 
         // Resolve parent relationships by clause number hierarchy
         resolveParents(clauses);
 
+        // Extract keywords for each clause
+        for (StandardClauseExtract clause : clauses) {
+            clause.keywords = extractKeywords(clause);
+        }
+
         return clauses;
+    }
+
+    /** Extract chapter number from "第X章" pattern */
+    private String extractChapterNumber(String text) {
+        if (text == null) return "";
+        Matcher m = Pattern.compile("第([一二三四五六七八九十百\\d]+)章").matcher(text);
+        if (m.find()) {
+            String num = m.group(1);
+            return num.matches("\\d+") ? num : chineseToArabic(num);
+        }
+        return "";
+    }
+
+    /** Extract cross-references from clause content */
+    private List<String> extractCrossRefs(String content) {
+        List<String> refs = new ArrayList<>();
+        if (content == null) return refs;
+        Matcher m = CROSS_REF.matcher(content);
+        while (m.find()) {
+            refs.add(m.group(1));
+        }
+        return refs.stream().distinct().toList();
+    }
+
+    /** Extract keywords from clause title and content */
+    private String extractKeywords(StandardClauseExtract clause) {
+        if (clause == null) return "";
+        StringBuilder kw = new StringBuilder();
+        String text = (clause.clauseTitle != null ? clause.clauseTitle + " " : "")
+            + (clause.clauseContent != null ? clause.clauseContent : "");
+
+        // Extract GJB-standard keywords: terms in quotes, parenthesized English, numbered items
+        List<String> keywords = new ArrayList<>();
+
+        // Quoted terms: "技术状态项"
+        Matcher m = Pattern.compile("[「「]([^」」]{2,20})[」」]").matcher(text);
+        while (m.find()) keywords.add(m.group(1));
+
+        // Parenthesized English abbreviations: (CSCI), (HWCI)
+        m = Pattern.compile("\\(([A-Z]{2,8})\\)").matcher(text);
+        while (m.find()) keywords.add(m.group(1));
+
+        // If no keywords found, use first meaningful phrase from title
+        if (keywords.isEmpty() && clause.clauseTitle != null && clause.clauseTitle.length() > 2) {
+            keywords.add(clause.clauseTitle.length() > 30
+                ? clause.clauseTitle.substring(0, 30) : clause.clauseTitle);
+        }
+
+        return String.join(", ", keywords.stream().distinct().limit(10).toList());
     }
 
     private void resolveParents(List<StandardClauseExtract> clauses) {
@@ -375,23 +460,27 @@ public class StandardParseService {
     }
 
     private String chineseToArabic(String chinese) {
-        Map<Character, Integer> map = Map.ofEntries(
-            Map.entry('一', 1), Map.entry('二', 2), Map.entry('三', 3),
-            Map.entry('四', 4), Map.entry('五', 5), Map.entry('六', 6),
-            Map.entry('七', 7), Map.entry('八', 8), Map.entry('九', 9),
-            Map.entry('十', 10)
-        );
+        // 支持 一～九十九、一百、二百 等
+        Map<Character, Integer> digits = new LinkedHashMap<>();
+        digits.put('一', 1); digits.put('二', 2); digits.put('三', 3);
+        digits.put('四', 4); digits.put('五', 5); digits.put('六', 6);
+        digits.put('七', 7); digits.put('八', 8); digits.put('九', 9);
+        Map<Character, Integer> units = new LinkedHashMap<>();
+        units.put('十', 10); units.put('百', 100);
+
         int result = 0;
         int temp = 0;
+
         for (char c : chinese.toCharArray()) {
-            Integer val = map.get(c);
-            if (val == null) continue;
-            if (val == 10) {
+            Integer digitVal = digits.get(c);
+            Integer unitVal = units.get(c);
+
+            if (digitVal != null) {
+                temp = digitVal;
+            } else if (unitVal != null) {
                 if (temp == 0) temp = 1;
-                result += temp * 10;
+                result += temp * unitVal;
                 temp = 0;
-            } else {
-                temp = val;
             }
         }
         result += temp;
@@ -543,5 +632,7 @@ public class StandardParseService {
         public String clauseContent;
         public String parentClauseNumber;
         public int orderNum;
+        public List<String> crossReferences = new ArrayList<>();
+        public String keywords;
     }
 }

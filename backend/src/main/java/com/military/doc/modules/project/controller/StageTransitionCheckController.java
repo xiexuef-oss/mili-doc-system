@@ -100,6 +100,15 @@ public class StageTransitionCheckController {
         return Result.success(result);
     }
 
+    @PostMapping("/full-check")
+    @Operation(summary = "执行完整的转阶段检查(文档完成率+必编文档+章节内容+评审关闭)")
+    public Result<Map<String, Object>> fullCheck(@RequestBody FullCheckRequest request, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        Map<String, Object> result = checkService.runFullCheck(
+            request.getProjectId(), request.getFromStageId(), request.getToStageId(), userId);
+        return Result.success(result);
+    }
+
     public static class DocumentCheckRequest {
         private Long projectId;
         private Long fromStageId;
@@ -108,5 +117,18 @@ public class StageTransitionCheckController {
         public void setProjectId(Long projectId) { this.projectId = projectId; }
         public Long getFromStageId() { return fromStageId; }
         public void setFromStageId(Long fromStageId) { this.fromStageId = fromStageId; }
+    }
+
+    public static class FullCheckRequest {
+        private Long projectId;
+        private Long fromStageId;
+        private Long toStageId;
+
+        public Long getProjectId() { return projectId; }
+        public void setProjectId(Long projectId) { this.projectId = projectId; }
+        public Long getFromStageId() { return fromStageId; }
+        public void setFromStageId(Long fromStageId) { this.fromStageId = fromStageId; }
+        public Long getToStageId() { return toStageId; }
+        public void setToStageId(Long toStageId) { this.toStageId = toStageId; }
     }
 }

@@ -1,0 +1,407 @@
+-- ============================================================
+-- 种子数据补全 v2 Batch 4 — 4份核心模板的章节结构
+-- B类规范(研制规范) / C类规范(产品规范) / 研制方案 / 详细设计
+-- 基于: GJB 6387-2008 第5-6章, GJB 2993-1997 第5章
+-- ============================================================
+
+-- ========================================
+-- 1. B类规范(研制规范) 章节结构 — 建立分配基线(ABL)
+--    六章固定格式 + 第3章含34个要素 [GJB 6387 4.2.3.2 + 6.3]
+-- ========================================
+DO $$
+DECLARE
+    tpl_id BIGINT;
+    ch3 BIGINT; ch4 BIGINT;
+BEGIN
+    SELECT id INTO tpl_id FROM doc_template_v2 WHERE template_code = 'TPL-B-SPEC';
+
+    -- 第1章 范围
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '1', '范围', 1, 10, TRUE, 'GJB 6387 5.9', '规范的主题内容、适用范围和分类');
+
+    -- 第2章 引用文件
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '2', '引用文件', 1, 20, TRUE, 'GJB 6387 5.10', '列出规范引用的所有标准文件');
+
+    -- 第3章 要求 (核心要素)
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description, writing_tips) VALUES
+    (tpl_id, 0, '3', '要求', 1, 30, TRUE, 'GJB 6387 6.3', '规定技术状态项必须满足的性能特性/物理特性/接口要求。B类规范建立分配基线(ABL)',
+     'B类规范重点关注：将系统要求分配到各技术状态项目,规定性能指标和验证矩阵。与A类不同,B类不写"系统概述"')
+    RETURNING id INTO ch3;
+
+    -- 3.1-3.5 核心功能性能
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.1', '功能', 2, 31, TRUE, 'GJB 6387 6.3.1', '应完成的功能/任务剖面/工作方式/功能框图');
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.2', '性能', 2, 32, TRUE, 'GJB 6387 6.3.2', '功能指标对应的性能特性/使用性能和理化性能/精度和稳定性');
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.3', '环境适应性', 2, 33, TRUE, 'GJB 6387 6.3.3', '自然环境/诱发环境/特殊环境条件及环境试验要求');
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.4', '作战适用性', 2, 34, FALSE, 'GJB 6387 6.3.4', '作战效能/作战适应性/可用性/可信性/能力/互操作性/生存性');
+
+    -- 3.5-3.10 六性指标
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.5', '可靠性', 2, 35, TRUE, 'GJB 6387 6.3.5', 'MTBF/MTBCF/任务可靠度等定量指标');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.6', '维修性', 2, 36, TRUE, 'GJB 6387 6.3.6', 'MTTR/维修工时率等指标，明确维修条件/程序/方法');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.7', '保障性', 2, 37, TRUE, 'GJB 6387 6.3.7', '保障性设计参数/保障资源参数/战备完好性');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.8', '测试性', 2, 38, TRUE, 'GJB 6387 6.3.8', 'BIT/自动测试/手工测试/诊断能力/FDR/FAR');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.9', '耐久性', 2, 39, FALSE, 'GJB 6387 6.3.9', '使用寿命/贮存寿命/首翻期/翻修间隔');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.10', '安全性', 2, 40, TRUE, 'GJB 6387 6.3.10', '风险参数/事故概率/失效保险/健康安全准则');
+
+    -- 3.11-3.17 专项特性
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.11', '信息安全', 2, 41, FALSE, 'GJB 6387 6.3.11', '密码保护/计算机安全/访问控制/信息交换控制');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.12', '隐蔽性', 2, 42, FALSE, 'GJB 6387 6.3.12', '雷达/电磁/声/光/红外/磁等物理场强度指标');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.13', '兼容性', 2, 43, FALSE, 'GJB 6387 6.3.13', '电磁兼容性/声兼容性/火力兼容性的定量要求');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.14', '运输性', 2, 44, FALSE, 'GJB 6387 6.3.14', '运输方式/运输工具/流动路线/装卸能力');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.15', '人机工程', 2, 45, FALSE, 'GJB 6387 6.3.15', '人机接口/工作环境(照明/温湿度/噪声)/工作强度');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.16', '互换性', 2, 46, FALSE, 'GJB 6387 6.3.16', '尺寸和功能上与其他产品的互换替换能力');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.17', '稳定性', 2, 47, FALSE, 'GJB 6387 6.3.17', '抗老化/抗腐蚀/抗倾覆等理化性能稳定性');
+
+    -- 3.18-3.23 物理与结构要求
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.18', '综合保障', 2, 48, TRUE, 'GJB 6387 6.3.18', '使用保障方案/维修方案/保障资源(设备/备件/技术资料/设施)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.19', '接口', 2, 49, TRUE, 'GJB 6387 6.3.19', '外部接口和内部接口的功能/电气/机械/光学/软件特性');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.20', '尺寸和体积', 2, 50, FALSE, 'GJB 6387 6.3.22', '外形尺寸/体积限制/允许偏差/体积中心位置');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.21', '重量', 2, 51, FALSE, 'GJB 6387 6.3.23', '重量限制/偏差/重心位置/组成部分重量');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.22', '材料', 2, 52, FALSE, 'GJB 6387 6.3.28', '性能/防腐/阻燃/防电化学腐蚀/无毒或低毒/时效性');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.23', '计算机硬件与软件', 2, 53, FALSE, 'GJB 6387 6.3.21', '处理器/存储/通信/软件运行能力/实时性/可移植性');
+
+    -- 3.24-3.28 制造与交付要求
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.24', '经济可承受性', 2, 54, FALSE, 'GJB 6387 6.3.20', '寿命周期费用(论证/研制/采购/使用保障/退役处置)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.25', '非研制项目', 2, 55, FALSE, 'GJB 6387 6.3.29', '标准零部件/组件的采用要求');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.26', '外观质量', 2, 56, FALSE, 'GJB 6387 6.3.30', '表面粗糙度/防护涂镀层/缺陷/机械伤痕');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.27', '标志和代号', 2, 57, FALSE, 'GJB 6387 6.3.31', '标志位置/内容/制作要求, 代号编号方法(≤15字符)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.28', '图样和技术文件', 2, 58, TRUE, 'GJB 6387 6.3.33', '生产用图样和技术文件的清单(编号+名称)');
+
+    -- 第4章 验证
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '4', '验证', 1, 40, TRUE, 'GJB 6387 6.4', '规定验证第3章各项要求的方法和判据')
+    RETURNING id INTO ch4;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.1', '检验分类', 2, 41, TRUE, 'GJB 6387 6.4.1', '设计验证/定型试验/首件检验/质量一致性检验');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.2', '检验条件', 2, 42, TRUE, 'GJB 6387 6.4.2', '环境条件/试验条件/标准引用');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.3', '设计验证', 2, 43, FALSE, 'GJB 6387 6.4.3', '模型仿真验证/演示验证/系统联调试验');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.4', '定型(鉴定)试验', 2, 44, TRUE, 'GJB 6387 6.4.4', '检验项目/顺序/样品数/合格判据');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.5', '首件检验', 2, 45, FALSE, 'GJB 6387 6.4.5', '首件检验项目/顺序/样品数/合格判据');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.6', '质量一致性检验', 2, 46, FALSE, 'GJB 6387 6.4.6', '组批规则/检验分组/检验项目/合格判据');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.7', '抽样', 2, 47, FALSE, 'GJB 6387 6.4.9', '组批规则/抽样方案(IL/AQL)/抽样条件/取样方法');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.8', '缺陷分类', 2, 48, FALSE, 'GJB 6387 6.4.10', '致命缺陷(1-99)/严重缺陷(101-199)/轻缺陷(201-299)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.9', '检验方法', 2, 49, TRUE, 'GJB 6387 6.4.11', '原理/设备/被试状态/程序/故障处理/结果/报告');
+
+    -- 第5章 包装、运输与贮存
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '5', '包装、运输与贮存', 1, 50, FALSE, 'GJB 6387 5.13', '防护包装/装箱/运输/贮存/标志要求');
+
+    -- 第6章 说明事项
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '6', '说明事项', 1, 60, TRUE, 'GJB 6387 5.14', '预定用途/分类/订购文件中应明确的内容/术语和定义');
+END $$;
+
+
+
+-- ========================================
+-- 2. C类规范(产品规范) 章节结构 — 建立产品基线(PBL)
+--    六章格式同B类,但"要求"章侧重最终交付产品的完整规格 [GJB 6387 4.2.3.2 + 6.3]
+-- ========================================
+DO $$
+DECLARE
+    tpl_id BIGINT;
+    ch3 BIGINT; ch4 BIGINT;
+BEGIN
+    SELECT id INTO tpl_id FROM doc_template_v2 WHERE template_code = 'TPL-C-SPEC';
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '1', '范围', 1, 10, TRUE, 'GJB 6387 5.9', '产品规范的主题内容、适用范围和分类');
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '2', '引用文件', 1, 20, TRUE, 'GJB 6387 5.10', '列出规范引用的所有标准文件');
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description, writing_tips) VALUES
+    (tpl_id, 0, '3', '要求', 1, 30, TRUE, 'GJB 6387 6.3', '规定最终交付产品必须满足的功能特性/物理特性/制造要求和验收要求。C类规范建立产品基线(PBL)',
+     'C类规范重点：面向生产制造,内容比B类更细化。应包含完整的制造要求(尺寸公差/材料/工艺),作为生产验收的直接依据')
+    RETURNING id INTO ch3;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.1', '功能', 2, 31, TRUE, 'GJB 6387 6.3.1', '产品应完成的全部功能及功能框图');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.2', '性能', 2, 32, TRUE, 'GJB 6387 6.3.2', '各项性能指标(使用性能/理化性能/精度/稳定性)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.3', '环境适应性', 2, 33, TRUE, 'GJB 6387 6.3.3', '产品能承受的自然/诱发/特殊环境条件');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.4', '可靠性', 2, 34, TRUE, 'GJB 6387 6.3.5', 'MTBF/MTBCF/任务可靠度等指标');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.5', '维修性', 2, 35, TRUE, 'GJB 6387 6.3.6', 'MTTR/维修工时率/维修级别划分');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.6', '测试性', 2, 36, TRUE, 'GJB 6387 6.3.8', 'BIT/自动测试/FDR/FAR/诊断能力');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.7', '安全性', 2, 37, TRUE, 'GJB 6387 6.3.10', '风险等级/安全装置/告警装置/失效保险');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.8', '电磁兼容性', 2, 38, FALSE, 'GJB 6387 6.3.13', '电磁发射和敏感度要求(GJB 151/GJB 1389)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.9', '尺寸和体积', 2, 39, TRUE, 'GJB 6387 6.3.22', '外形尺寸/体积/公差/配合/体积中心');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.10', '重量', 2, 40, TRUE, 'GJB 6387 6.3.23', '总重量/各组成部分重量/重心位置');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.11', '材料', 2, 41, TRUE, 'GJB 6387 6.3.28', '所用材料的性能/防腐/阻燃/无毒要求');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.12', '外观质量', 2, 42, TRUE, 'GJB 6387 6.3.30', '表面粗糙度/涂镀层/缺陷/机械伤痕/感官要求');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.13', '标志和代号', 2, 43, TRUE, 'GJB 6387 6.3.31', '标志位置/内容/制作 + 代号编号方法(≤15字符)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.14', '互换性', 2, 44, FALSE, 'GJB 6387 6.3.16', '尺寸和功能的互换替换能力');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.15', '接口', 2, 45, TRUE, 'GJB 6387 6.3.19', '外部接口和内部接口(电气/机械/光学/软件)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.16', '综合保障', 2, 46, FALSE, 'GJB 6387 6.3.18', '使用保障/维修保障/保障资源(备件/设备/资料/设施)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.17', '计算机硬件与软件', 2, 47, FALSE, 'GJB 6387 6.3.21', '处理器/存储/通信/软件运行能力/实时性');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.18', '人机工程', 2, 48, FALSE, 'GJB 6387 6.3.15', '人机接口/工作环境/工作强度');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.19', '图样和技术文件', 2, 49, TRUE, 'GJB 6387 6.3.33', '生产用图样和技术文件的完整清单');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.20', '能耗', 2, 50, FALSE, 'GJB 6387 6.3.27', '能源品种/参数/能耗指标');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.21', '理化性能', 2, 51, FALSE, 'GJB 6387 6.3.26', '成分/浓度/硬度/强度/延伸率/热膨胀系数等');
+
+    -- 第4章 验证
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '4', '验证', 1, 40, TRUE, 'GJB 6387 6.4', '验收检验的要求和方法')
+    RETURNING id INTO ch4;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.1', '检验分类', 2, 41, TRUE, 'GJB 6387 6.4.1', '定型试验/首件检验/质量一致性检验/出厂检验');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.2', '检验条件', 2, 42, TRUE, 'GJB 6387 6.4.2', '环境条件/试验条件/标准引用');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.3', '定型(鉴定)试验', 2, 43, TRUE, 'GJB 6387 6.4.4', '检验项目/顺序/样品数/合格判据');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.4', '质量一致性检验', 2, 44, TRUE, 'GJB 6387 6.4.6', '组批/分组/检验项目/合格判据(IL/AQL)');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.5', '抽样', 2, 45, FALSE, 'GJB 6387 6.4.9', '组批规则/抽样方案/缺陷分类/取样方法');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.6', '检验方法', 2, 46, TRUE, 'GJB 6387 6.4.11', '原理/设备/被试状态/程序/故障处理/结果/报告');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.7', '包装检验', 2, 47, FALSE, 'GJB 6387 6.4.8', '包装件的检验项目/顺序/抽样/方法/判据');
+
+    -- 第5章 包装、运输与贮存
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '5', '包装、运输与贮存', 1, 50, FALSE, 'GJB 6387 5.13', '防护包装/装箱/运输/贮存/标志');
+
+    -- 第6章 说明事项
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '6', '说明事项', 1, 60, TRUE, 'GJB 6387 5.14', '预定用途/分类/合格判定/术语定义');
+END $$;
+
+
+
+-- ========================================
+-- 3. 研制方案 章节结构 [GJB 2993-1997 5.4 + 附录A]
+-- ========================================
+DO $$
+DECLARE
+    tpl_id BIGINT;
+    ch1 BIGINT; ch2 BIGINT; ch3 BIGINT; ch4 BIGINT; ch5 BIGINT;
+    ch6 BIGINT; ch7 BIGINT; ch8 BIGINT;
+BEGIN
+    SELECT id INTO tpl_id FROM doc_template_v2 WHERE template_code = 'TPL-DEV-PLAN';
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description, writing_tips) VALUES
+    (tpl_id, 0, '1', '概述', 1, 10, TRUE, 'GJB 2993 5.4', '研制任务来源/产品用途/主要性能/研制目标',
+     '概述应简洁明了,说明本方案针对的产品型号和研制阶段')
+    RETURNING id INTO ch1;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '2', '技术方案', 1, 20, TRUE, 'GJB 2993 5.4.2', '系统总体方案/分系统方案/关键技术路线/技术途径选择理由')
+    RETURNING id INTO ch2;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.1', '系统总体设计', 2, 21, TRUE, 'GJB 2993 5.4.2a', '系统组成/功能分配/工作方式/性能指标分配');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.2', '工作分解结构(WBS)', 2, 22, TRUE, 'GJB 2116', '按GJB 2116逐级分解,确定技术状态项目');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.3', '系统规范概要', 2, 23, TRUE, 'GJB 2993 5.4.2b', '系统规范的主要技术要求,建立功能基线的要点');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.4', '接口控制方案', 2, 24, TRUE, 'GJB 2993 5.4.2c/d', '系统内部和系统之间的接口控制文件编制计划');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.5', '研制规范编制计划', 2, 25, TRUE, 'GJB 2993 5.4.2c', '各分系统/设备的研制规范编制安排');
+
+    -- 第3章 关键技术攻关
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '3', '关键技术攻关', 1, 30, TRUE, 'GJB 2993 5.4.2h', '关键技术识别/攻关方案/验证计划')
+    RETURNING id INTO ch3;
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.1', '关键技术清单', 2, 31, TRUE, 'GJB 2993 A1', '新技术/新产品/新材料/新工艺项目的汇总和评估');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.2', '攻关方案', 2, 32, TRUE, 'GJB 2993 5.4.2h', '每项关键技术的攻关技术途径/试验验证方案/判定准则');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.3', '技术风险评估与应对', 2, 33, TRUE, 'GJB 2993 附录A', '风险识别/评估/控制措施(不准高风险项目进入工程研制)');
+
+    -- 第4章 试验方案
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '4', '试验与评定方案', 1, 40, TRUE, 'GJB 2993 5.4.2f', '研制试验/验证试验/评定试验的总体规划')
+    RETURNING id INTO ch4;
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.1', '试验总计划概要', 2, 41, TRUE, 'GJB 2993 5.4.2f', '系统/分系统/单项设备的试验安排和网络图');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.2', '试验条件需求', 2, 42, TRUE, 'GJB 2993 5.4.2f', '所需试验设备/场地/环境条件/测试系统');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.3', '模型样机/原理样机方案', 2, 43, FALSE, 'GJB 2993 5.4', '如需模型样机或原理性样机,说明试制和试验方案');
+
+    -- 第5章 工程专门综合计划
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '5', '工程专门综合计划', 1, 50, TRUE, 'GJB 2993 5.4.21', '可靠性/维修性/保障性/安全性/人机工程/电磁兼容性/标准化/运输性等综合规划')
+    RETURNING id INTO ch5;
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch5, '5.1', '可靠性工作计划概要', 2, 51, TRUE, 'GJB 2993 5.4.21', '可靠性建模/分配/预计/FMECA/试验的初步安排');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch5, '5.2', '维修性工作计划概要', 2, 52, TRUE, 'GJB 2993 5.4.21', '维修性建模/分配/预计/验证的初步安排');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch5, '5.3', '综合保障计划概要', 2, 53, TRUE, 'GJB 2993 5.4.2k', '保障性分析/保障资源/保障系统初步方案');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch5, '5.4', '安全性工作初步方案', 2, 54, TRUE, 'GJB 2993 5.4.21', '初步危险分析(PHA)/安全性设计准则');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch5, '5.5', '标准化工作方案', 2, 55, TRUE, 'GJB 2993 5.4.21', '标准化目标/重大标准实施/"三化"设计原则');
+
+    -- 第6章 新产品/新材料/新工艺控制
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '6', '新产品/新材料/新工艺控制', 1, 60, TRUE, 'GJB 2993 5.4.2h', '四新项目的识别/验证/控制计划。新研产品比例≤20%~30%')
+    RETURNING id INTO ch6;
+
+    -- 第7章 试制工艺方案
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '7', '试制工艺总方案', 1, 70, TRUE, 'GJB 2993 5.4.2n / GJB 1269', '工艺总方案/工艺路线/关键工艺/工艺评审计划')
+    RETURNING id INTO ch7;
+
+    -- 第8章 经费与进度
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '8', '经费概算与研制进度', 1, 80, TRUE, 'GJB 2993 5.4.2g', '研制经费概算/产品成本价格估算/研制进度网络图/关键路径')
+    RETURNING id INTO ch8;
+END $$;
+
+
+
+-- ========================================
+-- 4. 详细设计 章节结构 [GJB 2993 5.5.1 + GJB 3206]
+-- ========================================
+DO $$
+DECLARE
+    tpl_id BIGINT;
+    ch1 BIGINT; ch2 BIGINT; ch3 BIGINT; ch4 BIGINT;
+    ch5 BIGINT; ch6 BIGINT; ch7 BIGINT;
+BEGIN
+    -- No dedicated template_code for GP-21 yet, will add to doc_template_v2 first
+    -- but chapter structure uses template_id lookup, so we create chapters
+    -- against the template that will be associated with GP-21
+    
+    -- NOTE: GP-21 模板需要在 doc_template_v2 中先创建
+    -- 这里先假设创建了 TPL-DETAIL-DESIGN 模板
+    
+    -- Check if template exists, if not create it
+    IF NOT EXISTS (SELECT 1 FROM doc_template_v2 WHERE template_code = 'TPL-DETAIL-DESIGN') THEN
+        INSERT INTO doc_template_v2(category_id, template_code, template_name, template_type, applicable_stage_codes, gjb_standard_ref, document_class, variables_schema, status)
+        VALUES ((SELECT id FROM doc_template_category WHERE category_code = 'MANAGEMENT'),
+                'TPL-DETAIL-DESIGN', '详细设计', 'MANAGEMENT',
+                'C', 'GJB 3206B-2022', 'MANAGEMENT',
+                '{"projectName":{"type":"string","label":"项目名称","required":true}}', 'ACTIVE');
+    END IF;
+    
+    SELECT id INTO tpl_id FROM doc_template_v2 WHERE template_code = 'TPL-DETAIL-DESIGN';
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '1', '概述', 1, 10, TRUE, 'GJB 2993 5.5.1', '设计依据/设计范围/设计目标/设计输入文件清单')
+    RETURNING id INTO ch1;
+
+    -- 第2章 系统/产品总体设计
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '2', '总体设计说明', 1, 20, TRUE, 'GJB 2993 5.5.1.1', '总体布置/结构方案/功能实现方案')
+    RETURNING id INTO ch2;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.1', '总体布置图', 2, 21, TRUE, 'GJB 2993 5.5.1.1a', '总体尺寸/安装接口/重心位置/主要部件布局');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.2', '结构设计方案', 2, 22, TRUE, 'GJB 2993 5.5.1.1a', '承力结构/材料选用/连接方式/密封/防护');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch2, '2.3', '热设计方案', 2, 23, FALSE, 'GJB 2993 5.5.1.1a', '热源分析/散热方案/热仿真结果');
+
+    -- 第3章 分系统/组件详细设计
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '3', '分系统/组件详细设计', 1, 30, TRUE, 'GJB 2993 5.5.1.1a', '各分系统的详细设计描述')
+    RETURNING id INTO ch3;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.1', '电气/电子分系统', 2, 31, FALSE, 'GJB 2993 5.5.1.1a', '电路设计/PCB布局/电源方案/信号处理');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.2', '机械/结构分系统', 2, 32, FALSE, 'GJB 2993 5.5.1.1a', '机械传动/运动机构/液压气动/结构强度');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.3', '软件分系统', 2, 33, FALSE, 'GJB 2993 5.5.1.1c', '软件架构/模块划分/接口定义/数据流设计');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch3, '3.4', '接口详细设计', 2, 34, TRUE, 'GJB 2993 5.4.2d', '各分系统间的接口规格/协议/连接器选型/线缆设计');
+
+    -- 第4章 设计计算与分析
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '4', '设计计算与分析', 1, 40, TRUE, 'GJB 2993 5.5.1', '支撑设计的关键计算和仿真分析')
+    RETURNING id INTO ch4;
+
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.1', '强度/刚度计算', 2, 41, FALSE, 'GJB 2993 5.5.1', '结构强度校核/安全系数/有限元分析结果');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.2', '性能指标核算', 2, 42, TRUE, 'GJB 2993 5.5.1', '各项战术技术指标的逐项计算/仿真验证结果');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.3', '可靠性预计', 2, 43, TRUE, 'GJB 2993 5.4.21', 'MTBF预计/元器件应力分析/可靠性框图');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.4', '维修性分析', 2, 44, FALSE, 'GJB 2993 5.4.21', 'MTTR预计/可达性分析/模块化设计');
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, ch4, '4.5', '安全性分析', 2, 45, TRUE, 'GJB 2993 5.4.21', 'PHA/系统危险分析/故障树分析(FTA)');
+
+    -- 第5章 元器件/材料选用
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '5', '元器件和材料选用', 1, 50, TRUE, 'GJB 2993 5.5.1', '元器件清单/材料清单/选用原则/降额设计要求(GJB/Z35)')
+    RETURNING id INTO ch5;
+
+    -- 第6章 工艺可制造性分析
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description, writing_tips) VALUES
+    (tpl_id, 0, '6', '工艺与可制造性分析', 1, 60, TRUE, 'GJB 2993 5.5.1.1b / GJB 1269', '工艺可行性/制造难点/关键工艺识别/工艺评审安排',
+     '详细设计阶段必须进行工艺评审,评审设计的可生产性。这是转入试制的前提条件')
+    RETURNING id INTO ch6;
+
+    -- 第7章 设计输出文件清单
+    INSERT INTO doc_template_chapter(template_id, parent_id, chapter_number, chapter_title, chapter_level, order_num, is_required, standard_clause_ref, description) VALUES
+    (tpl_id, 0, '7', '设计输出文件清单', 1, 70, TRUE, 'GJB 2993 5.5.1.1a', '全套试制图样/产品规范草案/工艺规范草案/其他技术文件')
+    RETURNING id INTO ch7;
+END $$;
+

@@ -347,4 +347,45 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
         }
         return ledgers.size();
     }
+
+    @Override
+    @Transactional
+    public DocLedger findOrCreateDraftLedger(Long projectId, Long stageId, Long catalogId,
+                                              String docName, String docType, Long operatorId) {
+        // Try to find existing DRAFTING ledger by catalogId
+        if (catalogId != null) {
+            List<DocLedger> existing = list(new LambdaQueryWrapper<DocLedger>()
+                .eq(DocLedger::getProjectId, projectId)
+                .eq(DocLedger::getCatalogId, catalogId)
+                .eq(DocLedger::getLifecycleStatus, "DRAFTING")
+                .orderByDesc(DocLedger::getId)
+                .last("LIMIT 1"));
+            if (!existing.isEmpty()) {
+                DocLedger ledger = existing.get(0);
+                if (docName != null && !docName.equals(ledger.getDocName())) ledger.setDocName(docName);
+                if (docType != null) ledger.setDocType(docType);
+                ledger.setStageId(stageId);
+                ledger.setUpdatedBy(operatorId);
+                ledger.setUpdatedAt(LocalDateTime.now());
+                updateById(ledger);
+                return ledger;
+            }
+        }
+
+        // Create new
+        DocLedger ledger = new DocLedger();
+        ledger.setProjectId(projectId);
+        ledger.setStageId(stageId);
+        ledger.setCatalogId(catalogId);
+        ledger.setDocName(docName != null ? docName : "AI 生成文档");
+        ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
+        ledger.setLifecycleStatus("DRAFTING");
+        ledger.setRequiredFlag(true);
+        ledger.setCreatedBy(operatorId);
+        ledger.setUpdatedBy(operatorId);
+        ledger.setCreatedAt(LocalDateTime.now());
+        ledger.setUpdatedAt(LocalDateTime.now());
+        save(ledger);
+        return ledger;
+    }
 }

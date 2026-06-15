@@ -102,11 +102,7 @@ public class ChapterWritingContext {
                     .append(" ").append(nullToEmpty(clause.getClauseNumber()))
                     .append(" ").append(nullToEmpty(clause.getClauseTitle())).append("\n");
                 if (notBlank(clause.getClauseContent())) {
-                    String content = clause.getClauseContent();
-                    if (content.length() > 500) {
-                        content = content.substring(0, 500) + "...";
-                    }
-                    sb.append(content).append("\n\n");
+                    sb.append(clause.getClauseContent()).append("\n\n");
                 }
             }
         }

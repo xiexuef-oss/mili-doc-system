@@ -3,15 +3,15 @@
     <!-- Header -->
     <div class="kanban-header">
       <div class="header-left">
-        <el-select v-model="selectedStageId" placeholder="筛选阶段" clearable style="width:220px" @change="loadKanban">
+        <el-select v-model="selectedStageId" placeholder="筛选阶段" clearable style="width:200px" @change="loadKanban">
           <el-option v-for="s in stages" :key="s.id" :label="s.stageName" :value="s.id" />
         </el-select>
         <el-select v-model="selectedCategory" placeholder="筛选类别" clearable style="width:180px">
           <el-option v-for="cat in availableCategories" :key="cat" :label="cat" :value="cat" />
         </el-select>
+        <el-input v-model="searchText" placeholder="搜索文档..." clearable size="small" style="width:200px" />
         <el-radio-group v-model="viewMode" size="small">
           <el-radio-button value="kanban">看板</el-radio-button>
-          <el-radio-button value="list">列表</el-radio-button>
           <el-radio-button value="tree">树形</el-radio-button>
         </el-radio-group>
       </div>
@@ -104,11 +104,13 @@
         </div>
         <div class="column-body">
           <template v-for="grp in col.groups" :key="grp.category || '__flat__'">
-            <div v-if="viewMode === 'kanban' && grp.category" class="col-cat-header">
+            <div v-if="grp.category" class="col-cat-header" @click.stop="toggleCat(col.key + '-' + grp.category)" style="cursor:pointer">
+              <el-icon style="margin-right:4px;font-size:12px"><component :is="collapsedCats[col.key + '-' + grp.category] ? 'ArrowRight' : 'ArrowDown'" /></el-icon>
               <span>{{ grp.category }}</span>
               <el-tag size="small">{{ grp.items.length }}</el-tag>
             </div>
             <div
+              v-show="!collapsedCats[col.key + '-' + grp.category]"
               v-for="item in grp.items"
               :key="item.id"
               class="kanban-card"
@@ -344,6 +346,7 @@
       :chapter-count="exportChapterCount"
       :fill-rate="exportFillRate"
       @done="loadKanban"
+      @closed="showExportItem = null; showExportDialog = false"
     />
 
     <!-- AI Pre-Review Result Dialog -->
@@ -384,9 +387,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useProjectStore } from '@/stores/project'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, RefreshRight, FolderOpened, Loading } from '@element-plus/icons-vue'
+import { Plus, RefreshRight, FolderOpened, Loading, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import {
   getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
@@ -404,15 +408,19 @@ import { getDictItems, type DictItem } from '@/api/dict'
 const route = useRoute()
 const router = useRouter()
 const projectId = Number(route.params.projectId)
+const pStore = useProjectStore()
+
+// Auto-refresh when chat agent generates documents
+watch(() => pStore.kanbanRefresh, () => { loadKanban() })
 
 const completenessMap = ref<Map<number, { passed: number; warnings: number; errors: number; total: number }>>(new Map())
 
 const columns = [
-  { key: 'PLANNED',  label: '策划',     tagType: '' },
+  { key: 'PLANNED',  label: '策划',     tagType: 'info' },
   { key: 'DRAFTING', label: '起草',     tagType: 'info' },
   { key: 'CHECKING', label: '校对',     tagType: 'warning' },
   { key: 'REVIEWING',label: '评审',     tagType: 'warning' },
-  { key: 'APPROVING',label: '批准',     tagType: '' },
+  { key: 'APPROVING',label: '批准',     tagType: 'warning' },
   { key: 'RELEASED', label: '已发布',   tagType: 'success' },
   { key: 'ARCHIVED', label: '已归档',   tagType: 'info' }
 ]
@@ -430,7 +438,9 @@ const kanbanData = ref<Record<string, DocLedgerItem[]>>({})
 const stages = ref<ProjectStageItem[]>([])
 const selectedStageId = ref<number | null>(null)
 const selectedCategory = ref('')
-const viewMode = ref<'kanban' | 'list' | 'tree'>('kanban')
+const searchText = ref('')
+const viewMode = ref<'kanban' | 'tree'>('kanban')
+const collapsedCats = ref<Record<string, boolean>>({})
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const showDrawer = ref(false)
@@ -461,6 +471,14 @@ function getColumnItems(key: string) {
   let items = kanbanData.value[key] || []
   if (selectedCategory.value) {
     items = items.filter(i => i.docCategory === selectedCategory.value)
+  }
+  if (searchText.value) {
+    const s = searchText.value.toLowerCase()
+    items = items.filter(i => 
+      (i.docName || '').toLowerCase().includes(s) ||
+      (i.docCode || '').toLowerCase().includes(s) ||
+      (i.docType || '').toLowerCase().includes(s)
+    )
   }
   return items
 }
@@ -575,6 +593,10 @@ function expandAll() {
   const keys = treeData.value.map(n => n.key)
   expandedKeys.value = keys
   treeRenderKey.value++
+}
+
+function toggleCat(catKey: string) {
+  collapsedCats.value = { ...collapsedCats.value, [catKey]: !collapsedCats.value[catKey] }
 }
 
 function collapseAll() {
@@ -884,7 +906,7 @@ async function handleSaveDraft() {
     })
     ElMessage.success('文档初稿已保存')
     showDraftDialog.value = false
-    loadKanban()
+    try { await loadKanban() } catch { /* refresh may fail silently */ }
   } catch {
     ElMessage.error('保存失败')
   } finally {
@@ -995,6 +1017,9 @@ onMounted(() => {
   }, 2000)
 })
 
+watch(searchText, (val) => {
+  treeFilter.value = val
+})
 watch(treeFilter, (val) => {
   treeRef.value?.filter(val)
 })

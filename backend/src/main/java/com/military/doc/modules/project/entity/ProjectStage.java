@@ -27,6 +27,12 @@ public class ProjectStage {
     private Boolean isCurrent;
     private Boolean allowParallel;
 
+    /** 两师签批确认 */
+    private Boolean chiefDesignerConfirmed;
+    private Boolean chiefCommanderConfirmed;
+    private LocalDateTime chiefDesignerConfirmedAt;
+    private LocalDateTime chiefCommanderConfirmedAt;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
 

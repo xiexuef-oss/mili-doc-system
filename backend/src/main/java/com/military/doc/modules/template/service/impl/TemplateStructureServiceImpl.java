@@ -77,6 +77,22 @@ public class TemplateStructureServiceImpl implements TemplateStructureService {
 
     @Override
     @Transactional
+    public void deleteChaptersByTemplateId(Long templateId) {
+        List<DocTemplateChapter> chapters = chapterMapper.selectList(
+                new LambdaQueryWrapper<DocTemplateChapter>()
+                    .eq(DocTemplateChapter::getTemplateId, templateId));
+        for (DocTemplateChapter ch : chapters) {
+            chapterMapper.deleteById(ch.getId());
+        }
+    }
+
+    @Override
+    public DocTemplateChapter getChapterById(Long chapterId) {
+        return chapterMapper.selectById(chapterId);
+    }
+
+    @Override
+    @Transactional
     public void reorderChapters(Long templateId, List<Long> chapterIdsInOrder) {
         List<DocTemplateChapter> chapters = chapterMapper.selectBatchIds(chapterIdsInOrder);
         java.util.Map<Long, Integer> orderMap = new java.util.HashMap<>();

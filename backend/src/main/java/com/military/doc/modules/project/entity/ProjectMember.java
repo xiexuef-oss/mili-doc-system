@@ -13,6 +13,13 @@ public class ProjectMember {
     private Long projectId;
     private Long userId;
     private String roleInProject;
+    /** 指挥线: TECHNICAL/ADMINISTRATIVE/QUALITY/CRAFT */
+    private String memberLine;
+    /** 岗位编码: CHIEF_DESIGNER/CHIEF_COMMANDER/... */
+    private String memberPosition;
+    /** 上级 member_id，构建指挥链 */
+    private Long supervisorId;
+    private Integer sortOrder;
     private String duties;
     private String status;
 

@@ -7,7 +7,12 @@
           <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
         </el-select>
       </div>
-      <el-button type="primary" @click="showCreateDialog">添加知识条目</el-button>
+      <div class="header-actions">
+        <el-button type="success" @click="showImportDialog">
+          <el-icon><FolderAdd /></el-icon>上传文件导入
+        </el-button>
+        <el-button type="primary" @click="showCreateDialog">添加知识条目</el-button>
+      </div>
     </div>
 
     <el-table :data="list" v-loading="loading" style="width: 100%">
@@ -139,17 +144,70 @@
         <el-button type="primary" :loading="uploading" :disabled="!pendingFile" @click="handleUpload">上传</el-button>
       </template>
     </el-dialog>
+
+    <!-- Import File Dialog -->
+    <el-dialog v-model="importVisible" title="上传文件导入知识条目" width="560px" @close="resetImport">
+      <el-form label-width="80px">
+        <el-form-item label="选择文件">
+          <el-upload
+            ref="importUploadRef"
+            drag
+            :auto-upload="false"
+            :limit="1"
+            :on-change="handleImportFileChange"
+            :on-remove="handleImportFileRemove"
+            accept=".txt,.docx,.pdf"
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">支持 .txt / .docx / .pdf</div>
+          </el-upload>
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="分类">
+              <el-input v-model="importCategory" placeholder="如：GJB、编写指南" list="import-cat-list" />
+              <datalist id="import-cat-list">
+                <option v-for="c in categories" :key="c" :value="c" />
+              </datalist>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="标签">
+              <el-input v-model="importTags" placeholder="逗号分隔" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="自动拆分">
+          <el-switch v-model="importAutoSplit" />
+          <span style="margin-left:8px;font-size:12px;color:var(--el-text-color-secondary)">按章节标题自动拆分为多个条目</span>
+        </el-form-item>
+      </el-form>
+      <div v-if="importResult.length > 0" style="margin-top:16px">
+        <el-alert :title="`成功导入 ${importResult.length} 个知识条目`" type="success" :closable="false" show-icon />
+        <div style="max-height:200px;overflow-y:auto;margin-top:8px">
+          <div v-for="(r, i) in importResult" :key="i" style="padding:4px 0;font-size:13px;border-bottom:1px solid var(--el-border-color-lighter)">
+            {{ i + 1 }}. {{ r.title }}
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="importVisible = false">{{ importResult.length > 0 ? '关闭' : '取消' }}</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="handleImport">
+          开始导入
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, UploadFilled } from '@element-plus/icons-vue'
+import { Upload, UploadFilled, FolderAdd } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import {
   getKnowledgeBaseList, createKnowledgeBase, updateKnowledgeBase, deleteKnowledgeBase,
-  uploadKnowledgeBaseFile, getKnowledgeBaseDownloadUrl, getKnowledgeBaseCategories,
+  uploadKnowledgeBaseFile, uploadKnowledgeFile, getKnowledgeBaseDownloadUrl, getKnowledgeBaseCategories,
   type KnowledgeBaseItem
 } from '@/api/knowledge-base'
 
@@ -301,12 +359,54 @@ function formatFileSize(bytes: number): string {
   return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
 }
 
+// Import file dialog
+const importVisible = ref(false)
+const importing = ref(false)
+const importFile = ref<File | null>(null)
+const importCategory = ref('')
+const importTags = ref('')
+const importAutoSplit = ref(true)
+const importResult = ref<KnowledgeBaseItem[]>([])
+
+function showImportDialog() {
+  importFile.value = null
+  importCategory.value = ''
+  importTags.value = ''
+  importAutoSplit.value = true
+  importResult.value = []
+  importVisible.value = true
+}
+
+function handleImportFileChange(file: any) { importFile.value = file.raw }
+function handleImportFileRemove() { importFile.value = null }
+function resetImport() { importFile.value = null; importResult.value = [] }
+
+async function handleImport() {
+  if (!importFile.value) return
+  importing.value = true
+  try {
+    const res = await uploadKnowledgeFile(
+      importFile.value,
+      importCategory.value || undefined,
+      importTags.value || undefined,
+      importAutoSplit.value
+    )
+    importResult.value = res.data.data || []
+    ElMessage.success(`成功导入 ${importResult.value.length} 个知识条目`)
+    fetchData()
+    loadCategories()
+  } catch {
+    ElMessage.error('导入失败，请确认文件格式正确')
+  } finally { importing.value = false }
+}
+
 onMounted(() => { fetchData(); loadCategories() })
 </script>
 
 <style scoped>
 .page { background: #fff; padding: 24px; border-radius: 4px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.header-actions { display: flex; gap: 8px; }
 .filters { display: flex; gap: 12px; }
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
 .text-muted { color: #c0c4cc; }

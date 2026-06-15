@@ -16,6 +16,10 @@ public class SysUser {
     private String email;
     private String phone;
     private String status;
+    /** 所在单位/部门 */
+    private String orgName;
+    /** 职称/军衔 */
+    private String title;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

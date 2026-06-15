@@ -9,10 +9,12 @@
 
     <el-table :data="users" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="username" label="用户名" width="130" />
-      <el-table-column prop="realName" label="姓名" width="120" />
-      <el-table-column prop="email" label="邮箱" min-width="200" />
-      <el-table-column prop="phone" label="电话" width="140" />
+      <el-table-column prop="username" label="用户名" width="100" />
+      <el-table-column prop="realName" label="姓名" width="100" />
+      <el-table-column prop="orgName" label="部门" width="140" />
+      <el-table-column prop="title" label="职称/军衔" width="120" />
+      <el-table-column prop="email" label="邮箱" min-width="180" />
+      <el-table-column prop="phone" label="电话" width="130" />
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'" size="small">
@@ -57,6 +59,18 @@
         <el-form-item label="姓名" prop="realName">
           <el-input v-model="form.realName" />
         </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="部门">
+              <el-input v-model="form.orgName" placeholder="所在单位/部门" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="职称/军衔">
+              <el-input v-model="form.title" placeholder="如：高级工程师" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="邮箱">
@@ -129,7 +143,9 @@ const emptyForm = (): UserItem => ({
   realName: '',
   email: '',
   phone: '',
-  status: 'ACTIVE'
+  status: 'ACTIVE',
+  orgName: '',
+  title: ''
 })
 
 const form = reactive<UserItem>(emptyForm())

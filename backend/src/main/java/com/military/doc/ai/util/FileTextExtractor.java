@@ -2,27 +2,37 @@ package com.military.doc.ai.util;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFPictureData;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Component
 public class FileTextExtractor {
 
-    private static final int MAX_TEXT_LENGTH = 5000;
-    private static final int FULL_MAX_LENGTH = 500_000;
+    // 内网部署，不截断文本
+    private static final int FULL_MAX_LENGTH = 2_000_000;
 
-    /** Extract text for context assembly (truncated to 5000 chars). */
+    /** Extract text for context assembly (no truncation for intranet deployment). */
     public String extract(byte[] bytes, String extension) {
-        return extract(bytes, extension, MAX_TEXT_LENGTH);
+        return extract(bytes, extension, FULL_MAX_LENGTH);
     }
 
-    /** Extract full text for knowledge import (truncated to 500K chars). */
+    /** Extract full text for knowledge import. */
     public String extractFull(byte[] bytes, String extension) {
         return extract(bytes, extension, FULL_MAX_LENGTH);
     }
@@ -33,8 +43,12 @@ public class FileTextExtractor {
             String text = switch (extension.toLowerCase()) {
                 case ".pdf" -> extractPdfFull(bytes, maxLength);
                 case ".docx" -> extractDocx(bytes);
-                case ".txt" -> new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-                default -> "";
+                case ".txt", ".md", ".markdown", ".json", ".xml", ".csv" ->
+                    new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                default -> {
+                    String s = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                    yield s.length() > 10 ? s : "";
+                }
             };
             if (text.length() > maxLength) {
                 text = text.substring(0, maxLength) + "\n...(已截断)";
@@ -51,9 +65,8 @@ public class FileTextExtractor {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
             stripper.setAddMoreFormatting(false);
-            // Read all pages for knowledge import
             int totalPages = doc.getNumberOfPages();
-            int endPage = Math.min(totalPages, 50); // max 50 pages
+            int endPage = Math.min(totalPages, 100); // 内网部署，翻倍页数限制
             stripper.setEndPage(endPage);
             String text = stripper.getText(doc);
             return text;
@@ -80,5 +93,150 @@ public class FileTextExtractor {
              var extractor = new XWPFWordExtractor(doc)) {
             return extractor.getText();
         }
+    }
+
+    // ============================================================
+    // Multi-modal: Image extraction
+    // ============================================================
+
+    /**
+     * Extract images from PDF and return as metadata descriptions.
+     * Does NOT require a vision model — produces structural descriptions.
+     */
+    public List<ImageDescriptor> extractPdfImages(byte[] pdfBytes) {
+        List<ImageDescriptor> images = new ArrayList<>();
+        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
+            for (int pageIdx = 0; pageIdx < doc.getNumberOfPages(); pageIdx++) {
+                PDPage page = doc.getPage(pageIdx);
+                PDResources resources = page.getResources();
+                if (resources == null) continue;
+
+                for (var name : resources.getXObjectNames()) {
+                    if (resources.isImageXObject(name)) {
+                        try {
+                            PDImageXObject img = (PDImageXObject) resources.getXObject(name);
+                            ImageDescriptor desc = new ImageDescriptor();
+                            desc.setPageNumber(pageIdx + 1);
+                            desc.setImageName(name.getName());
+                            desc.setWidth(img.getWidth());
+                            desc.setHeight(img.getHeight());
+                            desc.setColorSpace(img.getColorSpace() != null
+                                ? img.getColorSpace().getName() : "unknown");
+
+                            // Extract image bytes for potential vision model use
+                            BufferedImage buffered = img.getImage();
+                            if (buffered != null) {
+                                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                                ImageIO.write(buffered, "png", bos);
+                                desc.setImageBytes(bos.toByteArray());
+                                desc.setImageSizeBytes(bos.size());
+                            }
+
+                            desc.setDescription(generateImageDescription(desc));
+                            images.add(desc);
+                        } catch (Exception e) {
+                            log.debug("Skipping non-image XObject: {}", name.getName());
+                        }
+                    }
+                }
+            }
+            log.info("Extracted {} images from PDF ({} pages)", images.size(), doc.getNumberOfPages());
+        } catch (Exception e) {
+            log.warn("Failed to extract PDF images: {}", e.getMessage());
+        }
+        return images;
+    }
+
+    /**
+     * Extract images from DOCX and return as metadata descriptions.
+     */
+    public List<ImageDescriptor> extractDocxImages(byte[] docxBytes) {
+        List<ImageDescriptor> images = new ArrayList<>();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
+            List<XWPFPictureData> pictures = doc.getAllPictures();
+            for (XWPFPictureData pic : pictures) {
+                ImageDescriptor desc = new ImageDescriptor();
+                desc.setImageName(pic.getFileName());
+                desc.setImageBytes(pic.getData());
+                desc.setImageSizeBytes(pic.getData().length);
+                desc.setMimeType(pic.getPackagePart().getContentType());
+
+                // Try to read image dimensions
+                try {
+                    BufferedImage buffered = ImageIO.read(new ByteArrayInputStream(pic.getData()));
+                    if (buffered != null) {
+                        desc.setWidth(buffered.getWidth());
+                        desc.setHeight(buffered.getHeight());
+                    }
+                } catch (Exception ignored) {}
+
+                desc.setDescription(generateImageDescription(desc));
+                images.add(desc);
+            }
+            log.info("Extracted {} images from DOCX", images.size());
+        } catch (Exception e) {
+            log.warn("Failed to extract DOCX images: {}", e.getMessage());
+        }
+        return images;
+    }
+
+    /**
+     * Convenience: extract images from either PDF or DOCX based on extension.
+     */
+    public List<ImageDescriptor> extractImages(byte[] bytes, String extension) {
+        if (extension == null) return List.of();
+        return switch (extension.toLowerCase()) {
+            case ".pdf" -> extractPdfImages(bytes);
+            case ".docx" -> extractDocxImages(bytes);
+            default -> List.of();
+        };
+    }
+
+    /**
+     * Generate a structural description of an image for LLM context.
+     * This is a metadata-based description — for semantic description,
+     * a vision model would be needed.
+     */
+    private String generateImageDescription(ImageDescriptor img) {
+        StringBuilder desc = new StringBuilder();
+        desc.append("[图片]");
+        if (img.getPageNumber() > 0) {
+            desc.append(" 页码:").append(img.getPageNumber());
+        }
+        if (img.getWidth() > 0 && img.getHeight() > 0) {
+            desc.append(" 尺寸:").append(img.getWidth()).append("x").append(img.getHeight()).append("px");
+        }
+        if (img.getMimeType() != null) {
+            desc.append(" 格式:").append(img.getMimeType());
+        }
+        if (img.getImageSizeBytes() > 0) {
+            desc.append(" 大小:").append(formatBytes(img.getImageSizeBytes()));
+        }
+        if (img.getImageName() != null) {
+            desc.append(" 名称:").append(img.getImageName());
+        }
+        return desc.toString();
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + "B";
+        if (bytes < 1024 * 1024) return String.format("%.1fKB", bytes / 1024.0);
+        return String.format("%.1fMB", bytes / (1024.0 * 1024.0));
+    }
+
+    /**
+     * Descriptor for extracted images — metadata without vision model.
+     */
+    @lombok.Data
+    public static class ImageDescriptor {
+        private String imageName;
+        private int pageNumber;
+        private int width;
+        private int height;
+        private String colorSpace;
+        private String mimeType;
+        private long imageSizeBytes;
+        private byte[] imageBytes;
+        private String description;
     }
 }

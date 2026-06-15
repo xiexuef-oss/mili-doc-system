@@ -42,6 +42,26 @@ export interface DocTemplateChapter {
   writingTips?: string
   sampleContent?: string
   isReusableElement?: boolean
+  // V5: auto-parsed fields
+  headingStyle?: string
+  numberingFormat?: string
+  hasTable?: boolean
+  tableJson?: string
+  variablePlaceholders?: string
+  fontEmphasis?: string
+}
+
+export interface DocxParseResult {
+  templateId: number
+  title: string
+  securityLevel: string
+  docCodeFormat: string
+  hasCover: boolean
+  chaptersCreated: number
+  variablesDetected: number
+  tablesDetected: number
+  totalChars: number
+  variableList: Array<{ placeholder: string; type: string }>
 }
 
 export interface DocTemplateElement {
@@ -85,3 +105,12 @@ export function attachElement(chapterId: number, elementId: number, required?: b
 }
 export function detachElement(chapterId: number, elementId: number) { return api.delete(`/template-structure/chapters/${chapterId}/elements/${elementId}`) }
 export function getChapterElements(chapterId: number) { return api.get(`/template-structure/chapters/${chapterId}/elements`) }
+
+// DOCX upload and auto-parse
+export function uploadAndParseDocx(templateId: number, file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post(`/template-structure/templates/${templateId}/upload-docx`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}

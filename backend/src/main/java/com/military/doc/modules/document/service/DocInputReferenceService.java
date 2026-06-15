@@ -138,41 +138,21 @@ public class DocInputReferenceService {
                 ctx.append("## 写作模板: ").append(template.getTemplateName()).append("\n");
                 ctx.append("- 模板标准: ").append(nullToEmpty(template.getGjbStandardRef())).append("\n\n");
 
-                List<DocTemplateChapter> chapters = templateChapterMapper.selectList(
+                // Load ALL template chapters (not just level 1) with full context
+            List<DocTemplateChapter> allTplChapters = templateChapterMapper.selectList(
                     new LambdaQueryWrapper<DocTemplateChapter>()
                         .eq(DocTemplateChapter::getTemplateId, template.getId())
-                        .eq(DocTemplateChapter::getChapterLevel, 1)
                         .orderByAsc(DocTemplateChapter::getOrderNum));
 
-                for (DocTemplateChapter ch : chapters) {
-                    ctx.append("### 第").append(ch.getChapterNumber()).append("章 ")
-                        .append(ch.getChapterTitle()).append(" (")
-                        .append(Boolean.TRUE.equals(ch.getIsRequired()) ? "必填" : "可选").append(")\n");
-                    if (ch.getDescription() != null) {
-                        ctx.append("- 说明: ").append(ch.getDescription()).append("\n");
-                    }
-                    if (ch.getWritingTips() != null) {
-                        ctx.append("- 编写提示: ").append(ch.getWritingTips()).append("\n");
-                    }
-
-                    // 列出该章的子节
-                    List<DocTemplateChapter> subChapters = templateChapterMapper.selectList(
-                        new LambdaQueryWrapper<DocTemplateChapter>()
-                            .eq(DocTemplateChapter::getParentId, ch.getId())
-                            .orderByAsc(DocTemplateChapter::getOrderNum));
-                    if (!subChapters.isEmpty()) {
-                        ctx.append("- 包含要素:\n");
-                        for (DocTemplateChapter sub : subChapters) {
-                            ctx.append("  - ").append(sub.getChapterNumber()).append(" ")
-                                .append(sub.getChapterTitle());
-                            if (sub.getStandardClauseRef() != null) {
-                                ctx.append(" [").append(sub.getStandardClauseRef()).append("]");
-                            }
-                            ctx.append("\n");
-                        }
-                    }
-                    ctx.append("\n");
+                // Render complete template structure with descriptions and writing tips
+                Map<Long, List<DocTemplateChapter>> byParent = new java.util.LinkedHashMap<>();
+                for (DocTemplateChapter ch : allTplChapters) {
+                    byParent.computeIfAbsent(ch.getParentId() != null ? ch.getParentId() : 0L,
+                        k -> new ArrayList<>()).add(ch);
                 }
+                List<DocTemplateChapter> roots = byParent.getOrDefault(0L, List.of());
+                ctx.append("### 章节结构（必须严格遵循此结构撰写）\n\n");
+                renderTemplateChapters(roots, byParent, ctx, 0);
             }
         }
 
@@ -226,6 +206,32 @@ public class DocInputReferenceService {
             case "PROCESS_SPEC" -> "针对产品或材料制造的专用工艺，规定所需材料、设备及加工控制要求。";
             default -> "";
         };
+    }
+
+    /** Recursively render template chapters with descriptions, writing tips, and clause references. */
+    private void renderTemplateChapters(List<DocTemplateChapter> chapters,
+                                         Map<Long, List<DocTemplateChapter>> byParent,
+                                         StringBuilder ctx, int depth) {
+        for (DocTemplateChapter ch : chapters) {
+            String indent = "  ".repeat(depth);
+            String prefix = depth == 0 ? "## " : depth == 1 ? "### " : "- ";
+            ctx.append(indent).append(prefix).append(ch.getChapterNumber())
+                .append(" ").append(ch.getChapterTitle())
+                .append(Boolean.TRUE.equals(ch.getIsRequired()) ? "（必写）" : "（可选）").append("\n");
+            if (ch.getDescription() != null && !ch.getDescription().isBlank()) {
+                ctx.append(indent).append("  **说明**: ").append(ch.getDescription()).append("\n");
+            }
+            if (ch.getWritingTips() != null && !ch.getWritingTips().isBlank()) {
+                ctx.append(indent).append("  **编写提示**: ").append(ch.getWritingTips()).append("\n");
+            }
+            if (ch.getStandardClauseRef() != null && !ch.getStandardClauseRef().isBlank()) {
+                ctx.append(indent).append("  **适用标准**: ").append(ch.getStandardClauseRef()).append("\n");
+            }
+            List<DocTemplateChapter> children = byParent.getOrDefault(ch.getId(), List.of());
+            if (!children.isEmpty()) {
+                renderTemplateChapters(children, byParent, ctx, depth + 1);
+            }
+        }
     }
 
     private String nullToEmpty(String s) {

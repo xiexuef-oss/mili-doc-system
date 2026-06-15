@@ -8,6 +8,13 @@ export interface UserItem {
   email: string
   phone: string
   status: string
+  orgName?: string   // 部门
+  title?: string     // 职称/军衔
+}
+
+/** 用户搜索(不分页)，用于成员选择器 */
+export function searchUsers(keyword?: string) {
+  return api.get('/users', { params: { pageSize: 500, keyword: keyword || undefined } })
 }
 
 export function getUsers(params: {

@@ -28,11 +28,19 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="360" fixed="right">
+      <el-table-column label="操作" width="440" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="editChapters(row)">章节结构</el-button>
           <el-button link type="success" size="small" @click="editTemplate(row)">编辑</el-button>
           <el-button link type="warning" size="small" @click="manageElements(row)">标准元素</el-button>
+          <el-upload
+            :show-file-list="false"
+            :before-upload="(file: File) => handleUploadDocx(row, file)"
+            accept=".docx"
+            style="display:inline-block;margin:0 4px"
+          >
+            <el-button link type="info" size="small">📄导入DOCX</el-button>
+          </el-upload>
           <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -70,6 +78,30 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- DOCX Parse Result Dialog -->
+    <el-dialog v-model="showParseResult" title="DOCX 解析结果" width="600px">
+      <el-descriptions v-if="parseResult" :column="2" border>
+        <el-descriptions-item label="模板标题">{{ parseResult.title }}</el-descriptions-item>
+        <el-descriptions-item label="密级">{{ parseResult.securityLevel }}</el-descriptions-item>
+        <el-descriptions-item label="章节数">{{ parseResult.chaptersCreated }}</el-descriptions-item>
+        <el-descriptions-item label="检测变量">{{ parseResult.variablesDetected }}</el-descriptions-item>
+        <el-descriptions-item label="检测表格">{{ parseResult.tablesDetected }}</el-descriptions-item>
+        <el-descriptions-item label="文档编号格式">{{ parseResult.docCodeFormat || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="含封面">{{ parseResult.hasCover ? '是' : '否' }}</el-descriptions-item>
+        <el-descriptions-item label="总字符数">{{ parseResult.totalChars?.toLocaleString() }}</el-descriptions-item>
+      </el-descriptions>
+      <div v-if="parseResult?.variableList?.length" style="margin-top:12px">
+        <h5>检测到的变量占位符：</h5>
+        <el-tag v-for="v in parseResult.variableList" :key="v.placeholder" size="small" style="margin:2px">
+          {{ v.placeholder }} <span style="color:#999">({{ v.type }})</span>
+        </el-tag>
+      </div>
+      <template #footer>
+        <el-button @click="showParseResult = false">关闭</el-button>
+        <el-button type="primary" @click="goToChapters">查看章节结构</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -80,7 +112,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
   getTemplates, getCategories, createTemplate, updateTemplate, deleteTemplate,
-  type DocTemplateV2, type DocTemplateCategory
+  uploadAndParseDocx,
+  type DocTemplateV2, type DocTemplateCategory, type DocxParseResult
 } from '@/api/template-v2'
 
 const router = useRouter()
@@ -91,6 +124,11 @@ const saving = ref(false)
 const filterCategory = ref<number | null>(null)
 const showCreateDialog = ref(false)
 const editingTemplate = ref<DocTemplateV2 | null>(null)
+
+// DOCX parse
+const showParseResult = ref(false)
+const parseResult = ref<DocxParseResult | null>(null)
+const parsingTemplateId = ref<number | null>(null)
 
 const form = reactive({
   templateCode: '', templateName: '', categoryId: 0,
@@ -167,6 +205,35 @@ function editChapters(row: DocTemplateV2) {
 function manageElements(row: DocTemplateV2) {
   // Elements managed within chapter editor for now
   router.push({ name: 'TemplateChapterEditor', params: { templateId: row.id } })
+}
+
+async function handleUploadDocx(row: DocTemplateV2, file: File) {
+  if (!row.id) return
+  if (!file.name.endsWith('.docx')) {
+    ElMessage.warning('请选择 .docx 格式文件')
+    return false
+  }
+  loading.value = true
+  parsingTemplateId.value = row.id
+  try {
+    const res = await uploadAndParseDocx(row.id, file)
+    parseResult.value = res.data.data as DocxParseResult
+    showParseResult.value = true
+    ElMessage.success(`解析完成：${parseResult.value?.chaptersCreated || 0} 个章节，${parseResult.value?.variablesDetected || 0} 个变量`)
+    loadTemplates()
+  } catch (e: any) {
+    ElMessage.error('DOCX 解析失败: ' + (e?.response?.data?.message || e?.message || '未知错误'))
+  } finally {
+    loading.value = false
+  }
+  return false // prevent default upload
+}
+
+function goToChapters() {
+  showParseResult.value = false
+  if (parsingTemplateId.value) {
+    router.push({ name: 'TemplateChapterEditor', params: { templateId: parsingTemplateId.value } })
+  }
 }
 
 onMounted(() => { loadCategories(); loadTemplates() })

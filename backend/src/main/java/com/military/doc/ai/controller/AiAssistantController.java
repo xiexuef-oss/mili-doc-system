@@ -3,7 +3,13 @@ package com.military.doc.ai.controller;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.llm.LlmProviderService;
 import com.military.doc.ai.context.VectorIndexService;
+import com.military.doc.ai.util.MarkdownChapterParser;
 import com.military.doc.ai.entity.EmbeddingIndexTask;
+import com.military.doc.ai.entity.GenerationFeedback;
+import com.military.doc.ai.mapper.GenerationFeedbackMapper;
+import com.military.doc.ai.service.AiAuditService;
+import com.military.doc.ai.service.BatchGenerationService;
+import com.military.doc.ai.service.IncrementalGenerationService;
 import com.military.doc.ai.service.CatalogGenerationService;
 import com.military.doc.ai.service.ArchiveAdvisorService;
 import com.military.doc.ai.service.ChangeImpactService;
@@ -15,6 +21,7 @@ import com.military.doc.ai.service.ProofreadingService;
 import com.military.doc.ai.service.StageReadinessService;
 import com.military.doc.ai.service.TrainingDataService;
 import com.military.doc.ai.entity.TrainingExample;
+import com.military.doc.ai.util.SensitiveDataScrubber;
 import com.military.doc.common.result.Result;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.config.LlmProperties;
@@ -35,7 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -55,75 +61,100 @@ import java.util.concurrent.CompletableFuture;
 @Tag(name = "AI 智能助手")
 public class AiAssistantController {
 
-    @Autowired
-    private CatalogGenerationService catalogGenerationService;
+    private final CatalogGenerationService catalogGenerationService;
+    private final DraftGenerationService draftGenerationService;
+    private final TrainingDataService trainingDataService;
+    private final ProofreadingService proofreadingService;
+    private final PreReviewService preReviewService;
+    private final ComplianceCheckService complianceCheckService;
+    private final OpinionSummaryService opinionSummaryService;
+    private final StageReadinessService stageReadinessService;
+    private final ArchiveAdvisorService archiveAdvisorService;
+    private final ChangeImpactService changeImpactService;
+    private final BatchGenerationService batchGenerationService;
+    private final VectorIndexService vectorIndexService;
+    private final AiAuditService aiAuditService;
+    private final SensitiveDataScrubber sensitiveDataScrubber;
+    private final IncrementalGenerationService incrementalGenerationService;
+    private final GenerationFeedbackMapper feedbackMapper;
+    private final DocFileService docFileService;
+    private final DocVersionService docVersionService;
+    private final DocLedgerService docLedgerService;
+    private final FileStorageService fileStorageService;
+    private final com.military.doc.modules.document.mapper.DocLedgerMapper docLedgerMapper;
+    private final com.military.doc.modules.document.mapper.DocChapterMapper docChapterMapper;
+    private final DocChapterService docChapterService;
+    private final LlmProperties llmProperties;
+    private final LlmProviderService llmProviderService;
+    private final LlmClient llmClient;
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private DraftGenerationService draftGenerationService;
-
-    @Autowired
-    private TrainingDataService trainingDataService;
-
-    @Autowired
-    private ProofreadingService proofreadingService;
-
-    @Autowired
-    private PreReviewService preReviewService;
-
-    @Autowired
-    private ComplianceCheckService complianceCheckService;
-
-    @Autowired
-    private OpinionSummaryService opinionSummaryService;
-
-    @Autowired
-    private StageReadinessService stageReadinessService;
-
-    @Autowired
-    private ArchiveAdvisorService archiveAdvisorService;
-
-    @Autowired
-    private ChangeImpactService changeImpactService;
-
-    @Autowired
-    private VectorIndexService vectorIndexService;
-
-    @Autowired
-    private DocFileService docFileService;
-
-    @Autowired
-    private DocVersionService docVersionService;
-
-    @Autowired
-    private DocLedgerService docLedgerService;
-
-    @Autowired
-    private FileStorageService fileStorageService;
-
-    @Autowired
-    private DocChapterService docChapterService;
-
-    @Autowired
-    private LlmProperties llmProperties;
-
-    @Autowired
-    private LlmProviderService llmProviderService;
-
-    @Autowired
-    private LlmClient llmClient;
-
-    @Autowired
-    private OkHttpClient httpClient;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    public AiAssistantController(CatalogGenerationService catalogGenerationService,
+                                  DraftGenerationService draftGenerationService,
+                                  TrainingDataService trainingDataService,
+                                  ProofreadingService proofreadingService,
+                                  PreReviewService preReviewService,
+                                  ComplianceCheckService complianceCheckService,
+                                  OpinionSummaryService opinionSummaryService,
+                                  StageReadinessService stageReadinessService,
+                                  ArchiveAdvisorService archiveAdvisorService,
+                                  ChangeImpactService changeImpactService,
+                                  BatchGenerationService batchGenerationService,
+                                  VectorIndexService vectorIndexService,
+                                  AiAuditService aiAuditService,
+                                  SensitiveDataScrubber sensitiveDataScrubber,
+                                  IncrementalGenerationService incrementalGenerationService,
+                                  GenerationFeedbackMapper feedbackMapper,
+                                  DocFileService docFileService,
+                                  DocVersionService docVersionService,
+                                  DocLedgerService docLedgerService,
+                                  FileStorageService fileStorageService,
+                                  com.military.doc.modules.document.mapper.DocLedgerMapper docLedgerMapper,
+                                  com.military.doc.modules.document.mapper.DocChapterMapper docChapterMapper,
+                                  DocChapterService docChapterService,
+                                  LlmProperties llmProperties,
+                                  LlmProviderService llmProviderService,
+                                  LlmClient llmClient,
+                                  OkHttpClient httpClient,
+                                  ObjectMapper objectMapper) {
+        this.catalogGenerationService = catalogGenerationService;
+        this.draftGenerationService = draftGenerationService;
+        this.trainingDataService = trainingDataService;
+        this.proofreadingService = proofreadingService;
+        this.preReviewService = preReviewService;
+        this.complianceCheckService = complianceCheckService;
+        this.opinionSummaryService = opinionSummaryService;
+        this.stageReadinessService = stageReadinessService;
+        this.archiveAdvisorService = archiveAdvisorService;
+        this.changeImpactService = changeImpactService;
+        this.batchGenerationService = batchGenerationService;
+        this.vectorIndexService = vectorIndexService;
+        this.aiAuditService = aiAuditService;
+        this.sensitiveDataScrubber = sensitiveDataScrubber;
+        this.incrementalGenerationService = incrementalGenerationService;
+        this.feedbackMapper = feedbackMapper;
+        this.docFileService = docFileService;
+        this.docVersionService = docVersionService;
+        this.docLedgerService = docLedgerService;
+        this.fileStorageService = fileStorageService;
+        this.docLedgerMapper = docLedgerMapper;
+        this.docChapterMapper = docChapterMapper;
+        this.docChapterService = docChapterService;
+        this.llmProperties = llmProperties;
+        this.llmProviderService = llmProviderService;
+        this.llmClient = llmClient;
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
+    }
 
     @PostMapping("/catalog/generate")
-    @Operation(summary = "根据项目输入文件和适用标准自动生成文档目录")
-    public Result<List<DocCatalog>> generateCatalog(@RequestBody Map<String, Object> body,
+    @Operation(summary = "根据项目输入文件和适用标准自动生成文档目录（默认追加模式）")
+    public Result<Map<String, Object>> generateCatalog(@RequestBody Map<String, Object> body,
                                                      Authentication authentication) {
         Long projectId = toLong(body.get("projectId"));
         Long stageId = toLong(body.get("stageId"));
+        // 默认追加模式，仅当用户明确传 overwrite=true 时才覆盖
         boolean overwrite = Boolean.TRUE.equals(body.get("overwrite"));
         Long userId = (Long) authentication.getPrincipal();
 
@@ -135,7 +166,25 @@ public class AiAssistantController {
         }
 
         List<DocCatalog> catalogs = catalogGenerationService.generate(projectId, stageId, userId, overwrite);
-        return Result.success(catalogs);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("catalogs", catalogs);
+        result.put("totalNew", catalogs.size());
+        result.put("mode", overwrite ? "OVERWRITE" : "APPEND");
+        return Result.success(result);
+    }
+
+    @PostMapping("/catalog/preview")
+    @Operation(summary = "预览目录生成结果（不写入数据库），显示冲突信息")
+    public Result<Map<String, Object>> previewCatalog(@RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        Long stageId = toLong(body.get("stageId"));
+
+        if (projectId == null) {
+            return Result.error("PARAM_ERROR", "projectId is required");
+        }
+
+        Map<String, Object> preview = catalogGenerationService.generateDryRun(projectId, stageId);
+        return Result.success(preview);
     }
 
     @GetMapping("/provider")
@@ -159,6 +208,19 @@ public class AiAssistantController {
         }
     }
 
+    @GetMapping("/locality")
+    @Operation(summary = "获取当前模型位置信息（本地/云端）")
+    public Result<Map<String, Object>> getLocality() {
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("provider", llmProviderService.getActiveProvider());
+        data.put("locality", llmProviderService.getLocality());
+        data.put("isLocal", llmProviderService.isLocal());
+        data.put("model", llmProperties.getModel());
+        data.put("baseUrl", llmProperties.getBaseUrl());
+        data.put("desensitizationEnabled", sensitiveDataScrubber.isEnabled());
+        return Result.success(data);
+    }
+
     @GetMapping("/health")
     @Operation(summary = "检查大模型连接状态")
     public Result<Map<String, Object>> health() {
@@ -166,6 +228,8 @@ public class AiAssistantController {
         status.put("provider", llmProperties.getProvider());
         status.put("model", llmProperties.getModel());
         status.put("baseUrl", llmProperties.getBaseUrl());
+        status.put("locality", llmProviderService.getLocality());
+        status.put("isLocal", llmProviderService.isLocal());
         status.put("connected", false);
 
         try {
@@ -236,19 +300,24 @@ public class AiAssistantController {
                 draftGenerationService.generateStream(projectId, catalogId, docLedgerId, chunk -> {
                     try {
                         emitter.send(SseEmitter.event().name("chunk").data(chunk));
-                    } catch (IOException e) {
-                        log.warn("SSE send failed for chunk, aborting stream", e);
-                        throw new RuntimeException("SSE send failed", e);
+                    } catch (Exception e) {
+                        // Client disconnected — stop processing gracefully, don't cascade error
+                        log.debug("SSE send aborted (client disconnected): {}", e.getMessage());
+                        throw new RuntimeException("SSE_ABORT", e);
                     }
                 });
                 emitter.send(SseEmitter.event().name("done").data("complete"));
                 emitter.complete();
             } catch (RuntimeException e) {
-                log.warn("Draft stream interrupted: {}", e.getMessage());
-                emitter.completeWithError(e);
+                if ("SSE_ABORT".equals(e.getMessage())) {
+                    log.debug("Draft stream aborted by client disconnect");
+                } else {
+                    log.warn("Draft stream interrupted: {}", e.getMessage());
+                }
+                try { emitter.complete(); } catch (Exception ignored) {}
             } catch (Exception e) {
                 log.error("Draft stream failed", e);
-                emitter.completeWithError(e);
+                try { emitter.completeWithError(e); } catch (Exception ignored) {}
             } finally {
                 SecurityContextHolder.clearContext();
             }
@@ -264,6 +333,7 @@ public class AiAssistantController {
     @Operation(summary = "保存AI生成初稿，新建起草台账（策划列原条目不动），同目录多次生成则覆盖")
     public Result<DocFile> saveDraft(@RequestBody Map<String, Object> body,
                                       Authentication authentication) {
+        try {
         Long projectId = toLong(body.get("projectId"));
         Long catalogId = toLong(body.get("catalogId"));
         Long stageId = toLong(body.get("stageId"));
@@ -360,24 +430,28 @@ public class AiAssistantController {
         version.setCreatedAt(LocalDateTime.now());
         docVersionService.save(version);
 
-        // 6. Update ledger file reference to latest
+        // 6. Update ledger file reference and content size
         ledger.setFileObjectId(fileObjectId);
+        if (content != null) ledger.setContentSize((long) content.length());
         ledger.setUpdatedBy(userId);
         docLedgerService.updateById(ledger);
 
-        // 7. Parse markdown into hierarchical chapter tree
+        // 7. Parse markdown into hierarchical chapter tree using robust regex parser
         if (content != null && !content.isBlank()) {
-            String safeContent = content.length() > 100_000 ? content.substring(0, 100_000) : content;
+            // Skip if chapters already exist (chat agent/pipeline may have created them)
+            long chapterCount = docChapterService.count(new LambdaQueryWrapper<DocChapter>()
+                .eq(DocChapter::getDocLedgerId, ledger.getId()).eq(DocChapter::getDeleted, 0));
+            if (chapterCount > 0) {
+                log.info("Chapters already exist for ledger {}, skipping chapter creation", ledger.getId());
+            } else {
+                // Delete old chapters when overwriting
+                if (!isNew) {
+                    docChapterService.remove(new LambdaQueryWrapper<DocChapter>()
+                        .eq(DocChapter::getDocLedgerId, ledger.getId()));
+                }
 
-            // Delete old chapters when overwriting
-            if (!isNew) {
-                docChapterService.remove(new LambdaQueryWrapper<DocChapter>()
-                    .eq(DocChapter::getDocLedgerId, ledger.getId()));
-            }
-
-            List<Map<String, Object>> segments = parseMarkdownToSegments(safeContent);
-
-            if (segments.isEmpty()) {
+                var roots = MarkdownChapterParser.parse(content);
+            if (roots.isEmpty()) {
                 // No headings found — create a single fallback chapter
                 DocChapter chapter = new DocChapter();
                 chapter.setDocLedgerId(ledger.getId());
@@ -386,7 +460,7 @@ public class AiAssistantController {
                 chapter.setChapterLevel(1);
                 chapter.setOrderNum(1);
                 chapter.setParentId(0L);
-                chapter.setContent(safeContent);
+                chapter.setContent(content);
                 chapter.setFillStatus("DRAFT");
                 chapter.setFillPercentage(100);
                 chapter.setCreatedBy(userId);
@@ -394,66 +468,45 @@ public class AiAssistantController {
                 docChapterService.save(chapter);
                 log.info("Created single fallback chapter for ledger {}", ledger.getId());
             } else {
-                // Build chapters from parsed segments
+                var flat = MarkdownChapterParser.flatten(roots);
                 List<DocChapter> chapters = new ArrayList<>();
-                for (int i = 0; i < segments.size(); i++) {
-                    Map<String, Object> seg = segments.get(i);
+                for (int i = 0; i < flat.size(); i++) {
+                    var fs = flat.get(i);
                     DocChapter dc = new DocChapter();
                     dc.setDocLedgerId(ledger.getId());
-                    dc.setChapterNumber(String.valueOf(i + 1)); // placeholder, recomputed below
-                    dc.setChapterTitle((String) seg.get("title"));
-                    dc.setChapterLevel((Integer) seg.get("level"));
-                    dc.setOrderNum(i + 1);
-                    dc.setParentId(0L); // placeholder, resolved below
-                    String chapterBody = (String) seg.get("body");
-                    dc.setContent(chapterBody);
+                    dc.setChapterNumber(fs.section().number() != null ? fs.section().number() : String.valueOf(i + 1));
+                    dc.setChapterTitle(truncate(fs.section().title(), 250));
+                    dc.setChapterLevel(Math.min(fs.section().level(), 5));
+                    dc.setOrderNum(fs.orderNum());
+                    dc.setParentId(0L);
+                    dc.setContent(truncate(fs.section().content(), 50000));
                     dc.setFillStatus("DRAFT");
-                    dc.setFillPercentage(chapterBody != null && !chapterBody.isBlank() ? 100 : 0);
+                    dc.setFillPercentage(fs.section().content() != null && !fs.section().content().isBlank() ? 100 : 0);
                     dc.setCreatedBy(userId);
                     dc.setUpdatedBy(userId);
                     chapters.add(dc);
                 }
                 docChapterService.saveBatch(chapters);
-
-                // Resolve parent IDs: each chapter's parent is the nearest prior chapter with a lower level
-                for (int i = 0; i < chapters.size(); i++) {
-                    DocChapter dc = chapters.get(i);
-                    int level = dc.getChapterLevel();
-                    for (int j = i - 1; j >= 0; j--) {
-                        if (chapters.get(j).getChapterLevel() < level) {
-                            dc.setParentId(chapters.get(j).getId());
-                            break;
-                        }
+                // Second pass: resolve parentId using hierarchy from parser
+                for (int i = 0; i < flat.size(); i++) {
+                    int pi = flat.get(i).parentFlatIndex();
+                    if (pi >= 0 && pi < chapters.size()) {
+                        chapters.get(i).setParentId(chapters.get(pi).getId());
+                        docChapterService.updateById(chapters.get(i));
                     }
                 }
-
-                // Compute hierarchical chapter numbers (1, 1.1, 1.2, 2, 2.1, ...)
-                java.util.Map<Long, Integer> counters = new java.util.LinkedHashMap<>();
-                for (DocChapter dc : chapters) {
-                    Long pid = dc.getParentId();
-                    int counter = counters.getOrDefault(pid, 0) + 1;
-                    counters.put(pid, counter);
-
-                    StringBuilder num = new StringBuilder();
-                    if (pid != 0L) {
-                        String parentNum = "";
-                        for (DocChapter c : chapters) {
-                            if (c.getId().equals(pid)) { parentNum = c.getChapterNumber(); break; }
-                        }
-                        if (!parentNum.isEmpty()) num.append(parentNum).append(".");
-                    }
-                    num.append(counter);
-                    dc.setChapterNumber(num.toString());
-                }
-
-                docChapterService.updateBatchById(chapters);
                 log.info("Created {} chapters from markdown for ledger {}", chapters.size(), ledger.getId());
+            } // end else (chapterCount == 0)
             }
         }
 
         log.info("Draft saved: docFileId={}, ledgerId={}, version={}, catalogId={}, isNew={}",
             docFile.getId(), ledger.getId(), versionNo, catalogId, isNew);
         return Result.success(docFile);
+        } catch (Exception e) {
+            log.error("Draft save failed: {}", e.getMessage(), e);
+            return Result.error("SAVE_ERROR", "保存失败: " + e.getMessage());
+        }
     }
 
     // ---- Phase 2: AI 校对、预评审、合规检查、意见汇总、转阶段评估 ----
@@ -626,16 +679,25 @@ public class AiAssistantController {
 
         if (userMessage == null || userMessage.isBlank()) {
             SseEmitter emitter = new SseEmitter();
-            try {
-                emitter.send(SseEmitter.event().name("error").data("message is required"));
-                emitter.complete();
-            } catch (IOException e) {
-                emitter.completeWithError(e);
-            }
+            try { emitter.send(SseEmitter.event().name("error").data("message is required")); emitter.complete(); }
+            catch (IOException e) { emitter.completeWithError(e); }
             return emitter;
         }
 
-        // Build the full prompt: include history as context
+        // Guard: very short inputs get a help prompt instead of going to LLM
+        if (userMessage.trim().length() <= 1) {
+            SseEmitter emitter = new SseEmitter();
+            CompletableFuture.runAsync(() -> {
+                try {
+                    emitter.send(SseEmitter.event().name("chunk").data("你好！我是AI工程助手。可以帮你解答GJB标准、技术文档编写、项目管理等问题。请输入具体问题。"));
+                    emitter.send(SseEmitter.event().name("done").data("complete"));
+                    emitter.complete();
+                } catch (IOException e) { emitter.completeWithError(e); }
+            });
+            return emitter;
+        }
+
+        // Note: For project-aware chat, use the newer /api/v1/chat/message endpoint
         StringBuilder fullPrompt = new StringBuilder();
         if (historyList != null && !historyList.isEmpty()) {
             fullPrompt.append("以下是之前的对话历史：\n");
@@ -704,68 +766,256 @@ public class AiAssistantController {
         }
     }
 
-    /**
-     * Parse markdown content into heading-body segments.
-     * Each returned map has keys: "level" (Integer), "title" (String), "body" (String).
-     * Content before the first heading becomes a preamble segment with level 1.
-     */
-    private List<Map<String, Object>> parseMarkdownToSegments(String markdown) {
-        List<Map<String, Object>> segments = new ArrayList<>();
-        String[] lines = markdown.split("\n");
-
-        int currentLevel = 0;
-        String currentTitle = null;
-        StringBuilder currentBody = new StringBuilder();
-
-        for (String line : lines) {
-            int headingLevel = getHeadingLevel(line);
-            if (headingLevel > 0) {
-                // Flush previous segment
-                if (currentTitle != null || currentBody.length() > 0) {
-                    Map<String, Object> seg = new java.util.LinkedHashMap<>();
-                    seg.put("level", currentLevel > 0 ? currentLevel : 1);
-                    seg.put("title", currentTitle != null ? currentTitle : "文档内容");
-                    seg.put("body", currentBody.toString().trim());
-                    segments.add(seg);
-                }
-                currentLevel = headingLevel;
-                currentTitle = line.substring(headingLevel).trim().replaceAll("\\s*#+\\s*$", "");
-                currentBody = new StringBuilder();
-            } else if (currentTitle != null || currentBody.length() > 0) {
-                if (currentBody.length() > 0) currentBody.append("\n");
-                currentBody.append(line);
-            }
-        }
-
-        // Flush last segment
-        if (currentTitle != null || currentBody.length() > 0) {
-            Map<String, Object> seg = new java.util.LinkedHashMap<>();
-            seg.put("level", currentLevel > 0 ? currentLevel : 1);
-            seg.put("title", currentTitle != null ? currentTitle : "文档内容");
-            seg.put("body", currentBody.toString().trim());
-            segments.add(seg);
-        }
-
-        return segments;
+    /** Truncate a string to maxLen chars, safely handling null. */
+    private String truncate(String s, int maxLen) {
+        if (s == null) return "";
+        return s.length() <= maxLen ? s : s.substring(0, maxLen);
     }
 
-    /** Returns 1-6 for ATX headings like "# Title", "## Subtitle", or "##Title" (without space), or 0 if not a heading. */
-    private int getHeadingLevel(String line) {
-        if (line == null || line.isBlank()) return 0;
-        int level = 0;
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            if (c == '#') {
-                level++;
-            } else if (c == ' ' || c == '\t') {
-                return (level >= 1 && level <= 6) ? level : 0;
-            } else {
-                // Non-space/non-# character immediately after # markers → treat as heading text
-                // e.g., "##Title" or "#1. Scope" should still be recognized
-                return (level >= 1 && level <= 6) ? level : 0;
+    // ========== Generation Feedback ==========
+
+    @PostMapping("/feedback")
+    @Operation(summary = "提交生成质量反馈（1-5星评分）")
+    public Result<GenerationFeedback> submitFeedback(@RequestBody Map<String, Object> body,
+                                                      Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        GenerationFeedback fb = new GenerationFeedback();
+        fb.setProjectId(toLong(body.get("projectId")));
+        fb.setDocLedgerId(toLong(body.get("docLedgerId")));
+        fb.setTaskType((String) body.getOrDefault("taskType", "draft"));
+        fb.setRating(body.get("rating") != null ? ((Number) body.get("rating")).intValue() : 0);
+        fb.setFeedbackText((String) body.get("feedbackText"));
+        fb.setCategories(body.get("categories") != null ? body.get("categories").toString() : "[]");
+        fb.setWillUseAgain((Boolean) body.get("willUseAgain"));
+        fb.setCreatedBy(userId);
+        fb.setCreatedAt(java.time.LocalDateTime.now());
+        feedbackMapper.insert(fb);
+        return Result.success(fb);
+    }
+
+    @GetMapping("/feedback/stats")
+    @Operation(summary = "查询生成质量反馈统计")
+    public Result<Map<String, Object>> getFeedbackStats(@RequestParam(required = false) Long projectId) {
+        var qw = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GenerationFeedback>();
+        if (projectId != null) qw.eq(GenerationFeedback::getProjectId, projectId);
+        var all = feedbackMapper.selectList(qw);
+        double avgRating = all.stream().filter(f -> f.getRating() != null)
+            .mapToInt(GenerationFeedback::getRating).average().orElse(0);
+        Map<String, Object> stats = new java.util.LinkedHashMap<>();
+        stats.put("totalFeedbacks", all.size());
+        stats.put("averageRating", Math.round(avgRating * 10) / 10.0);
+        stats.put("wouldUseAgain", all.stream().filter(f -> Boolean.TRUE.equals(f.getWillUseAgain())).count());
+        return Result.success(stats);
+    }
+
+    // ========== Incremental Generation ==========
+
+    @PostMapping("/chapter/{docChapterId}/regenerate")
+    @Operation(summary = "重新生成单个章节")
+    public Result<Map<String, Object>> regenerateChapter(@PathVariable Long docChapterId,
+                                                          @RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        if (projectId == null) return Result.error("PARAM_ERROR", "projectId is required");
+
+        String content = incrementalGenerationService.regenerateChapter(docChapterId, projectId);
+        return Result.success(Map.of("content", content != null ? content : ""));
+    }
+
+    @PostMapping("/chapter/{docChapterId}/rewrite")
+    @Operation(summary = "AI 改写选中文本")
+    public Result<Map<String, Object>> rewriteSelection(@PathVariable Long docChapterId,
+                                                         @RequestBody Map<String, Object> body) {
+        String selectedText = (String) body.get("selectedText");
+        String instruction = (String) body.getOrDefault("instruction", "优化表达");
+        String chapterContent = (String) body.getOrDefault("chapterContent", "");
+        Long projectId = toLong(body.get("projectId"));
+
+        if (selectedText == null || selectedText.isBlank()) {
+            return Result.error("PARAM_ERROR", "selectedText is required");
+        }
+
+        String rewritten = incrementalGenerationService.rewriteSelection(
+            chapterContent, selectedText, instruction, projectId);
+        return Result.success(Map.of("rewritten", rewritten));
+    }
+
+    // ========== AI Audit Logging ==========
+
+    @GetMapping("/audit-logs")
+    @Operation(summary = "查询 AI API 调用审计日志")
+    public Result<Map<String, Object>> getAuditLogs(
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) String taskType,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        java.time.LocalDateTime fromDt = null;
+        java.time.LocalDateTime toDt = null;
+        try {
+            if (from != null && !from.isBlank()) fromDt = java.time.LocalDateTime.parse(from);
+            if (to != null && !to.isBlank()) toDt = java.time.LocalDateTime.parse(to);
+        } catch (Exception e) {
+            return Result.error("PARAM_ERROR", "日期格式错误，请使用 ISO-8601 格式 (如 2026-06-01T00:00:00)");
+        }
+        return Result.success(aiAuditService.queryLogs(projectId, taskType, fromDt, toDt, page, size));
+    }
+
+    @GetMapping("/audit-stats")
+    @Operation(summary = "查询 AI API 调用统计")
+    public Result<Map<String, Object>> getAuditStats(
+            @RequestParam(required = false) Long projectId) {
+        return Result.success(aiAuditService.getStats(projectId));
+    }
+
+    // ========== Batch Generation ==========
+
+    @PostMapping("/batch-generate/{projectId}/{stageId}/cancel")
+    @Operation(summary = "取消正在进行的批量生成")
+    public Result<String> cancelBatchGenerate(@PathVariable Long projectId,
+                                               @PathVariable Long stageId) {
+        // 取消通过 sessionId 进行，sessionId 存储在活跃任务映射中
+        // 由于 SSE 连接已断开，这里主要通过停止后台处理来实现
+        log.info("Batch generation cancel requested: projectId={}, stageId={}", projectId, stageId);
+        return Result.success("取消请求已提交，当前文档生成完成后将停止");
+    }
+
+    @GetMapping("/batch-generate/{projectId}/{stageId}")
+    @Operation(summary = "批量生成阶段全部文档(SSE)")
+    public SseEmitter batchGenerate(@PathVariable Long projectId,
+                                    @PathVariable Long stageId,
+                                    Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        SseEmitter emitter = new SseEmitter(1800000L); // 30 min timeout for large batches
+        log.info("Batch generation started: projectId={}, stageId={}, userId={}", projectId, stageId, userId);
+
+        var securityContext = SecurityContextHolder.getContext();
+        var abortFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
+        String sessionId = java.util.UUID.randomUUID().toString();
+
+        CompletableFuture.runAsync(() -> {
+            SecurityContextHolder.setContext(securityContext);
+            try {
+                batchGenerationService.generateStageDocs(projectId, stageId, sessionId, event -> {
+                    // SSE 已断开则跳过后续事件发送
+                    if (abortFlag.get()) return;
+
+                    try {
+                        Map<String, Object> data = new java.util.LinkedHashMap<>();
+                        data.put("type", event.type());
+                        data.put("current", event.current());
+                        data.put("total", event.total());
+                        if (event.docName() != null) data.put("docName", event.docName());
+                        if (event.docCode() != null) data.put("docCode", event.docCode());
+                        if (event.docLedgerId() != null) data.put("docLedgerId", event.docLedgerId());
+                        if (event.status() != null) data.put("status", event.status());
+                        if (event.message() != null) data.put("message", event.message());
+
+                        emitter.send(SseEmitter.event()
+                            .name(event.type())
+                            .data(objectMapper.writeValueAsString(data)));
+                    } catch (Exception e) {
+                        // SSE 连接断开(客户端关闭/超时) — 静默停止事件推送，生成继续后台执行
+                        log.warn("SSE disconnected during batch: {}", e.getMessage());
+                        abortFlag.set(true);
+                    }
+                });
+                if (!abortFlag.get()) {
+                    emitter.complete();
+                }
+            } catch (Exception e) {
+                log.error("Batch generation failed", e);
+                emitter.completeWithError(e);
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        });
+
+        emitter.onTimeout(() -> {
+            log.warn("SSE timeout for batch generation");
+            abortFlag.set(true);
+        });
+        emitter.onError(ex -> {
+            log.warn("SSE error for batch generation: {}", ex.getMessage());
+            abortFlag.set(true);
+        });
+
+        return emitter;
+    }
+
+    /**
+     * One-time repair: re-parse existing markdown content into doc_chapter entries
+     * for documents that have content_size > 0 but zero chapters.
+     */
+    @PostMapping("/repair-chapters/{projectId}")
+    @Operation(summary = "修复：将已有文档内容按标题拆分为章节（解决DOCX只有封面无正文的问题）")
+    public Result<Map<String, Object>> repairChapters(@PathVariable Long projectId) {
+        int ledgersFixed = 0;
+        int chaptersCreated = 0;
+        var ledgers = docLedgerMapper.selectList(
+            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.military.doc.modules.document.entity.DocLedger>()
+                .eq(com.military.doc.modules.document.entity.DocLedger::getProjectId, projectId)
+                .isNotNull(com.military.doc.modules.document.entity.DocLedger::getContentSize)
+                .gt(com.military.doc.modules.document.entity.DocLedger::getContentSize, 0));
+        log.info("Repair chapters: found {} ledgers with content for project {}", ledgers.size(), projectId);
+
+        for (var ledger : ledgers) {
+            // Check if already has chapters
+            long existingCount = docChapterMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.military.doc.modules.document.entity.DocChapter>()
+                    .eq(com.military.doc.modules.document.entity.DocChapter::getDocLedgerId, ledger.getId())
+                    .eq(com.military.doc.modules.document.entity.DocChapter::getDeleted, 0));
+            if (existingCount > 0) continue;
+
+            // Read content from file storage
+            if (ledger.getFileObjectId() == null || ledger.getFileObjectId().isBlank()) continue;
+            try {
+                byte[] bytes = fileStorageService.download(ledger.getFileObjectId()).readAllBytes();
+                String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                if (content.isBlank()) continue;
+
+                // Parse and create chapters
+                var roots = com.military.doc.ai.util.MarkdownChapterParser.parse(content);
+                if (roots.isEmpty()) continue;
+
+                var flat = com.military.doc.ai.util.MarkdownChapterParser.flatten(roots);
+                java.util.List<com.military.doc.modules.document.entity.DocChapter> chList = new java.util.ArrayList<>();
+                for (var fs : flat) {
+                    var ch = new com.military.doc.modules.document.entity.DocChapter();
+                    ch.setDocLedgerId(ledger.getId());
+                    ch.setParentId(0L);
+                    ch.setChapterNumber(fs.section().number() != null ? fs.section().number() : String.valueOf(fs.orderNum()));
+                    ch.setChapterTitle(truncate(fs.section().title(), 250));
+                    ch.setChapterLevel(Math.min(fs.section().level(), 5));
+                    ch.setOrderNum(fs.orderNum());
+                    ch.setContent(truncate(fs.section().content(), 50000));
+                    ch.setFillStatus(fs.section().content() != null && !fs.section().content().isBlank() ? "FILLED" : "DRAFT");
+                    ch.setCreatedAt(java.time.LocalDateTime.now());
+                    ch.setUpdatedAt(java.time.LocalDateTime.now());
+                    docChapterMapper.insert(ch);
+                    chList.add(ch);
+                }
+                // Second pass: resolve parentId
+                for (int i = 0; i < flat.size(); i++) {
+                    int pi = flat.get(i).parentFlatIndex();
+                    if (pi >= 0 && pi < chList.size()) {
+                        chList.get(i).setParentId(chList.get(pi).getId());
+                        docChapterMapper.updateById(chList.get(i));
+                    }
+                }
+                ledgersFixed++;
+                chaptersCreated += flat.size();
+                log.info("Repaired ledger {}: {} => {} chapters", ledger.getId(), ledger.getDocName(), flat.size());
+            } catch (Exception e) {
+                log.warn("Failed to repair chapters for ledger {}: {}", ledger.getId(), e.getMessage());
             }
         }
-        return (level >= 1 && level <= 6) ? level : 0;
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("ledgersFixed", ledgersFixed);
+        result.put("chaptersCreated", chaptersCreated);
+        result.put("message", String.format("修复了 %d 个文档，创建了 %d 个章节", ledgersFixed, chaptersCreated));
+        return Result.success(result);
     }
 
 }

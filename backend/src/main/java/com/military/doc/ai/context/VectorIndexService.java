@@ -330,24 +330,23 @@ public class VectorIndexService {
 
     private String buildClauseText(StandardClause c) {
         StringBuilder sb = new StringBuilder();
-        if (c.getClauseNumber() != null) sb.append(c.getClauseNumber()).append(" ");
-        if (c.getClauseTitle() != null) sb.append(c.getClauseTitle()).append(" ");
+        sb.append("[标准] ").append(c.getStandardId() != null ? "" : "").append("\n");
+        if (c.getClauseNumber() != null) sb.append("[条款] ").append(c.getClauseNumber()).append("\n");
+        if (c.getClauseTitle() != null) sb.append("[标题] ").append(c.getClauseTitle()).append("\n");
+        if (c.getKeywords() != null) sb.append("[关键词] ").append(c.getKeywords()).append("\n");
         if (c.getClauseContent() != null) {
-            String content = c.getClauseContent();
-            if (content.length() > 500) content = content.substring(0, 500);
-            sb.append(content);
+            sb.append("[内容] ").append(c.getClauseContent()).append("\n");
         }
         return sb.toString().trim();
     }
 
     private String buildKbText(KnowledgeBase kb) {
         StringBuilder sb = new StringBuilder();
-        if (kb.getTitle() != null) sb.append(kb.getTitle()).append(" ");
-        if (kb.getCategory() != null) sb.append(kb.getCategory()).append(" ");
+        sb.append("[分类] ").append(kb.getCategory() != null ? kb.getCategory() : "").append("\n");
+        if (kb.getTitle() != null) sb.append("[标题] ").append(kb.getTitle()).append("\n");
+        if (kb.getTags() != null) sb.append("[标签] ").append(kb.getTags()).append("\n");
         if (kb.getContent() != null) {
-            String content = kb.getContent();
-            if (content.length() > 500) content = content.substring(0, 500);
-            sb.append(content);
+            sb.append("[内容] ").append(kb.getContent()).append("\n");
         }
         return sb.toString().trim();
     }

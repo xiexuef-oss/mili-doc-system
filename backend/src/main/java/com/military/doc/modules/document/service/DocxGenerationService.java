@@ -29,6 +29,8 @@ public class DocxGenerationService {
     @Autowired private DocTemplateV2Mapper templateV2Mapper;
     @Autowired private DocTemplateChapterMapper templateChapterMapper;
     @Autowired private ProjectMasterDataMapper masterDataMapper;
+    @Autowired private com.military.doc.modules.document.mapper.ProjectDocChecklistMapper checklistMapper;
+    @Autowired private com.military.doc.modules.document.mapper.StageDocChecklistTemplateMapper stageChecklistTplMapper;
     @Autowired private FileStorageService fileStorageService;
     @Autowired private ObjectMapper objectMapper;
 
@@ -36,51 +38,63 @@ public class DocxGenerationService {
         DocLedger ledger = docLedgerMapper.selectById(docLedgerId);
         if (ledger == null) throw new RuntimeException("文档台账条目不存在: " + docLedgerId);
 
-        List<DocChapter> chapters = docChapterMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocChapter>()
-                        .eq(DocChapter::getDocLedgerId, docLedgerId)
-                        .orderByAsc(DocChapter::getOrderNum));
+        // === Find template via checklist chain ===
+        DocTemplateV2 template = findTemplate(ledger);
+        List<DocTemplateChapter> templateChapters = template != null
+            ? templateChapterMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocTemplateChapter>()
+                .eq(DocTemplateChapter::getTemplateId, template.getId())
+                .orderByAsc(DocTemplateChapter::getOrderNum))
+            : List.of();
 
+        // === Load AI-generated content ===
+        Map<String, String> contentByTitle = new java.util.LinkedHashMap<>();
+        List<DocChapter> aiChapters = docChapterMapper.selectList(
+            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocChapter>()
+                .eq(DocChapter::getDocLedgerId, docLedgerId)
+                .eq(DocChapter::getDeleted, 0)
+                .orderByAsc(DocChapter::getOrderNum));
+        for (DocChapter ac : aiChapters) {
+            if (ac.getChapterTitle() != null && ac.getContent() != null && !ac.getContent().isBlank()) {
+                contentByTitle.put(ac.getChapterTitle(), ac.getContent());
+            }
+        }
+
+        // === Project info for cover ===
         ProjectMasterData pmd = null;
         if (ledger.getProjectId() != null) {
             pmd = masterDataMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ProjectMasterData>()
-                            .eq(ProjectMasterData::getProjectId, ledger.getProjectId()));
-        }
-
-        DocTemplateV2 template = null;
-        if (!chapters.isEmpty() && chapters.get(0).getTemplateChapterId() != null) {
-            DocTemplateChapter tc = templateChapterMapper.selectById(chapters.get(0).getTemplateChapterId());
-            if (tc != null) {
-                template = templateV2Mapper.selectById(tc.getTemplateId());
-            }
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ProjectMasterData>()
+                    .eq(ProjectMasterData::getProjectId, ledger.getProjectId()));
         }
 
         try (XWPFDocument doc = new XWPFDocument()) {
-            // A4 size is default in XWPFDocument
-
             if (includeCover) {
                 String docTitle = template != null ? template.getTemplateName() : ledger.getDocName();
-                String projectName = ledger.getDocName();
-                GjbStyleHelper.addCoverPage(doc, docTitle, projectName,
-                        ledger.getSecurityLevel(), null);
+                GjbStyleHelper.addCoverPage(doc, docTitle, ledger.getDocName(),
+                    ledger.getSecurityLevel(), null);
             }
 
-            // Build chapter tree
-            Map<Long, List<DocChapter>> childrenMap = new HashMap<>();
-            for (DocChapter dc : chapters) {
-                childrenMap.computeIfAbsent(dc.getParentId(), k -> new ArrayList<>()).add(dc);
-            }
-            List<DocChapter> rootChapters = childrenMap.getOrDefault(0L, new ArrayList<>());
-            rootChapters.sort(Comparator.comparing(DocChapter::getOrderNum));
+            // Body section: GJB page layout
+            GjbStyleHelper.setupBodySection(doc);
 
-            int[] chapterCount = {0};
-            int[] tableCount = {0};
-            int[] figureCount = {0};
-
-            for (DocChapter rootCh : rootChapters) {
-                chapterCount[0]++;
-                writeChapter(doc, rootCh, childrenMap, 1, chapterCount, tableCount, figureCount, showHighlights);
+            // If AI chapters exist with content, render them directly (avoids duplicate headings)
+            boolean hasAiContent = aiChapters.stream().anyMatch(c -> c.getContent() != null && !c.getContent().isBlank());
+            if (!hasAiContent && !templateChapters.isEmpty()) {
+                writeTemplateChapters(doc, templateChapters, 0, contentByTitle,
+                    new int[]{0}, showHighlights);
+            } else {
+                // Fallback: render AI chapters directly (legacy mode)
+                Map<Long, List<DocChapter>> childrenMap = new HashMap<>();
+                for (DocChapter dc : aiChapters) {
+                    childrenMap.computeIfAbsent(dc.getParentId(), k -> new ArrayList<>()).add(dc);
+                }
+                List<DocChapter> rootChapters = childrenMap.getOrDefault(0L, new ArrayList<>());
+                rootChapters.sort(Comparator.comparing(DocChapter::getOrderNum));
+                int[] chapterCount = {0};
+                for (DocChapter rootCh : rootChapters) {
+                    chapterCount[0]++;
+                    writeChapter(doc, rootCh, childrenMap, 1, chapterCount, new int[]{0}, new int[]{0}, showHighlights);
+                }
             }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -88,6 +102,77 @@ public class DocxGenerationService {
             return baos.toByteArray();
         } catch (Exception e) {
             throw new RuntimeException("生成Word文档失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Find the document template via chain:
+     * doc_ledger.checklistItemId → project_doc_checklist.template_id
+     * → stage_doc_checklist_template.template_id → doc_template_v2
+     */
+    private DocTemplateV2 findTemplate(DocLedger ledger) {
+        if (ledger.getChecklistItemId() == null) return null;
+        try {
+            // Step 1: project_doc_checklist
+            com.military.doc.modules.document.entity.ProjectDocChecklist pdc = checklistMapper.selectById(ledger.getChecklistItemId());
+            if (pdc == null || pdc.getTemplateId() == null) return null;
+            // Step 2: stage_doc_checklist_template
+            com.military.doc.modules.document.entity.StageDocChecklistTemplate sct = stageChecklistTplMapper.selectById(pdc.getTemplateId());
+            if (sct == null || sct.getTemplateId() == null) return null;
+            // Step 3: doc_template_v2
+            return templateV2Mapper.selectById(sct.getTemplateId());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Render template-driven chapters, filling AI content where available.
+     */
+    private void writeTemplateChapters(XWPFDocument doc, List<DocTemplateChapter> tplChapters,
+                                        int parentId, Map<String, String> contentByTitle,
+                                        int[] counter, boolean showHighlights) {
+        List<DocTemplateChapter> children = new ArrayList<>();
+        for (DocTemplateChapter tc : tplChapters) {
+            if ((tc.getParentId() == null ? 0L : tc.getParentId()) == parentId) {
+                children.add(tc);
+            }
+        }
+        children.sort(Comparator.comparing(c -> c.getOrderNum() != null ? c.getOrderNum() : 0));
+
+        for (DocTemplateChapter tc : children) {
+            counter[0]++;
+            int level = Math.min(tc.getChapterLevel() != null ? tc.getChapterLevel() : 1, 5);
+
+            // Build heading from template
+            String heading = (tc.getChapterNumber() != null ? tc.getChapterNumber() : String.valueOf(counter[0]))
+                + " " + (tc.getChapterTitle() != null ? tc.getChapterTitle() : "");
+            GjbStyleHelper.addHeading(doc, heading, level);
+
+            // Find matching AI content by title
+            String matchedContent = null;
+            if (tc.getChapterTitle() != null) {
+                for (Map.Entry<String, String> e : contentByTitle.entrySet()) {
+                    if (e.getKey().contains(tc.getChapterTitle())
+                        || tc.getChapterTitle().contains(e.getKey())) {
+                        matchedContent = e.getValue();
+                        break;
+                    }
+                }
+            }
+
+            if (matchedContent != null && !matchedContent.isBlank()) {
+                GjbStyleHelper.writeMarkdownContent(doc, matchedContent, level, true);
+            } else if (showHighlights && Boolean.TRUE.equals(tc.getIsRequired())) {
+                String title = tc.getChapterTitle() != null ? tc.getChapterTitle() : "";
+                if (title.length() < 50) {
+                    GjbStyleHelper.addHighlightedParagraph(doc,
+                        "【必填项缺失】" + title + " - 此章节为GJB要求必填内容，请补充", "RED");
+                }
+            }
+
+            // Render sub-chapters
+            writeTemplateChapters(doc, tplChapters, tc.getId().intValue(), contentByTitle, counter, showHighlights);
         }
     }
 
@@ -104,7 +189,9 @@ public class DocxGenerationService {
         String chapterNum = chapter.getChapterNumber();
         if (chapterNum == null) chapterNum = String.valueOf(chapterCount[0]);
 
-        GjbStyleHelper.addHeading(doc, chapterNum + " " + chapter.getChapterTitle(), level);
+        // Use chapter_level from DB if available, otherwise use tree depth
+        int headingLevel = chapter.getChapterLevel() != null ? Math.min(chapter.getChapterLevel(), 5) : level;
+        GjbStyleHelper.addHeading(doc, chapterNum + " " + chapter.getChapterTitle(), headingLevel);
 
         if (chapter.getContent() != null && !chapter.getContent().isBlank()) {
             String content = chapter.getContent();
@@ -116,14 +203,16 @@ public class DocxGenerationService {
             if (highlightType != null) {
                 GjbStyleHelper.addHighlightedParagraph(doc, content, highlightType);
             } else {
-                GjbStyleHelper.writeMarkdownContent(doc, content, level);
+                // skipHeadings=true: titles already rendered by addHeading()
+                GjbStyleHelper.writeMarkdownContent(doc, content, level, true);
             }
         } else if (showHighlights && chapter.getFillStatus() != null && !"FILLED".equals(chapter.getFillStatus())) {
-            String msg = "【缺项】此章节内容未填写";
-            if ("REQUIRED".equals(chapter.getFillStatus()) || true) {
-                msg = "【必填项缺失】" + chapter.getChapterTitle() + " - 此章节为GJB要求必填内容，请补充";
+            // Skip RED marker if title is long — AI may have put body content in the heading line
+            String title = chapter.getChapterTitle();
+            if (title == null || title.length() < 50) {
+                String msg = "【必填项缺失】" + title + " - 此章节为GJB要求必填内容，请补充";
+                GjbStyleHelper.addHighlightedParagraph(doc, msg, "RED");
             }
-            GjbStyleHelper.addHighlightedParagraph(doc, msg, "RED");
         }
 
         // Write sub-chapters

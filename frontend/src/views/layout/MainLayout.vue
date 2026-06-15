@@ -56,6 +56,10 @@
             <el-icon><Monitor /></el-icon>
             <span>向量索引</span>
           </el-menu-item>
+          <el-menu-item index="/ai-audit-logs">
+            <el-icon><List /></el-icon>
+            <span>AI审计日志</span>
+          </el-menu-item>
         </el-sub-menu>
       </el-menu>
       <div class="sidebar-footer">
@@ -66,6 +70,9 @@
     <el-container>
       <el-header class="header">
         <h3>{{ $route.meta.title || '军工项目文档策划与编制一体机' }}</h3>
+        <div class="header-right">
+          <LocalityBadge />
+        </div>
       </el-header>
       <el-main class="main">
         <router-view />
@@ -78,6 +85,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getUser, removeToken, isAdmin } from '@/utils/auth'
+import LocalityBadge from '@/components/LocalityBadge.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -94,6 +102,7 @@ const activeMenu = computed(() => {
   if (path.startsWith('/dicts')) return '/dicts'
   if (path.startsWith('/permissions')) return '/permissions'
   if (path.startsWith('/ai-training')) return '/ai-training'
+  if (path.startsWith('/ai-audit-logs')) return '/ai-audit-logs'
   return '/projects'
 })
 
@@ -137,6 +146,7 @@ function handleLogout() {
   padding: 0 24px;
 }
 .header h3 { font-size: 16px; font-weight: 500; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .main {
   background: #f0f2f5;
   padding: 24px;

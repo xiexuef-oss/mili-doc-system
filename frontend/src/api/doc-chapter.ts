@@ -33,6 +33,10 @@ export function getCompletionSummary(docLedgerId: number) {
   return api.get(`/doc-chapters/ledger/${docLedgerId}/summary`)
 }
 
+export function getCompletionSummaryBatch(docLedgerIds: number[]) {
+  return api.post('/doc-chapters/ledger/summary/batch', { docLedgerIds })
+}
+
 export function getChapter(id: number) {
   return api.get(`/doc-chapters/${id}`)
 }

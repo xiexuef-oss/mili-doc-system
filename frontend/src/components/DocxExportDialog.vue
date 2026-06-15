@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="导出 Word 文档" width="480px" @closed="reset">
+  <el-dialog v-model="visible" title="导出 Word 文档" width="480px" @closed="handleClosed">
     <el-form label-width="110px">
       <el-form-item label="包含封面页">
         <el-switch v-model="options.includeCover" />
@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Upload } from '@element-plus/icons-vue'
 import { generateDocx, generateAndUpload } from '@/api/docx'
@@ -46,15 +46,26 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void
   (e: 'done'): void
+  (e: 'closed'): void
 }>()
 
 const visible = ref(props.modelValue)
 const generating = ref(false)
 const options = reactive({ includeCover: true, showHighlights: true })
 
+// 关键修复: 监听 modelValue 变化，否则关闭后再打开时 visible 不会同步为 true
+watch(() => props.modelValue, (val) => {
+  visible.value = val
+})
+
 function reset() {
   options.includeCover = true
   options.showHighlights = true
+}
+
+function handleClosed() {
+  reset()
+  emit('closed')
 }
 
 async function handleGenerateDownload() {
@@ -67,7 +78,10 @@ async function handleGenerateDownload() {
     a.href = url
 
     const disposition = res.headers?.['content-disposition']
-    let filename = `document_${props.docLedgerId}.docx`
+    // 优先用文档名称，回退到服务端 Content-Disposition，最后用数字 ID
+    let filename = props.docName
+      ? `${props.docName}.docx`
+      : `document_${props.docLedgerId}.docx`
     if (disposition) {
       const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]*)/i)
       if (match) {

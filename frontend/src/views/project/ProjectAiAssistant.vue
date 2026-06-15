@@ -29,9 +29,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="生成选项">
-          <el-checkbox v-model="overwrite">覆盖已有目录条目</el-checkbox>
+          <el-checkbox v-model="overwrite">覆盖已有目录条目（默认追加，勾选后需二次确认）</el-checkbox>
         </el-form-item>
         <el-form-item>
+          <el-button
+            :loading="previewing"
+            :disabled="!healthOk"
+            @click="handlePreviewCatalog"
+          >
+            <el-icon><View /></el-icon>
+            预览
+          </el-button>
           <el-button
             type="primary"
             :loading="generating"
@@ -161,23 +169,73 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 预览弹窗 -->
+    <el-dialog v-model="showPreviewDialog" title="目录生成预览" width="700px">
+      <div v-if="previewData">
+        <el-descriptions :column="3" border>
+          <el-descriptions-item label="AI 生成">{{ previewData.totalGenerated }} 条</el-descriptions-item>
+          <el-descriptions-item label="新增">{{ previewData.newCount }} 条</el-descriptions-item>
+          <el-descriptions-item label="冲突(跳过)">{{ previewData.conflictCount }} 条</el-descriptions-item>
+        </el-descriptions>
+        <div v-if="previewData.newItems?.length" style="margin-top: 16px">
+          <h4>将新增的目录项：</h4>
+          <el-table :data="previewData.newItems" size="small" max-height="300">
+            <el-table-column prop="docCode" label="文档编号" width="150" />
+            <el-table-column prop="docName" label="文档名称" />
+            <el-table-column prop="docType" label="类型" width="120" />
+          </el-table>
+        </div>
+        <div v-if="previewData.conflictItems?.length" style="margin-top: 16px">
+          <h4 style="color: #e6a23c">将跳过的重复条目：</h4>
+          <el-table :data="previewData.conflictItems" size="small" max-height="200">
+            <el-table-column prop="docCode" label="文档编号" width="150" />
+            <el-table-column prop="docName" label="文档名称" />
+          </el-table>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showPreviewDialog = false">关闭</el-button>
+        <el-button type="primary" @click="showPreviewDialog = false; handleGenerateCatalog()">
+          确认生成
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 覆盖确认弹窗 -->
+    <el-dialog v-model="showOverwriteConfirm" title="确认覆盖" width="450px">
+      <el-alert type="warning" :closable="false" show-icon>
+        <template #title>
+          覆盖模式将删除当前项目/阶段下所有已有目录条目，并重新生成。
+        </template>
+        此操作不可撤销！建议先使用"预览"功能查看将生成的内容。
+      </el-alert>
+      <template #footer>
+        <el-button @click="showOverwriteConfirm = false">取消</el-button>
+        <el-button type="danger" @click="handleGenerateCatalog()">
+          确认覆盖
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { MagicStick, EditPen, FolderAdd, Loading } from '@element-plus/icons-vue'
+import { MagicStick, EditPen, FolderAdd, Loading, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getProject, type ProjectItem } from '@/api/project'
 import { getProjectStages } from '@/api/project-stage'
 import { getDocCatalogsByProject, type DocCatalogItem } from '@/api/doc-catalog'
 import {
   generateCatalog,
+  previewCatalog,
   checkAiHealth,
   streamDraft,
   saveDraft,
-  type DocCatalog
+  type DocCatalog,
+  type CatalogPreviewResult
 } from '@/api/ai'
 
 const route = useRoute()
@@ -189,6 +247,10 @@ const stageId = ref<number | undefined>()
 const overwrite = ref(false)
 const generating = ref(false)
 const saving = ref(false)
+const previewing = ref(false)
+const previewData = ref<CatalogPreviewResult | null>(null)
+const showPreviewDialog = ref(false)
+const showOverwriteConfirm = ref(false)
 const healthOk = ref(false)
 const catalogResult = ref<DocCatalog[]>([])
 
@@ -265,7 +327,30 @@ async function checkHealth() {
   }
 }
 
+async function handlePreviewCatalog() {
+  previewing.value = true
+  try {
+    const res = await previewCatalog({
+      projectId: projectId.value,
+      stageId: stageId.value
+    })
+    previewData.value = res.data.data as CatalogPreviewResult
+    showPreviewDialog.value = true
+  } catch {
+    ElMessage.error('目录预览失败，请检查 AI 连接状态')
+  } finally {
+    previewing.value = false
+  }
+}
+
 async function handleGenerateCatalog() {
+  // 覆盖模式需要二次确认
+  if (overwrite.value && !showOverwriteConfirm.value) {
+    showOverwriteConfirm.value = true
+    return
+  }
+  showOverwriteConfirm.value = false
+
   generating.value = true
   catalogResult.value = []
   try {
@@ -274,17 +359,25 @@ async function handleGenerateCatalog() {
       stageId: stageId.value,
       overwrite: overwrite.value
     })
-    catalogResult.value = res.data.data || []
+    // 新格式: {catalogs, totalNew, mode}
+    const data = res.data.data
+    const catalogs = data?.catalogs || data || []
+    const totalNew = data?.totalNew ?? (Array.isArray(catalogs) ? catalogs.length : 0)
+    const mode = data?.mode || 'APPEND'
+
+    catalogResult.value = Array.isArray(catalogs) ? catalogs : []
     if (catalogResult.value.length === 0) {
-      ElMessage.warning('未能生成目录，请检查项目输入文件和适用标准是否完整')
+      ElMessage.warning('未能生成新目录，所有条目均已存在（追加模式）或项目输入文件不完整')
+    } else if (mode === 'APPEND') {
+      ElMessage.success(`成功新增 ${totalNew} 条文档目录`)
     } else {
-      ElMessage.success(`成功生成 ${catalogResult.value.length} 条文档目录`)
+      ElMessage.success(`成功生成 ${catalogResult.value.length} 条文档目录（已覆盖）`)
     }
     // Refresh catalog entries
     const catRes = await getDocCatalogsByProject(projectId.value)
     catalogEntries.value = (catRes.data.data || [])
   } catch {
-    ElMessage.error('目录生成失败，请检查本地大模型连接状态')
+    ElMessage.error('目录生成失败，请检查 AI 连接状态')
   } finally {
     generating.value = false
   }
@@ -307,6 +400,7 @@ function handleGenerateDraft() {
   abortController = streamDraft(
     projectId.value,
     selectedCatalogId.value,
+    null,
     (chunk: string) => {
       draftContent.value += chunk
       draftCharCount.value = draftContent.value.length

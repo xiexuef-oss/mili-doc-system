@@ -16,9 +16,11 @@ import com.military.doc.modules.document.mapper.StageDocChecklistTemplateMapper;
 import com.military.doc.modules.document.service.DocInputReferenceService;
 import com.military.doc.modules.project.entity.Project;
 import com.military.doc.modules.project.mapper.ProjectMapper;
+import com.military.doc.common.util.Str;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -37,6 +39,8 @@ public class DraftGenerationService {
     private final ProjectMapper projectMapper;
     private final DocInputReferenceService inputReferenceService;
     private final StageDocChecklistTemplateMapper checklistTemplateMapper;
+    private final com.military.doc.modules.document.mapper.ProjectDocChecklistMapper checklistItemMapper;
+    private final com.military.doc.modules.template.mapper.DocTemplateChapterMapper tplChapterMapper;
 
     public DraftGenerationService(ContextAssemblyService contextAssemblyService,
                                    ChapterWritingContextService chapterContextService,
@@ -47,7 +51,9 @@ public class DraftGenerationService {
                                    DocLedgerMapper docLedgerMapper,
                                    ProjectMapper projectMapper,
                                    DocInputReferenceService inputReferenceService,
-                                   StageDocChecklistTemplateMapper checklistTemplateMapper) {
+                                   StageDocChecklistTemplateMapper checklistTemplateMapper,
+                                   com.military.doc.modules.document.mapper.ProjectDocChecklistMapper checklistItemMapper,
+                                   com.military.doc.modules.template.mapper.DocTemplateChapterMapper tplChapterMapper) {
         this.contextAssemblyService = contextAssemblyService;
         this.chapterContextService = chapterContextService;
         this.promptTemplateService = promptTemplateService;
@@ -58,16 +64,25 @@ public class DraftGenerationService {
         this.projectMapper = projectMapper;
         this.inputReferenceService = inputReferenceService;
         this.checklistTemplateMapper = checklistTemplateMapper;
+        this.checklistItemMapper = checklistItemMapper;
+        this.tplChapterMapper = tplChapterMapper;
     }
 
+    private static final int MAX_CONTEXT_TOKENS = 50000; // DeepSeek 64K window, leave 14K for response
+
     public String generate(Long projectId, Long catalogId, Long docLedgerId) {
+        return generateOneShot(projectId, catalogId, docLedgerId);
+    }
+
+    private String generateOneShot(Long projectId, Long catalogId, Long docLedgerId) {
         String context = assembleDraftContext(projectId, catalogId, docLedgerId);
         if (context.isEmpty()) return "";
-
-        String userPrompt = promptTemplateService.render("draft-generation",
-            Map.of("context", context));
-        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》、GJB 438C、GJB 9001C、GJB 3206B 等标准。请严格按照 GJB 5882 规定的文档结构和内容要求撰写，输出 Markdown 格式的完整文档正文。标题格式必须为\"# 标题\"（#后有一个空格）。";
-
+        if (Str.estimateTokens(context) > MAX_CONTEXT_TOKENS) {
+            context = Str.truncateByTokens(context, MAX_CONTEXT_TOKENS);
+        }
+        String userPrompt = promptTemplateService.render("draft-generation", Map.of("context", context));
+        String systemPrompt = promptTemplateService.getTemplate("system-draft-generation");
+        if (systemPrompt.isEmpty()) systemPrompt = "你是一位军工文档撰写专家，请输出文档正文。";
         log.info("Draft generation: catalogId={}, docLedgerId={}, prompt {} chars", catalogId, docLedgerId, userPrompt.length());
         return llmClient.chat(systemPrompt, userPrompt);
     }
@@ -75,13 +90,179 @@ public class DraftGenerationService {
     public void generateStream(Long projectId, Long catalogId, Long docLedgerId, Consumer<String> onChunk) {
         String context = assembleDraftContext(projectId, catalogId, docLedgerId);
         if (context.isEmpty()) return;
-
-        String userPrompt = promptTemplateService.render("draft-generation",
-            Map.of("context", context));
-        String systemPrompt = "你是一位军工文档撰写专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》、GJB 438C、GJB 9001C、GJB 3206B 等标准。请严格按照 GJB 5882 规定的文档结构和内容要求撰写，输出 Markdown 格式的完整文档正文。标题格式必须为\"# 标题\"（#后有一个空格）。";
-
+        // Safety: ensure context fits within model window
+        if (Str.estimateTokens(context) > MAX_CONTEXT_TOKENS) {
+            context = Str.truncateByTokens(context, MAX_CONTEXT_TOKENS);
+        }
+        String userPrompt = promptTemplateService.render("draft-generation", Map.of("context", context));
+        String systemPrompt = promptTemplateService.getTemplate("system-draft-generation");
+        if (systemPrompt.isEmpty()) systemPrompt = "你是一位军工文档撰写专家，请输出文档正文内容。";
         log.info("Draft generation stream: catalogId={}, docLedgerId={}, prompt {} chars", catalogId, docLedgerId, userPrompt.length());
         llmClient.chatStream(systemPrompt, userPrompt, onChunk);
+    }
+
+    // === Per-chapter template-driven generation ===
+
+    private Long findTemplateForLedger(Long docLedgerId) {
+        if (docLedgerId == null) return null;
+        try {
+            DocLedger ledger = docLedgerMapper.selectById(docLedgerId);
+            if (ledger == null || ledger.getChecklistItemId() == null) return null;
+            var pdc = checklistItemMapper.selectById(ledger.getChecklistItemId());
+            if (pdc == null || pdc.getTemplateId() == null) return null;
+            var sct = checklistTemplateMapper.selectById(pdc.getTemplateId());
+            return sct != null ? sct.getTemplateId() : null;
+        } catch (Exception e) { return null; }
+    }
+
+    private String generateByTemplate(Long projectId, Long templateId) {
+        var chapters = new com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<>(
+            tplChapterMapper)
+            .eq(com.military.doc.modules.template.entity.DocTemplateChapter::getTemplateId, templateId)
+            .orderByAsc(com.military.doc.modules.template.entity.DocTemplateChapter::getOrderNum).list();
+        if (chapters == null || chapters.isEmpty()) return null;
+
+        String projectCtx = contextAssemblyService.assembleContext(projectId);
+        StringBuilder doc = new StringBuilder();
+        int generated = 0;
+        for (var ch : chapters) {
+            if (!Boolean.TRUE.equals(ch.getIsRequired())) continue;
+            try {
+                String body = generateChapterByTemplate(projectId, ch, projectCtx);
+                if (body != null && !body.isBlank()) {
+                    int lv = Math.min(ch.getChapterLevel() != null ? ch.getChapterLevel() : 1, 5);
+                    doc.append("#".repeat(lv)).append(" ").append(ch.getChapterNumber())
+                       .append(" ").append(ch.getChapterTitle()).append("\n\n");
+                    doc.append(body).append("\n\n");
+                    generated++;
+                }
+            } catch (Exception e) { log.warn("Ch {} failed: {}", ch.getChapterTitle(), e.getMessage()); }
+        }
+        if (generated == 0) return null;
+        return doc.toString();
+    }
+
+    /**
+     * Generate by logical sections, batching large sections for speed.
+     * Small sections (<=6 subs) → one call. Large sections → split into batches of 6.
+     * All batches run in parallel via 4-thread pool.
+     */
+    private void generateByTemplateStream(Long projectId, Long templateId, Consumer<String> onChunk) {
+        var all = tplChapterMapper.selectList(
+            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.military.doc.modules.template.entity.DocTemplateChapter>()
+                .eq(com.military.doc.modules.template.entity.DocTemplateChapter::getTemplateId, templateId)
+                .orderByAsc(com.military.doc.modules.template.entity.DocTemplateChapter::getOrderNum));
+        if (all == null || all.isEmpty()) { onChunk.accept(""); return; }
+
+        // Deduplicate by chapter_number
+        var deduped = all.stream().collect(java.util.stream.Collectors.toMap(
+            ch -> ch.getChapterNumber() != null ? ch.getChapterNumber() : (ch.getParentId() + "_" + ch.getChapterTitle()),
+            ch -> ch, (a, b) -> a, java.util.LinkedHashMap::new)).values().stream()
+            .filter(ch -> Boolean.TRUE.equals(ch.getIsRequired()))
+            .sorted(Comparator.comparing(ch -> ch.getOrderNum() != null ? ch.getOrderNum() : 0))
+            .toList();
+
+        if (deduped.isEmpty()) { onChunk.accept(""); return; }
+
+        final String projectCtx = contextAssemblyService.assembleContext(projectId);
+        // Per-batch budget: reserve ~8K tokens for chapter instructions + response
+        final int PER_BATCH_PROJECT_TOKENS = Math.max(4000, (MAX_CONTEXT_TOKENS - 8000) / Math.max(1, (deduped.size() + 5) / 6));
+        final String ctx = Str.estimateTokens(projectCtx) > PER_BATCH_PROJECT_TOKENS
+            ? Str.truncateByTokens(projectCtx, PER_BATCH_PROJECT_TOKENS)
+            : projectCtx;
+        String sp = promptTemplateService.getTemplate("system-draft-generation");
+        final String systemPrompt = (!sp.isEmpty()) ? sp : "你是军工文档撰写专家。只输出正文内容，不要写标题。";
+
+        // Batch size: 6 chapters per LLM call
+        int BATCH = 6;
+        var batches = new java.util.ArrayList<java.util.List<com.military.doc.modules.template.entity.DocTemplateChapter>>();
+        for (int i = 0; i < deduped.size(); i += BATCH) {
+            batches.add(deduped.subList(i, Math.min(i + BATCH, deduped.size())));
+        }
+
+        onChunk.accept("共 " + batches.size() + " 批次，并行生成中...\n\n");
+        int[] completed = {0};
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+
+        // Build prompts outside lambda, then run in parallel
+        var prompts = new java.util.ArrayList<String>();
+        for (var batch : batches) {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("## 项目\n").append(ctx).append("\n\n");
+            prompt.append("## 撰写以下章节\n");
+            for (var ch : batch) {
+                int lv = Math.min(ch.getChapterLevel() != null ? ch.getChapterLevel() : 1, 5);
+                prompt.append("#".repeat(lv)).append(" ").append(ch.getChapterNumber())
+                    .append(" ").append(ch.getChapterTitle()).append("\n");
+                if (ch.getDescription() != null) prompt.append("说明: ").append(ch.getDescription()).append("\n");
+                if (ch.getWritingTips() != null) prompt.append("提示: ").append(ch.getWritingTips()).append("\n");
+            }
+            prompt.append("\n请逐一撰写以上章节的正文内容。不需要写标题行（系统会自动添加）。按 GJB 规范，主数据缺失填 XXX。不要输出开场白。");
+            prompts.add(prompt.toString());
+        }
+
+        var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
+        for (int bi = 0; bi < prompts.size(); bi++) {
+            final int idx = bi;
+            final String prompt = prompts.get(bi);
+            final var batch = batches.get(bi);
+            futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String body = llmClient.chat(systemPrompt, prompt);
+                    if (body != null && !body.isBlank()) {
+                        // System prepends ## headings → Parser can split chapters reliably
+                        StringBuilder output = new StringBuilder();
+                        for (var ch : batch) {
+                            int lv = Math.min(ch.getChapterLevel() != null ? ch.getChapterLevel() : 1, 5);
+                            output.append("#".repeat(lv)).append(" ")
+                                .append(ch.getChapterNumber()).append(" ")
+                                .append(ch.getChapterTitle()).append("\n\n");
+                        }
+                        output.append(body);
+                        onChunk.accept(output.toString() + "\n\n");
+                    }
+                } catch (Exception e) {
+                    log.warn("Batch {} failed: {}", idx, e.getMessage());
+                }
+                synchronized (completed) { completed[0]++; }
+            }, pool));
+        }
+        java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+        pool.shutdown();
+        log.info("Section gen: {} chapters in {} batches, {} completed",
+            deduped.size(), batches.size(), completed[0]);
+    }
+
+    /** Build a prompt for one logical section (parent + children) and stream result. */
+    private String buildSectionPrompt(com.military.doc.modules.template.entity.DocTemplateChapter root,
+                                       java.util.List<com.military.doc.modules.template.entity.DocTemplateChapter> subs,
+                                       String projectCtx) {
+        StringBuilder ctx = new StringBuilder();
+        ctx.append("## 项目信息\n").append(projectCtx).append("\n\n");
+        ctx.append("## 写作任务\n");
+        ctx.append("请撰写《").append(root.getChapterNumber()).append(" ").append(root.getChapterTitle()).append("》章节");
+
+        if (root.getDescription() != null) ctx.append("。").append(root.getDescription());
+        if (root.getWritingTips() != null) ctx.append("。编写要求：").append(root.getWritingTips());
+        ctx.append("\n\n");
+
+        if (!subs.isEmpty()) {
+            ctx.append("本章包含以下小节，请逐一撰写（使用 ## 小节标题）：\n");
+            for (var sub : subs) {
+                if (!Boolean.TRUE.equals(sub.getIsRequired())) continue;
+                ctx.append("- **").append(sub.getChapterNumber()).append(" ").append(sub.getChapterTitle()).append("**");
+                if (sub.getDescription() != null) ctx.append(": ").append(sub.getDescription());
+                if (sub.getWritingTips() != null) ctx.append("（编写提示: ").append(sub.getWritingTips()).append("）");
+                if (sub.getStandardClauseRef() != null) ctx.append(" [标准: ").append(sub.getStandardClauseRef()).append("]");
+                ctx.append("\n");
+            }
+        }
+        ctx.append("\n要求：输出完整的 Markdown 格式内容。小节标题用 ## 开头。主数据用实际值，缺失值填 XXX。不要输出开场白。");
+
+        String sp = promptTemplateService.getTemplate("system-draft-generation");
+        final String systemPrompt = (!sp.isEmpty()) ? sp : "你是军工文档撰写专家。只输出正文内容，不要写标题。";
+        log.info("Section generation: {} {}, prompt {} chars", root.getChapterNumber(), root.getChapterTitle(), ctx.length());
+        return llmClient.chat(systemPrompt, ctx.toString());
     }
 
     private String assembleDraftContext(Long projectId, Long catalogId, Long docLedgerId) {
@@ -181,6 +362,48 @@ public class DraftGenerationService {
     // ========== Chapter-level generation ==========
 
     /**
+     * Generate body content for a single template chapter.
+     * Builds focused context: chapter description + writing tips + standard clauses +
+     * input file excerpts + knowledge cards, then calls LLM for just this chapter.
+     */
+    public String generateChapterByTemplate(Long projectId,
+                                             com.military.doc.modules.template.entity.DocTemplateChapter tplCh,
+                                             String projectContext) {
+        StringBuilder ctx = new StringBuilder();
+        ctx.append(projectContext).append("\n");
+
+        // Chapter metadata
+        ctx.append("## 当前章节\n");
+        ctx.append("- 章节编号: ").append(tplCh.getChapterNumber()).append("\n");
+        ctx.append("- 章节标题: ").append(tplCh.getChapterTitle()).append("\n");
+        ctx.append("- 章节层级: ").append(tplCh.getChapterLevel()).append("\n");
+        if (tplCh.getDescription() != null) {
+            ctx.append("- 内容说明: ").append(tplCh.getDescription()).append("\n");
+        }
+        if (tplCh.getWritingTips() != null) {
+            ctx.append("- 编写提示: ").append(tplCh.getWritingTips()).append("\n");
+        }
+        if (tplCh.getStandardClauseRef() != null) {
+            ctx.append("- 适用标准条款: ").append(tplCh.getStandardClauseRef()).append("\n");
+        }
+        ctx.append("\n");
+
+        // Task instruction
+        ctx.append("## 任务\n");
+        ctx.append("请为上述章节撰写正文内容。\n");
+        ctx.append("- 只写本章节内容，不要涉及其他章节\n");
+        ctx.append("- 主数据字段有值的直接填入，未填写的保留 XXX 占位符\n");
+        ctx.append("- 如果有适用标准条款，请在正文中引用\n");
+        ctx.append("- 如果需要表格，使用 Markdown 表格格式\n");
+        ctx.append("- 不要输出章节标题，不要使用 # 号\n");
+
+        String systemPrompt = buildChapterSystemPrompt();
+        log.info("Chapter generation: {} {}, context {} chars",
+            tplCh.getChapterNumber(), tplCh.getChapterTitle(), ctx.length());
+        return llmClient.chat(systemPrompt, ctx.toString());
+    }
+
+    /**
      * Generate content for a single chapter using three-library context.
      */
     public String generateChapter(Long docChapterId, Long projectId) {
@@ -245,21 +468,8 @@ public class DraftGenerationService {
     }
 
     private String buildChapterSystemPrompt() {
-        return """
-            你是一位军工文档撰写专家，精通 GJB 5882-2006《军工产品研制技术文件编写指南》、\
-            GJB 438C、GJB 9001C、GJB 3206B 等军用标准。
-
-            撰写要求:
-            1. 只撰写本章节内容，不要包含其他章节
-            2. 严格遵循编写指南中的章节说明和编写提示
-            3. 遵守适用标准条款中的规定和要求
-            4. 参考知识卡片中的编写技巧和范例
-            5. 使用规范的军工文档术语和表达方式
-            6. 主数据字段有值的直接填入，未填写的保留 XXX 占位符
-            7. 输出 Markdown 格式，不添加章节标题(系统会自动添加)
-            8. 不输出任何开场白或结束语，直接输出内容
-            9. Markdown 标题格式必须为"# 标题"（#后有一个空格），不要使用"#标题"
-            """;
+        String prompt = promptTemplateService.getTemplate("system-chapter-writing");
+        return !prompt.isEmpty() ? prompt : "你是一位军工文档撰写专家，请按GJB标准撰写本章节内容。";
     }
 
     private String nullToEmpty(String s) {

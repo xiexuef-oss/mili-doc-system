@@ -17,6 +17,12 @@ import com.military.doc.modules.standard.entity.Standard;
 import com.military.doc.modules.standard.entity.StandardClause;
 import com.military.doc.modules.standard.mapper.StandardClauseMapper;
 import com.military.doc.modules.standard.mapper.StandardMapper;
+import com.military.doc.modules.template.entity.DocTemplateV2;
+import com.military.doc.modules.template.entity.DocTemplateChapter;
+import com.military.doc.modules.template.entity.DocTemplateCategory;
+import com.military.doc.modules.template.mapper.DocTemplateV2Mapper;
+import com.military.doc.modules.template.mapper.DocTemplateChapterMapper;
+import com.military.doc.modules.template.mapper.DocTemplateCategoryMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -38,14 +44,23 @@ public class ContextAssemblyService {
     private final StandardMapper standardMapper;
     private final StandardClauseMapper standardClauseMapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
+    private final DocTemplateV2Mapper templateV2Mapper;
+    private final DocTemplateChapterMapper templateChapterMapper;
+    private final DocTemplateCategoryMapper templateCategoryMapper;
     private final FileStorageService fileStorageService;
     private final FileTextExtractor fileTextExtractor;
     private final VectorIndexService vectorIndexService;
     private final EmbeddingProperties embeddingProperties;
     private final ProjectMasterDataService masterDataService;
+    private SmartTruncationService smartTruncationService; // setter injected
 
-    private static final int MAX_CLAUSE_LENGTH = 500;
-    private static final int MAX_INPUT_FILE_LENGTH = 3000;
+    // 内网部署，模型上下文窗口充足，不再硬编码截断
+    // 仅在 assembleContext 总长度超过阈值时按比例截断
+    private static final int TOTAL_CONTEXT_WARNING_CHARS = 50000;
+
+    public void setSmartTruncationService(SmartTruncationService svc) {
+        this.smartTruncationService = svc;
+    }
 
     public ContextAssemblyService(ProjectMapper projectMapper,
                                   ProjectInputFileMapper inputFileMapper,
@@ -53,6 +68,9 @@ public class ContextAssemblyService {
                                   StandardMapper standardMapper,
                                   StandardClauseMapper standardClauseMapper,
                                   KnowledgeBaseMapper knowledgeBaseMapper,
+                                  DocTemplateV2Mapper templateV2Mapper,
+                                  DocTemplateChapterMapper templateChapterMapper,
+                                  DocTemplateCategoryMapper templateCategoryMapper,
                                   FileStorageService fileStorageService,
                                   FileTextExtractor fileTextExtractor,
                                   VectorIndexService vectorIndexService,
@@ -64,6 +82,9 @@ public class ContextAssemblyService {
         this.standardMapper = standardMapper;
         this.standardClauseMapper = standardClauseMapper;
         this.knowledgeBaseMapper = knowledgeBaseMapper;
+        this.templateV2Mapper = templateV2Mapper;
+        this.templateChapterMapper = templateChapterMapper;
+        this.templateCategoryMapper = templateCategoryMapper;
         this.fileStorageService = fileStorageService;
         this.fileTextExtractor = fileTextExtractor;
         this.vectorIndexService = vectorIndexService;
@@ -99,9 +120,6 @@ public class ContextAssemblyService {
                 ctx.append("### ").append(f.getFileName())
                     .append(" (").append(nullToEmpty(f.getInputType())).append(")\n");
                 String text = extractFileText(f.getFileObjectId(), f.getFileName());
-                if (text.length() > MAX_INPUT_FILE_LENGTH) {
-                    text = text.substring(0, MAX_INPUT_FILE_LENGTH) + "\n...(已截断)";
-                }
                 ctx.append(text).append("\n\n");
             }
         }
@@ -115,9 +133,6 @@ public class ContextAssemblyService {
                     Object value = entry.getValue();
                     if (value == null) continue;
                     String str = value instanceof String ? (String) value : value.toString();
-                    if (str.length() > 2000) {
-                        str = str.substring(0, 2000) + "\n...(已截断)";
-                    }
                     ctx.append("- **").append(entry.getKey()).append("**: ").append(str).append("\n");
                 }
                 ctx.append("\n");
@@ -138,9 +153,6 @@ public class ContextAssemblyService {
                         .append(" [").append(nullToEmpty(m.getStandardCode())).append("]")
                         .append(" (相关性: ").append(String.format("%.2f", m.getSimilarity())).append(")\n");
                     String content = nullToEmpty(m.getClauseContent());
-                    if (content.length() > MAX_CLAUSE_LENGTH) {
-                        content = content.substring(0, MAX_CLAUSE_LENGTH) + "...";
-                    }
                     if (!content.isBlank()) {
                         ctx.append("  ").append(content).append("\n");
                     }
@@ -166,9 +178,6 @@ public class ContextAssemblyService {
                             ctx.append("- **").append(clause.getClauseNumber()).append("** ")
                                 .append(nullToEmpty(clause.getClauseTitle())).append("\n");
                             String content = nullToEmpty(clause.getClauseContent());
-                            if (content.length() > MAX_CLAUSE_LENGTH) {
-                                content = content.substring(0, MAX_CLAUSE_LENGTH) + "...";
-                            }
                             if (!content.isBlank()) {
                                 ctx.append("  ").append(content).append("\n");
                             }
@@ -179,7 +188,43 @@ public class ContextAssemblyService {
             }
         }
 
-        // 5. Knowledge base (semantic RAG or recent)
+        // 5. Template library — all active templates with chapter counts
+        List<DocTemplateV2> activeTemplates = templateV2Mapper.selectList(
+            new LambdaQueryWrapper<DocTemplateV2>()
+                .eq(DocTemplateV2::getStatus, "ACTIVE")
+                .orderByAsc(DocTemplateV2::getTemplateCode));
+        if (!activeTemplates.isEmpty()) {
+            ctx.append("## 模板库\n");
+            // Load categories for display
+            var categories = templateCategoryMapper.selectList(
+                new LambdaQueryWrapper<DocTemplateCategory>().eq(DocTemplateCategory::getStatus, "ACTIVE"));
+            var catMap = categories.stream().collect(Collectors.toMap(
+                DocTemplateCategory::getId, DocTemplateCategory::getCategoryName, (a, b) -> a));
+
+            for (DocTemplateV2 tpl : activeTemplates) {
+                String catName = catMap.getOrDefault(tpl.getCategoryId(), "未分类");
+                // Count chapters
+                Long chapterCount = templateChapterMapper.selectCount(
+                    new LambdaQueryWrapper<DocTemplateChapter>()
+                        .eq(DocTemplateChapter::getTemplateId, tpl.getId()));
+                ctx.append("- **").append(nullToEmpty(tpl.getTemplateCode())).append("** ")
+                    .append(nullToEmpty(tpl.getTemplateName()))
+                    .append(" [").append(catName).append("]");
+                if (chapterCount > 0) {
+                    ctx.append(" (").append(chapterCount).append("章)");
+                }
+                if (tpl.getGjbStandardRef() != null && !tpl.getGjbStandardRef().isBlank()) {
+                    ctx.append(" 引用: ").append(tpl.getGjbStandardRef());
+                }
+                if (tpl.getApplicableProjectType() != null && !tpl.getApplicableProjectType().isBlank()) {
+                    ctx.append(" 适用: ").append(tpl.getApplicableProjectType());
+                }
+                ctx.append("\n");
+            }
+            ctx.append("\n");
+        }
+
+        // 6. Knowledge base (semantic RAG or recent)
         if (embeddingProperties.isSemanticRagEnabled()) {
             String queryText = buildQueryText(project);
             List<SemanticMatch> articles = vectorIndexService.searchSimilarKnowledge(queryText, 5);
@@ -190,9 +235,6 @@ public class ContextAssemblyService {
                         .append(nullToEmpty(m.getCategory())).append(")")
                         .append(" 相关性: ").append(String.format("%.2f", m.getSimilarity())).append("\n");
                     String content = nullToEmpty(m.getClauseContent());
-                    if (content.length() > 300) {
-                        content = content.substring(0, 300) + "...";
-                    }
                     if (!content.isBlank()) {
                         ctx.append("  ").append(content).append("\n");
                     }
@@ -212,9 +254,6 @@ public class ContextAssemblyService {
                     ctx.append("- **").append(nullToEmpty(kb.getTitle())).append("** (")
                         .append(nullToEmpty(kb.getCategory())).append(")\n");
                     String content = nullToEmpty(kb.getContent());
-                    if (content.length() > 300) {
-                        content = content.substring(0, 300) + "...";
-                    }
                     if (!content.isBlank()) {
                         ctx.append("  ").append(content).append("\n");
                     }
@@ -247,19 +286,16 @@ public class ContextAssemblyService {
             .collect(Collectors.toList());
     }
 
+    @org.springframework.cache.annotation.Cacheable("standards")
     private List<Standard> findStandards(List<String> codes) {
         if (codes.isEmpty()) return List.of();
-        List<Standard> results = new ArrayList<>();
-        for (String code : codes) {
-            List<Standard> found = standardMapper.selectList(
-                new LambdaQueryWrapper<Standard>()
-                    .like(Standard::getStandardCode, code)
-                    .eq(Standard::getStatus, "ACTIVE")
-                    .last("LIMIT 1")
-            );
-            results.addAll(found);
-        }
-        return results;
+        List<Standard> allActive = standardMapper.selectList(
+            new LambdaQueryWrapper<Standard>().eq(Standard::getStatus, "ACTIVE"));
+        java.util.Set<String> codeSet = new java.util.HashSet<>(codes);
+        return allActive.stream()
+            .filter(s -> s.getStandardCode() != null
+                && codeSet.stream().anyMatch(c -> s.getStandardCode().contains(c)))
+            .collect(Collectors.toList());
     }
 
     private String getExtension(String filename) {

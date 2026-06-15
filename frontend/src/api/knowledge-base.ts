@@ -37,13 +37,20 @@ export function deleteKnowledgeBase(id: number) {
 export function uploadKnowledgeBaseFile(id: number, file: File) {
   const form = new FormData()
   form.append('file', file)
-  return api.post(`/knowledge/${id}/upload`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  return api.post(`/knowledge/${id}/upload`, form)
 }
 
 export function getKnowledgeBaseDownloadUrl(id: number) {
   return api.get(`/knowledge/${id}/download-url`)
+}
+
+export function uploadKnowledgeFile(file: File, category?: string, tags?: string, autoSplit?: boolean) {
+  const form = new FormData()
+  form.append('file', file)
+  if (category) form.append('category', category)
+  if (tags) form.append('tags', tags)
+  if (autoSplit !== undefined) form.append('autoSplit', String(autoSplit))
+  return api.post('/knowledge/upload', form)
 }
 
 export function getKnowledgeBaseCategories() {

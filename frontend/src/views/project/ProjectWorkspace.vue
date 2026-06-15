@@ -17,31 +17,43 @@
       <el-tab-pane label="输入文件" name="input-files" />
       <el-tab-pane label="阶段管理" name="stages" />
       <el-tab-pane label="文档台账" name="doc-ledger" />
+      <el-tab-pane label="AI对话" name="ai-chat" />
+      <el-tab-pane label="AI生成" name="ai-generate" />
       <el-tab-pane label="主数据" name="master-data" />
       <el-tab-pane label="评审管理" name="reviews" />
       <el-tab-pane label="完整性检查" name="completeness" />
+      <el-tab-pane label="可靠性设计" name="reliability" />
       <el-tab-pane label="项目成员" name="members" />
     </el-tabs>
 
     <div class="workspace-content">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <keep-alive :max="8">
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { getProject, type ProjectItem } from '@/api/project'
+import { useProjectStore } from '@/stores/project'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => Number(route.params.projectId))
+const store = useProjectStore()
 
-const project = ref<ProjectItem | null>(null)
-
+const project = computed(() => store.project)
 const activeTab = ref('overview')
+
+onMounted(async () => {
+  await store.loadProject(projectId.value)
+  store.loadStages()
+})
 
 const statusTagType = computed(() => {
   const map: Record<string, string> = {
@@ -61,9 +73,12 @@ function handleTabChange(name: string) {
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :
     name === 'doc-ledger' ? 'ProjectDocLedger' :
+    name === 'ai-generate' ? 'BatchGeneratePage' :
+    name === 'ai-chat' ? 'ChatPage' :
     name === 'master-data' ? 'ProjectMasterData' :
     name === 'reviews' ? 'ProjectReviews' :
     name === 'completeness' ? 'CompletenessCheck' :
+    name === 'reliability' ? 'ReliabilityWorkbench' :
     name === 'members' ? 'ProjectMembers' :
     'ProjectInputFiles'
   router.replace({ name: routeName, params: { projectId: projectId.value } })
@@ -74,9 +89,12 @@ watch(() => route.name, (name) => {
     ProjectOverview: 'overview',
     ProjectStages: 'stages',
     ProjectDocLedger: 'doc-ledger',
+    BatchGeneratePage: 'ai-generate',
+    ChatPage: 'ai-chat',
     ProjectMasterData: 'master-data',
     ProjectReviews: 'reviews',
     CompletenessCheck: 'completeness',
+    ReliabilityWorkbench: 'reliability',
     ProjectMembers: 'members',
     ProjectInputFiles: 'input-files'
   }
@@ -84,15 +102,6 @@ watch(() => route.name, (name) => {
     activeTab.value = map[String(name)]
   }
 }, { immediate: true })
-
-async function loadProject() {
-  try {
-    const res = await getProject(projectId.value)
-    project.value = res.data.data
-  } catch { /* ignore */ }
-}
-
-loadProject()
 </script>
 
 <style scoped>
