@@ -13,4 +13,7 @@ public interface ProjectMasterDataService extends IService<ProjectMasterData> {
 
     /** Get flattened view of master data for document filling */
     Map<String, Object> getFlattenedData(Long projectId);
+
+    /** Get master data with JSONB fields parsed into objects/arrays (frontend-compatible) */
+    Map<String, Object> getParsedData(Long projectId);
 }

@@ -121,16 +121,16 @@ const inputFiles = ref<Array<{fileName: string; fileUrl: string}>>([])
 
 const masterData: Record<string, any> = reactive({
   equipmentInfo: {}, tacticalIndicators: {}, productTree: {},
-  teamMembers: {}, milestones: {}
+  milestones: {}
 })
 
 const masterDataSections = [
   {
-    key: 'equipmentInfo', label: '装备基本信息',
+    key: 'equipmentInfo', label: '产品基本信息',
     fields: [
-      { name: 'equipmentName', label: '装备名称', type: 'text', required: true },
-      { name: 'equipmentType', label: '装备类型', type: 'select', options: ['雷达', '通信', '电子对抗', '指挥控制', '导弹', '无人机', '卫星', '其他'] },
-      { name: 'model', label: '型号', type: 'text' },
+      { name: 'equipmentName', label: '产品名称', type: 'text', required: true },
+      { name: 'equipmentType', label: '产品类型', type: 'select', options: ['雷达', '通信', '电子对抗', '指挥控制', '导弹', '无人机', '卫星', '其他'] },
+      { name: 'model', label: '产品型号', type: 'text' },
       { name: 'manufacturer', label: '研制单位', type: 'text' },
       { name: 'overview', label: '概述', type: 'textarea' }
     ]
@@ -155,16 +155,6 @@ const masterDataSections = [
       { name: 'parentProduct', label: '父级产品', type: 'text' },
       { name: 'quantity', label: '数量', type: 'text' },
       { name: 'remark', label: '备注', type: 'textarea' }
-    ]
-  },
-  {
-    key: 'teamMembers', label: '项目团队',
-    fields: [
-      { name: 'role', label: '角色', type: 'select', options: ['总设计师', '副总设计师', '主任设计师', '主管设计师', '设计师', '质量师', '标准化师', '工艺师', '可靠性工程师', '项目管理员'] },
-      { name: 'name', label: '姓名', type: 'text' },
-      { name: 'department', label: '所属部门', type: 'text' },
-      { name: 'phone', label: '联系电话', type: 'text' },
-      { name: 'email', label: '邮箱', type: 'text' }
     ]
   },
   {

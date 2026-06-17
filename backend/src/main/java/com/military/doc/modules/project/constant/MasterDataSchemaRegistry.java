@@ -12,9 +12,9 @@ public class MasterDataSchemaRegistry {
 
     private static final Map<String, Object> COMMON_EQUIPMENT_INFO = Map.of(
         "fields", List.of(
-            field("equipmentName", "装备名称", "text", true, null),
-            field("equipmentModel", "装备型号", "text", true, null),
-            field("equipmentCategory", "装备类别", "select", true,
+            field("equipmentName", "产品名称", "text", true, null),
+            field("equipmentModel", "产品型号", "text", true, null),
+            field("equipmentCategory", "产品类别", "select", true,
                 List.of("常规武器", "战略武器", "卫星", "电子对抗", "通信导航", "指挥控制", "其他")),
             field("militaryUse", "军事用途", "richtext", false, null),
             field("systemBoundary", "系统边界描述", "richtext", false, null)
@@ -75,7 +75,6 @@ public class MasterDataSchemaRegistry {
         schema.put("equipmentInfo", COMMON_EQUIPMENT_INFO);
         schema.put("tacticalIndicators", COMMON_TACTICAL_INDICATORS);
         schema.put("productTree", COMMON_PRODUCT_TREE);
-        schema.put("teamMembers", COMMON_TEAM);
         schema.put("milestones", COMMON_MILESTONES);
         return schema;
     }
@@ -85,7 +84,6 @@ public class MasterDataSchemaRegistry {
         data.put("equipmentInfo", Map.of("equipmentName", "", "equipmentModel", "", "equipmentCategory", ""));
         data.put("tacticalIndicators", List.of());
         data.put("productTree", List.of());
-        data.put("teamMembers", List.of());
         data.put("milestones", List.of());
         data.put("extendedFields", Map.of());
         return data;

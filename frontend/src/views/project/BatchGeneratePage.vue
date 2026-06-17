@@ -1,7 +1,7 @@
 <template>
   <div class="batch-generate">
     <div class="bg-toolbar">
-      <el-select v-model="selectedEquipmentType" placeholder="装备类型" @change="loadChecklist" style="width: 160px">
+      <el-select v-model="selectedEquipmentType" placeholder="产品类型" @change="loadChecklist" style="width: 160px">
         <el-option v-for="et in equipmentTypes" :key="et.label" :label="et.label" :value="et.label">
           <span>{{ et.label }}</span>
           <span style="float:right;color:var(--el-text-color-secondary);font-size:12px">{{ et.stageFlow }}</span>

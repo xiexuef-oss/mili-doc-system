@@ -175,13 +175,13 @@ public class MasterDataExtractionService {
         return """
             你是一位军工项目文档数据提取专家。从给定的项目输入文件(合同、技术要求、任务书等)中提取结构化主数据。
 
-            请输出严格的JSON格式，包含以下五个字段(没有数据的字段输出空对象/数组):
+            请输出严格的JSON格式，包含以下四个字段(没有数据的字段输出空对象/数组):
 
             {
               "equipmentInfo": {
-                "equipmentName": "装备名称",
-                "equipmentModel": "装备型号",
-                "equipmentCode": "装备代号",
+                "equipmentName": "产品名称",
+                "equipmentModel": "产品型号",
+                "equipmentCode": "产品代号",
                 "taskBookCode": "任务书编号",
                 "contractCode": "合同编号",
                 "developerUnit": "研制单位",
@@ -193,24 +193,45 @@ public class MasterDataExtractionService {
                 "securityLevel": "密级"
               },
               "tacticalIndicators": [
-                {"indicatorName": "指标名称", "value": "指标值", "unit": "单位", "requirementSource": "来源"}
+                {
+                  "indicatorName": "指标名称",
+                  "required": "要求值(含量纲如≤0.5m)",
+                  "actual": "实测值(如已知)",
+                  "unit": "单位",
+                  "conclusion": "满足/基本满足/不满足",
+                  "remark": "备注"
+                }
               ],
               "productTree": [
-                {"itemName": "名称", "itemCode": "代号", "level": 1, "parentCode": "", "quantity": 1, "remark": ""}
-              ],
-              "teamMembers": [
-                {"name": "姓名", "role": "角色", "unit": "单位", "contact": ""}
+                {
+                  "level": "系统/分系统/设备/组件",
+                  "productName": "产品名称",
+                  "productCode": "产品代号",
+                  "parentProduct": "上级产品代号",
+                  "quantity": "数量",
+                  "remark": "备注"
+                }
               ],
               "milestones": [
-                {"name": "节点名称", "deadline": "2025-12-31", "deliverable": "交付物", "status": "进行中"}
+                {
+                  "stageCode": "阶段代码(L/F/C/S/D/P/N)",
+                  "name": "节点名称",
+                  "plannedDate": "2025-12-31",
+                  "actualDate": "实际完成日期(如已知)",
+                  "keyDeliverables": "关键交付物",
+                  "status": "未开始/进行中/已完成"
+                }
               ]
             }
 
             要求:
-            1. 只提取文件中明确出现的数据，空值使用 null 或空字符串
-            2. 数值和日期保持原样，不要编造
-            3. 人名、单位名称使用文件中的原始表述
-            4. 只输出JSON，不要添加任何解释文字
+            1. 只提取文件中明确出现的数据，没有的字段使用 null 或空字符串 ""，不要编造
+            2. 数值和日期保持原文原样，不要编造数据
+            3. 人名、单位名称使用文件中的原始表述，保留全称
+            4. productTree的level使用中文: 系统/分系统/设备/组件
+            5. tacticalIndicators中value字段包含量纲(如 "≤0.5m")，存入required字段
+            6. 团队成员角色使用标准名称: 总设计师/副总设计师/主任设计师/主管设计师/设计师/质量师/标准化师/工艺师
+            7. 只输出JSON，不要添加任何解释文字
             """;
     }
 
@@ -219,6 +240,7 @@ public class MasterDataExtractionService {
         try (InputStream is = fileStorageService.download(file.getFileObjectId())) {
             byte[] bytes = is.readAllBytes();
             String ext = getExtension(file.getFileName());
+            // FileTextExtractor now has built-in OCR fallback for scanned PDFs
             return fileTextExtractor.extract(bytes, ext);
         } catch (Exception e) {
             log.warn("Failed to extract text from {}: {}", file.getFileName(), e.getMessage());

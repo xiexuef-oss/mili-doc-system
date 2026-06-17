@@ -42,8 +42,7 @@ ON CONFLICT DO NOTHING;
 -- 2. 研制过程概述
 INSERT INTO template_chapter_field_mapping (template_chapter_id, master_data_path, field_label, is_required, order_num)
 VALUES
-    (5, 'milestones', '里程碑节点', true, 1),
-    (5, 'teamMembers', '团队信息', false, 2)
+    (5, 'milestones', '里程碑节点', true, 1)
 ON CONFLICT DO NOTHING;
 
 -- 2.1 方案阶段工作
@@ -74,8 +73,7 @@ ON CONFLICT DO NOTHING;
 -- 4. 关键技术攻关情况
 INSERT INTO template_chapter_field_mapping (template_chapter_id, master_data_path, field_label, is_required, order_num)
 VALUES
-    (10, 'equipment.equipmentName', '装备名称', true, 1),
-    (10, 'teamMembers', '攻关团队', false, 2)
+    (10, 'equipment.equipmentName', '装备名称', true, 1)
 ON CONFLICT DO NOTHING;
 
 -- 5. 产品质量状况

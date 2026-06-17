@@ -40,3 +40,7 @@ export function getDefaultMasterData() {
 export function getNavigatorData(projectId: number) {
   return api.get(`/projects/${projectId}/navigator`)
 }
+
+export function extractMasterData(projectId: number) {
+  return api.post(`/projects/${projectId}/master-data/extract`)
+}

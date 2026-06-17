@@ -1,5 +1,6 @@
 package com.military.doc.ai.util;
 
+import com.military.doc.modules.standard.service.OcrService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -26,6 +27,18 @@ public class FileTextExtractor {
 
     // 内网部署，不截断文本
     private static final int FULL_MAX_LENGTH = 2_000_000;
+    // PDF文本层字符数低于此阈值时自动触发OCR
+    private static final int PDF_OCR_THRESHOLD = 100;
+    // OCR最大页数
+    private static final int OCR_MAX_PAGES = 50;
+    // OCR语言
+    private static final String OCR_LANG = "chi_sim+eng";
+
+    private final OcrService ocrService;
+
+    public FileTextExtractor(OcrService ocrService) {
+        this.ocrService = ocrService;
+    }
 
     /** Extract text for context assembly (no truncation for intranet deployment). */
     public String extract(byte[] bytes, String extension) {
@@ -41,7 +54,7 @@ public class FileTextExtractor {
         if (bytes == null || bytes.length == 0) return "";
         try {
             String text = switch (extension.toLowerCase()) {
-                case ".pdf" -> extractPdfFull(bytes, maxLength);
+                case ".pdf" -> extractPdfWithOcr(bytes, maxLength);
                 case ".docx" -> extractDocx(bytes);
                 case ".txt", ".md", ".markdown", ".json", ".xml", ".csv" ->
                     new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
@@ -60,16 +73,41 @@ public class FileTextExtractor {
         }
     }
 
+    /**
+     * PDF文本提取，内置OCR回退。
+     * 先用PDFBox提取文字层，若字符数不足则自动调用Tesseract OCR。
+     */
+    private String extractPdfWithOcr(byte[] bytes, int maxLength) throws IOException {
+        // Step 1: PDFBox direct text extraction
+        String text = extractPdfFull(bytes, maxLength);
+
+        // Step 2: If text layer is sparse, try OCR
+        if (text.trim().length() < PDF_OCR_THRESHOLD && ocrService.isEnabled()) {
+            log.info("PDF text layer is sparse ({} chars), falling back to OCR...",
+                text.trim().length());
+            try {
+                var ocrResult = ocrService.ocrPdf(bytes, OCR_MAX_PAGES, OCR_LANG);
+                if (ocrResult != null && ocrResult.text() != null && !ocrResult.text().isBlank()) {
+                    log.info("OCR extracted {} chars ({} pages, {}ms), replacing PDFBox result",
+                        ocrResult.text().length(), ocrResult.pagesProcessed(), ocrResult.elapsedMs());
+                    return ocrResult.text();
+                }
+            } catch (Exception e) {
+                log.warn("OCR fallback failed: {}", e.getMessage());
+            }
+        }
+        return text;
+    }
+
     private String extractPdfFull(byte[] bytes, int maxLength) throws IOException {
         try (var doc = Loader.loadPDF(bytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
             stripper.setAddMoreFormatting(false);
             int totalPages = doc.getNumberOfPages();
-            int endPage = Math.min(totalPages, 100); // 内网部署，翻倍页数限制
+            int endPage = Math.min(totalPages, 100);
             stripper.setEndPage(endPage);
-            String text = stripper.getText(doc);
-            return text;
+            return stripper.getText(doc);
         }
     }
 
@@ -79,13 +117,7 @@ public class FileTextExtractor {
     }
 
     private String extractPdf(byte[] bytes) throws IOException {
-        try (var doc = Loader.loadPDF(bytes)) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
-            stripper.setAddMoreFormatting(false);
-            stripper.setEndPage(10);
-            return stripper.getText(doc);
-        }
+        return extractPdfWithOcr(bytes, FULL_MAX_LENGTH);
     }
 
     private String extractDocx(byte[] bytes) throws IOException {
@@ -99,10 +131,6 @@ public class FileTextExtractor {
     // Multi-modal: Image extraction
     // ============================================================
 
-    /**
-     * Extract images from PDF and return as metadata descriptions.
-     * Does NOT require a vision model — produces structural descriptions.
-     */
     public List<ImageDescriptor> extractPdfImages(byte[] pdfBytes) {
         List<ImageDescriptor> images = new ArrayList<>();
         try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
@@ -123,7 +151,6 @@ public class FileTextExtractor {
                             desc.setColorSpace(img.getColorSpace() != null
                                 ? img.getColorSpace().getName() : "unknown");
 
-                            // Extract image bytes for potential vision model use
                             BufferedImage buffered = img.getImage();
                             if (buffered != null) {
                                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -147,9 +174,6 @@ public class FileTextExtractor {
         return images;
     }
 
-    /**
-     * Extract images from DOCX and return as metadata descriptions.
-     */
     public List<ImageDescriptor> extractDocxImages(byte[] docxBytes) {
         List<ImageDescriptor> images = new ArrayList<>();
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
@@ -161,7 +185,6 @@ public class FileTextExtractor {
                 desc.setImageSizeBytes(pic.getData().length);
                 desc.setMimeType(pic.getPackagePart().getContentType());
 
-                // Try to read image dimensions
                 try {
                     BufferedImage buffered = ImageIO.read(new ByteArrayInputStream(pic.getData()));
                     if (buffered != null) {
@@ -180,9 +203,6 @@ public class FileTextExtractor {
         return images;
     }
 
-    /**
-     * Convenience: extract images from either PDF or DOCX based on extension.
-     */
     public List<ImageDescriptor> extractImages(byte[] bytes, String extension) {
         if (extension == null) return List.of();
         return switch (extension.toLowerCase()) {
@@ -192,11 +212,6 @@ public class FileTextExtractor {
         };
     }
 
-    /**
-     * Generate a structural description of an image for LLM context.
-     * This is a metadata-based description — for semantic description,
-     * a vision model would be needed.
-     */
     private String generateImageDescription(ImageDescriptor img) {
         StringBuilder desc = new StringBuilder();
         desc.append("[图片]");
@@ -224,9 +239,6 @@ public class FileTextExtractor {
         return String.format("%.1fMB", bytes / (1024.0 * 1024.0));
     }
 
-    /**
-     * Descriptor for extracted images — metadata without vision model.
-     */
     @lombok.Data
     public static class ImageDescriptor {
         private String imageName;

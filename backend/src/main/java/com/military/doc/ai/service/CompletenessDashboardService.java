@@ -35,7 +35,7 @@ public class CompletenessDashboardService {
     private final ObjectMapper objectMapper;
 
     private static final List<String> MASTER_DATA_SECTIONS = List.of(
-        "equipmentInfo", "tacticalIndicators", "productTree", "teamMembers", "milestones", "extendedFields");
+        "equipmentInfo", "tacticalIndicators", "productTree", "milestones", "extendedFields");
 
     public CompletenessDashboardService(ProjectMasterDataMapper masterDataMapper,
                                         DocLedgerMapper docLedgerMapper,

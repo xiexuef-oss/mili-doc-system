@@ -60,10 +60,6 @@
         </el-col>
       </el-row>
       <el-row :gutter="16" style="margin-top:12px">
-        <el-col :span="8" v-if="masterData.teamMembers">
-          <h4 class="md-section-title">项目团队</h4>
-          <p>{{ (masterData.teamMembers || []).length }} 人</p>
-        </el-col>
         <el-col :span="8" v-if="masterData.milestones">
           <h4 class="md-section-title">里程碑</h4>
           <p>{{ (masterData.milestones || []).length }} 个节点</p>
