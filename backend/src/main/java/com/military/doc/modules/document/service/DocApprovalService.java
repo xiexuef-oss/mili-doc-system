@@ -5,12 +5,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.modules.document.entity.DocApprovalFlowTemplate;
 import com.military.doc.modules.document.entity.DocApprovalRecord;
+import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocApprovalFlowTemplateMapper;
 import com.military.doc.modules.document.mapper.DocApprovalRecordMapper;
 import com.military.doc.modules.project.entity.ProjectMember;
 import com.military.doc.modules.project.mapper.ProjectMemberMapper;
 import lombok.extern.slf4j.Slf4j;
+import com.military.doc.ai.service.DiffAnalysisService;
+import com.military.doc.ai.service.EnterpriseBaselineService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,18 +31,30 @@ public class DocApprovalService {
     private final DocApprovalFlowTemplateMapper templateMapper;
     private final ProjectMemberMapper memberMapper;
     private final DocLedgerService docLedgerService;
+    private final DiffAnalysisService diffAnalysisService;
+    private final EnterpriseBaselineService enterpriseBaselineService;
     private final ObjectMapper objectMapper;
+    private final com.military.doc.modules.document.mapper.DocLedgerMapper docLedgerMapper;
+    private final com.military.doc.modules.document.mapper.DocChapterMapper docChapterMapper;
 
     public DocApprovalService(DocApprovalRecordMapper recordMapper,
                                DocApprovalFlowTemplateMapper templateMapper,
                                ProjectMemberMapper memberMapper,
                                DocLedgerService docLedgerService,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                              com.military.doc.modules.document.mapper.DocLedgerMapper docLedgerMapper,
+                              com.military.doc.modules.document.mapper.DocChapterMapper docChapterMapper,
+                              DiffAnalysisService diffAnalysisService,
+                              EnterpriseBaselineService enterpriseBaselineService) {
         this.recordMapper = recordMapper;
         this.templateMapper = templateMapper;
         this.memberMapper = memberMapper;
         this.docLedgerService = docLedgerService;
         this.objectMapper = objectMapper;
+        this.docLedgerMapper = docLedgerMapper;
+        this.docChapterMapper = docChapterMapper;
+        this.diffAnalysisService = diffAnalysisService;
+        this.enterpriseBaselineService = enterpriseBaselineService;
     }
 
     /**
@@ -138,6 +153,27 @@ public class DocApprovalService {
             // 全部通过 → 发布
             docLedgerService.transitionStatus(ledgerId, "RELEASED", approverId,
                 "全部签审通过，文档发布");
+
+            // 学习闭环：终稿发布后自动触发差异分析和基线更新
+            try {
+                List<DocChapter> chapters = docChapterMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocChapter>()
+                        .eq(DocChapter::getDocLedgerId, ledgerId));
+                StringBuilder contentBuilder = new StringBuilder();
+                for (DocChapter ch : chapters) {
+                    if (ch.getContent() != null) contentBuilder.append(ch.getContent()).append("\n");
+                }
+                String finalContent = contentBuilder.toString();
+                if (!finalContent.isBlank()) {
+                    var diff = diffAnalysisService.analyze(ledgerId, finalContent);
+                    enterpriseBaselineService.updateFromDiff(
+                        docLedgerMapper.selectById(ledgerId).getProjectId(), diff);
+                    log.info("Learning loop triggered for ledgerId={}: changes={}, warningsResolved={}",
+                        ledgerId, diff.getChanges().size(), diff.getWarningsResolved());
+                }
+            } catch (Exception e) {
+                log.warn("Learning loop failed for ledgerId={}: {}", ledgerId, e.getMessage());
+            }
         } else {
             // 推进到下一步
             advanceToNextStep(ledgerId);

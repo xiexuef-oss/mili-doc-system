@@ -70,6 +70,8 @@ const statusLabel = computed(() => {
 })
 
 function handleTabChange(name: string) {
+  const t0 = performance.now()
+  console.log('[TabSwitch] start:', name)
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :
     name === 'doc-ledger' ? 'ProjectDocLedger' :

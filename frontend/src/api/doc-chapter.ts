@@ -111,3 +111,98 @@ export function autoFillAll(docLedgerId: number, projectId: number) {
 export function extractMasterData(projectId: number) {
   return api.post('/doc-chapters/extract-master-data', null, { params: { projectId } })
 }
+
+// ========== AI Chapter Structure Generation ==========
+
+export interface AiStructureRequest {
+  projectId?: number
+  docLedgerId?: number
+  templateId?: number
+  docType?: string
+  additionalPrompt?: string
+  optimize?: boolean
+}
+
+export interface AiChapterNode {
+  chapterNumber: string
+  chapterTitle: string
+  chapterLevel: number
+  orderNum: number
+  isRequired?: boolean
+  writingTips?: string
+  contentSchema?: any
+  children: AiChapterNode[]
+}
+
+export interface AiStructureResponse {
+  chapters: AiChapterNode[]
+  totalChapters: number
+  summary: string
+}
+
+/** AI preview chapter structure (no persistence) */
+export function previewChapterStructure(req: AiStructureRequest) {
+  return api.post('/ai/chapter-structure/preview', req)
+}
+
+/** Apply AI-generated chapter structure to a doc ledger */
+export function applyChapterStructure(docLedgerId: number, chapters: AiChapterNode[]) {
+  return api.post('/ai/chapter-structure/apply', { docLedgerId, chapters })
+}
+
+/** AI optimize existing chapter structure */
+export function optimizeChapterStructure(req: AiStructureRequest) {
+  return api.post('/ai/chapter-structure/optimize', req)
+}
+
+// ========== Chapter Structure Validation ==========
+
+export interface StructureIssue {
+  level: string       // ERROR or WARNING
+  chapterRef: string  // e.g. "3.2"
+  description: string
+}
+
+export interface ChapterStructureValidation {
+  valid: boolean
+  totalChapters: number
+  issuesFound: number
+  issues: StructureIssue[]
+  summary: string
+}
+
+/** Validate chapter structure for a document */
+export function validateChapterStructure(docLedgerId: number) {
+  return api.get(`/doc-chapters/ledger/${docLedgerId}/validate`)
+}
+
+/** AI edit a chapter (rewrite/expand/shorten/polish) */
+export function aiEditChapter(chapterId: number, action: string, instruction?: string) {
+  return api.post(`/doc-chapters/${chapterId}/ai-edit`, { action, instruction })
+}
+
+// ========== DDXML Block Operations ==========
+
+export interface ContentBlock {
+  id: number; type: string; content: string
+}
+
+/** Generate chapter content as DDXML blocks */
+export function generateBlocks(chapterId: number, projectId: number) {
+  return api.post(`/ddxml/chapters/${chapterId}/generate`, null, { params: { projectId } })
+}
+
+/** Execute a block-level edit command */
+export function blockCommand(chapterId: number, command: string, params?: Record<string,any>) {
+  return api.post(`/ddxml/chapters/${chapterId}/command`, { command, ...params })
+}
+
+/** Get blocks for a chapter */
+export function getBlocks(chapterId: number) {
+  return api.get(`/ddxml/chapters/${chapterId}/blocks`)
+}
+
+/** Auto-fix chapter structure numbering and hierarchy */
+export function fixChapterStructure(docLedgerId: number) {
+  return api.post(`/doc-chapters/ledger/${docLedgerId}/fix`)
+}

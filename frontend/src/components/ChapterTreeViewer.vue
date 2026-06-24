@@ -116,7 +116,7 @@ function fillLabel(status: string) {
 .chapter-tree-viewer { min-width: 240px; }
 .tree-node { display: flex; align-items: center; gap: 6px; flex: 1; font-size: 13px; }
 .node-num { flex-shrink: 0; }
-.node-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-status { flex-shrink: 0; margin-left: auto; }
 
 .node-filled .node-title { color: #67c23a; }

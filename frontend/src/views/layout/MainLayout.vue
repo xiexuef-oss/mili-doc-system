@@ -148,7 +148,11 @@ function handleLogout() {
 .header h3 { font-size: 16px; font-weight: 500; }
 .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .main {
+  --el-main-padding: 0;
+  overflow: hidden;
+  box-sizing: border-box; 
+  height: calc(100vh - 64px);
   background: #f0f2f5;
-  padding: 24px;
+  padding: 0;
 }
 </style>

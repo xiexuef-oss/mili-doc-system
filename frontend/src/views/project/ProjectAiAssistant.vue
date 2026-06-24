@@ -7,7 +7,15 @@
           <span>文档目录自动生成</span>
           <el-tag type="info" size="small">Phase 1</el-tag>
         </div>
-      </template>
+      
+  <PrerequisitesCheck
+    v-model="prereqVisible"
+    :project-id="projectId"
+    :doc-type="prereqDocType"
+    api="general"
+    @proceed="onPrereqProceed"
+  />
+</template>
 
       <el-descriptions :column="2" border style="margin-bottom: 16px">
         <el-descriptions-item label="项目名称">{{ project?.projectName }}</el-descriptions-item>
@@ -237,6 +245,7 @@ import {
   type DocCatalog,
   type CatalogPreviewResult
 } from '@/api/ai'
+import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
 
 const route = useRoute()
 const projectId = computed(() => Number(route.params.projectId))
@@ -320,7 +329,7 @@ async function checkHealth() {
     const res = await checkAiHealth()
     healthOk.value = res.data.data?.connected === true
     if (healthOk.value) {
-      ElMessage.success(`本地大模型已连接 (${res.data.data.model})`)
+      // Connection OK, silent
     }
   } catch {
     healthOk.value = false
@@ -381,6 +390,22 @@ async function handleGenerateCatalog() {
   } finally {
     generating.value = false
   }
+}
+
+
+// Prerequisites check
+const prereqVisible = ref(false)
+const prereqDocType = ref('')
+const prereqCallback = ref(null as (() => void) | null)
+
+function checkThenGenerate(docType: string, callback: () => void) {
+  prereqDocType.value = docType
+  prereqCallback.value = callback
+  prereqVisible.value = true
+}
+
+function onPrereqProceed() {
+  if (prereqCallback.value) prereqCallback.value()
 }
 
 function handleGenerateDraft() {
@@ -458,7 +483,8 @@ async function handleSaveDraft() {
 
 onMounted(() => {
   loadData()
-  checkHealth()
+  // Defer health check to not block initial render
+  setTimeout(() => checkHealth(), 1000)
 })
 </script>
 

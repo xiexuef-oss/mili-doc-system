@@ -23,6 +23,9 @@ public class DocChapter {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String contentJson;
 
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String contentBlocks; // DDXML block array: [{"id":1,"type":"title","content":"..."},...]
+
     private String fillStatus;
     private Integer fillPercentage;
     private String status;

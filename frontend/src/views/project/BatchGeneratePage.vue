@@ -43,7 +43,9 @@
           <el-tag v-else-if="resultMap[row.templateId]?.status === 'error'" type="danger" size="small">失败</el-tag>
           <el-tag v-else-if="resultMap[row.templateId]?.status === 'generating'" type="warning" size="small" effect="dark">生成中</el-tag>
           <el-tag v-else type="info" size="small">待生成</el-tag>
-        </template>
+        
+  <PrerequisitesCheck v-model="prereqVisible" :project-id="projectId" :doc-type="prereqDocType" api="general" @proceed="doBatchGenerate" />
+</template>
       </el-table-column>
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
@@ -61,7 +63,9 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: "BatchGeneratePage" })
 import { ref, computed, onMounted } from 'vue'
+import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { VideoPlay, Close } from '@element-plus/icons-vue'
@@ -80,6 +84,9 @@ const selectedEquipmentType = ref<string | undefined>(undefined)
 const checklistItems = ref<ProjectDocChecklist[]>([])
 const loadingChecklist = ref(false)
 const generating = ref(false)
+const prereqVisible = ref(false)
+const prereqDocType = ref('any_draft')
+let pendingBatchGenerate = false
 const currentDoc = ref('')
 const totalDocs = ref(0)
 const completedDocs = ref(0)
@@ -101,7 +108,12 @@ const progress = computed(() => {
   return completedDocs.value / totalDocs.value
 })
 
-onMounted(async () => {
+const pageLoading = ref(true)
+onMounted(() => {
+  loadPageData()
+})
+
+async function loadPageData() {
   try {
     const [stageRes, etRes] = await Promise.all([
       getProjectStages(projectId.value),
@@ -117,7 +129,8 @@ onMounted(async () => {
       loadChecklist()
     }
   } catch { /* ignore */ }
-})
+  finally { pageLoading.value = false }
+}
 
 async function loadChecklist() {
   if (!selectedStageId.value) return

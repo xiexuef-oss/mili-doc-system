@@ -66,3 +66,8 @@ export function getRelRequirements(projectId: number) {
 export function saveRelRequirement(data: any) {
   return request.post('/reliability/requirement', data)
 }
+
+/** 检查文档生成的前置条件 */
+export function checkPrerequisites(projectId: number, docType: string) {
+  return request.get(`/reliability/projects/${projectId}/${docType}/prerequisites`)
+}

@@ -26,4 +26,8 @@ public class BusinessException extends RuntimeException {
     public static BusinessException documentLocked() {
         return new BusinessException("DOCUMENT_LOCKED", "文档已被锁定");
     }
+
+    public static BusinessException serverError(String message) {
+        return new BusinessException("SERVER_ERROR", message);
+    }
 }

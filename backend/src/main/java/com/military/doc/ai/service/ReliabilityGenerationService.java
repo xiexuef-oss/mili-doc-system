@@ -300,7 +300,13 @@ public class ReliabilityGenerationService {
         }
 
         log.info("Reliability one-shot: promptName={}, chars={}", promptName, userPrompt.length());
-        return llmClient.chat(systemPrompt, userPrompt);
+        String result = llmClient.chat(systemPrompt, userPrompt);
+        if (result != null && !result.isEmpty() && result.startsWith("null")) {
+            String cleaned = result.replaceFirst("^(null)+", "");
+            log.info("Stripped {} leading null chars from reliability AI response", result.length() - cleaned.length());
+            return cleaned;
+        }
+        return result;
     }
 
     private void generateOneShotStream(Long projectId, Long docLedgerId,
@@ -317,7 +323,15 @@ public class ReliabilityGenerationService {
         if (systemPrompt.isEmpty()) {
             systemPrompt = "你是军工可靠性文档撰写专家，请输出符合GJB规范的文档正文。";
         }
-        llmClient.chatStream(systemPrompt, userPrompt, onChunk);
+        var stripRef = new Object() { boolean stripping = true; };
+        llmClient.chatStream(systemPrompt, userPrompt, chunk -> {
+            if (stripRef.stripping) {
+                String stripped = chunk.replaceAll("^null+", "");
+                if (stripped.isEmpty() && chunk.length() <= 200) return;
+                if (!stripped.isEmpty()) { stripRef.stripping = false; chunk = stripped; }
+            }
+            onChunk.accept(chunk);
+        });
     }
 
     /**
@@ -336,11 +350,12 @@ public class ReliabilityGenerationService {
                     ctx.append("\n\n## 可靠性指标要求\n");
                     for (var req : reqs) {
                         ctx.append("- MTBF: ");
-                        ctx.append(req.getMtbfHours() != null ? req.getMtbfHours() + " h" : "XXX");
+                        ctx.append(req.getMtbfHours() != null ? req.getMtbfHours() + " h" : "待确定");
                         ctx.append("\n");
                         if (req.getReliabilityAtTime() != null) {
-                            ctx.append("- 可靠度 R(").append(req.getReliabilityTimeHours())
-                               .append("h) = ").append(req.getReliabilityAtTime()).append("\n");
+                            ctx.append("- 可靠度 R(")
+                               .append(req.getReliabilityTimeHours() != null ? req.getReliabilityTimeHours() + "h" : "待确定时间")
+                               .append(") = ").append(req.getReliabilityAtTime()).append("\n");
                         }
                         if (req.getVerificationMethod() != null) {
                             ctx.append("- 验证方法: ").append(req.getVerificationMethod()).append("\n");

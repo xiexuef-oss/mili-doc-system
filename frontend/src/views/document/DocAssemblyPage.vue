@@ -10,6 +10,9 @@
         <el-select v-model="selectedTemplateId" placeholder="选择模板初始化章节" style="width:220px" @change="handleInitChapters">
           <el-option v-for="t in templates" :key="t.id" :label="t.templateName" :value="t.id" />
         </el-select>
+        <el-button type="success" @click="showAiDialog = true" :disabled="!ledger?.projectId">
+          <el-icon><MagicStick /></el-icon>AI 生成结构
+        </el-button>
         <el-button type="primary" @click="showExport = true">
           <el-icon><Download /></el-icon>导出 Word
         </el-button>
@@ -18,18 +21,41 @@
 
     <el-row :gutter="16" v-if="ledger">
       <!-- Left: Chapter tree -->
-      <el-col :span="5">
+      <el-col :xs="24" :sm="24" :md="5" :lg="5" :xl="5">
         <el-card shadow="never">
           <template #header>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span>章节结构</span>
               <el-tag size="small">{{ completionSummary.filled || 0 }}/{{ completionSummary.total || 0 }}</el-tag>
             </div>
-          </template>
+          
+    <div v-if="ledger?.id" class="quality-sidebar">
+      <QualityPanel :ledger-id="ledger.id" />
+    </div>
+</template>
           <ChapterTreeViewer
             :tree-data="chapterTree"
             @node-click="selectChapter"
           />
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <el-button size="small" :loading="validating" @click="handleValidate">
+              <el-icon><CircleCheck /></el-icon>校验结构
+            </el-button>
+            <el-button v-if="validationResult && !validationResult.valid" size="small" type="warning" :loading="fixing" @click="handleFix">
+              <el-icon><Tools /></el-icon>一键修复
+            </el-button>
+          </div>
+          <el-alert v-if="validationResult" :title="validationResult.summary"
+            :type="validationResult.valid ? 'success' : 'error'"
+            :closable="false" show-icon style="margin-top:8px;font-size:12px" />
+          <div v-if="validationResult && validationResult.issues.length > 0" style="margin-top:4px;max-height:150px;overflow-y:auto">
+            <div v-for="(issue, i) in validationResult.issues" :key="i"
+              style="font-size:11px;padding:2px 4px;margin:1px 0;border-radius:2px"
+              :style="{background: issue.level==='ERROR'?'#fef0f0':'#fdf6ec'}">
+              <el-tag size="small" :type="issue.level==='ERROR'?'danger':'warning'" style="font-size:10px">{{ issue.level }}</el-tag>
+              <strong>{{ issue.chapterRef }}</strong> {{ issue.description }}
+            </div>
+          </div>
           <CompletenessProgressBar
             v-if="completionSummary.total > 0"
             :passed="completionSummary.filled || 0"
@@ -42,7 +68,7 @@
       </el-col>
 
       <!-- Center: Chapter editor -->
-      <el-col :span="13">
+      <el-col :xs="24" :sm="24" :md="13" :lg="13" :xl="13">
         <el-card shadow="never">
           <template #header>
             <span v-if="selectedChapter">
@@ -104,7 +130,7 @@
       </el-col>
 
       <!-- Right: Knowledge & completeness -->
-      <el-col :span="6">
+      <el-col :xs="24" :sm="24" :md="6" :lg="6" :xl="6">
         <el-card shadow="never">
           <template #header><span>知识卡片</span></template>
           <div v-if="knowledgeCards.length > 0">
@@ -145,22 +171,76 @@
       @done="loadChapters"
     />
 
+    <!-- AI Structure Dialog -->
+    <el-dialog v-model="showAiDialog" title="AI 智能构建章节结构" width="800px" :close-on-click-modal="false" @closed="aiPreview = null; aiRequest.additionalPrompt = ''">
+      <el-form label-width="100px" size="small">
+        <el-form-item label="文档类型">
+          <el-input v-model="aiRequest.docType" placeholder="如：研制总结、可靠性大纲、产品规范等" />
+        </el-form-item>
+        <el-form-item label="参考模板">
+          <el-select v-model="aiRequest.templateId" placeholder="可选，选择已有模板作为参考" clearable style="width:100%">
+            <el-option v-for="t in templates" :key="t.id" :label="t.templateName" :value="t.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="补充要求">
+          <el-input v-model="aiRequest.additionalPrompt" type="textarea" :rows="3"
+            placeholder="可输入额外的结构要求，如：'需要增加电磁兼容性试验章节'、'重点突出安全性分析'等" />
+        </el-form-item>
+      </el-form>
+
+      <!-- Preview result -->
+      <div v-if="aiPreview" class="ai-preview">
+        <el-alert :title="aiPreview.summary" type="success" :closable="false" show-icon style="margin-bottom:12px" />
+        <div class="ai-tree">
+          <el-tree :data="aiPreview.chapters" :props="{ children: 'children', label: 'chapterTitle' }"
+            node-key="chapterNumber" default-expand-all>
+            <template #default="{ data }">
+              <span style="display:flex;align-items:center;gap:8px">
+                <el-tag size="small" type="info">{{ data.chapterNumber }}</el-tag>
+                <span>{{ data.chapterTitle }}</span>
+                <el-tag v-if="data.isRequired" size="small" type="danger">必填</el-tag>
+                <el-tag v-if="data.writingTips" size="small" type="success">含提示</el-tag>
+                <el-tag v-if="data.contentSchema" size="small" type="warning">结构化</el-tag>
+              </span>
+            </template>
+          </el-tree>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="showAiDialog = false">关闭</el-button>
+        <el-button type="warning" :loading="aiLoading" @click="handleAiOptimizeStructure" :disabled="chapterTree.length === 0">
+          优化现有结构
+        </el-button>
+        <el-button type="primary" :loading="aiLoading" @click="handleAiGenerateStructure">
+          {{ chapterTree.length > 0 ? '重新生成' : '智能生成' }}
+        </el-button>
+        <el-button v-if="aiPreview" type="success" :loading="aiApplying" @click="handleAiApplyStructure">
+          应用此结构
+        </el-button>
+      </template>
+    </el-dialog>
+
     <div v-if="!ledger" style="text-align:center;padding:80px 0;color:#999">加载中...</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Download, MagicStick, CircleCheck, Tools, ChatDotRound } from '@element-plus/icons-vue'
 import { getDocLedger, type DocLedgerItem } from '@/api/doc-ledger'
 import { getChapterTree, getCompletionSummary, updateChapterContent, initFromTemplate,
-  getChapterWritingContext, generateChapter, autoFillChapter, type ChapterWritingContext } from '@/api/doc-chapter'
+  getChapterWritingContext, generateChapter, autoFillChapter, type ChapterWritingContext,
+  previewChapterStructure, applyChapterStructure, optimizeChapterStructure,
+  type AiStructureRequest, type AiStructureResponse, type AiChapterNode,
+  validateChapterStructure, fixChapterStructure, type ChapterStructureValidation } from '@/api/doc-chapter'
 import { getTemplates, type DocTemplateV2 } from '@/api/template-v2'
 import { getKnowledgeCards, type KnowledgeCard } from '@/api/knowledge-card'
 import ChapterTreeViewer from '@/components/ChapterTreeViewer.vue'
 import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
+import QualityPanel from '@/components/QualityPanel.vue'
 import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
 import ChapterWritingGuide from '@/components/ChapterWritingGuide.vue'
 import DocxExportDialog from '@/components/DocxExportDialog.vue'
@@ -197,6 +277,97 @@ const contentSchema = computed(() => {
 })
 
 const contentJsonObj: Record<string, any> = reactive({})
+
+// ---- AI Chapter Structure ----
+const showAiDialog = ref(false)
+const aiLoading = ref(false)
+const aiApplying = ref(false)
+const aiPreview = ref<AiStructureResponse | null>(null)
+const aiRequest = reactive<AiStructureRequest>({
+  projectId: 0, docLedgerId: 0, docType: '', templateId: undefined, additionalPrompt: '', optimize: false
+})
+
+async function handleAiGenerateStructure() {
+  if (!ledger.value?.projectId) { ElMessage.warning('缺少项目ID'); return }
+  aiLoading.value = true; aiPreview.value = null
+  aiRequest.projectId = ledger.value.projectId
+  aiRequest.docLedgerId = ledger.value.id
+  aiRequest.optimize = false
+  try {
+    const res = await previewChapterStructure({ ...aiRequest })
+    aiPreview.value = res.data.data as AiStructureResponse
+  } catch {
+    ElMessage.error('AI 生成失败，请检查 AI 服务连接')
+  }
+  aiLoading.value = false
+}
+
+async function handleAiOptimizeStructure() {
+  if (!ledger.value?.id) return
+  aiLoading.value = true; aiPreview.value = null
+  aiRequest.docLedgerId = ledger.value.id
+  try {
+    const res = await optimizeChapterStructure({ docLedgerId: ledger.value.id, additionalPrompt: aiRequest.additionalPrompt })
+    aiPreview.value = res.data.data as AiStructureResponse
+  } catch {
+    ElMessage.error('AI 优化失败')
+  }
+  aiLoading.value = false
+}
+
+async function handleAiApplyStructure() {
+  if (!aiPreview.value || !ledger.value?.id) return
+  aiApplying.value = true
+  try {
+    await applyChapterStructure(ledger.value.id, aiPreview.value.chapters)
+    ElMessage.success('AI 章节结构已应用')
+    showAiDialog.value = false
+    loadChapters(); loadSummary()
+  } catch {
+    ElMessage.error('应用失败')
+  }
+  aiApplying.value = false
+}
+
+// ---- Chapter Structure Validation ----
+const validating = ref(false)
+const fixing = ref(false)
+const validationResult = ref<ChapterStructureValidation | null>(null)
+
+async function handleValidate() {
+  if (!ledger.value?.id) return
+  validating.value = true
+  try {
+    const res = await validateChapterStructure(ledger.value.id)
+    validationResult.value = res.data.data as ChapterStructureValidation
+    if (validationResult.value?.valid) {
+      ElMessage.success('章节结构校验通过')
+    } else {
+      ElMessage.warning('发现结构问题，请查看详情')
+    }
+  } catch {
+    ElMessage.error('校验失败')
+  }
+  validating.value = false
+}
+
+async function handleFix() {
+  if (!ledger.value?.id) return
+  fixing.value = true
+  try {
+    const res = await fixChapterStructure(ledger.value.id)
+    validationResult.value = res.data.data as ChapterStructureValidation
+    if (validationResult.value?.valid) {
+      ElMessage.success('章节结构已修复')
+    } else {
+      ElMessage.warning('部分问题已修复，剩余问题请手动调整')
+    }
+    loadChapters(); loadSummary()
+  } catch {
+    ElMessage.error('修复失败')
+  }
+  fixing.value = false
+}
 
 const cardTags = computed(() => {
   if (!selectedCard.value?.tags) return []
@@ -343,7 +514,41 @@ async function handleAutoFill() {
   autoFilling.value = false
 }
 
+// Watch for route param changes (switch between documents)
+watch(() => route.params.docLedgerId, (newId) => {
+  if (newId) {
+    loadLedger()
+    loadChapters()
+    loadSummary()
+    loadTemplates()
+    loadKnowledgeCards()
+  }
+})
+
 onMounted(() => { loadLedger(); loadChapters(); loadSummary(); loadTemplates(); loadKnowledgeCards() })
+
+function handleGjbExport() {
+  if (!ledger.value?.id) return
+  const url = `/api/v1/reliability/documents/${ledger.value.id}/export`
+  fetch(url).then(r => r.text()).then(text => {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${ledger.value?.docName || '文档'}.txt`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    ElMessage.success('导出成功')
+  }).catch(() => ElMessage.error('导出失败'))
+}
+
+
+function handleDialogue() {
+  if (!ledger.value?.id) return
+  const route = useRoute()
+  const router = useRouter()
+  // Navigate to dialogue writer
+  window.open(`/dialogue-writer?projectId=${route.params.projectId}&docType=${ledger.value.docType || 'any_draft'}&docName=${ledger.value.docName || '文档'}&ledgerId=${ledger.value.id}`, '_blank')
+}
 </script>
 
 <style scoped>
@@ -360,4 +565,7 @@ onMounted(() => { loadLedger(); loadChapters(); loadSummary(); loadTemplates(); 
 .card-detail { font-size: 13px; line-height: 1.8; }
 .plain-box { padding: 8px; background: #f0f9eb; border-radius: 4px; margin-bottom: 8px; }
 .schema-fields { margin-top: 12px; padding: 12px; background: var(--el-fill-color-lighter); border-radius: 4px; }
+.ai-preview { margin-top: 16px; border: 1px solid var(--el-border-color); border-radius: 6px; padding: 12px; background: #fafbfc; }
+.ai-tree { max-height: 400px; overflow-y: auto; }
+.ai-tree :deep(.el-tree-node__content) { height: auto; padding: 3px 0; }
 </style>

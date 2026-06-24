@@ -23,6 +23,7 @@ import com.military.doc.modules.template.entity.DocTemplateCategory;
 import com.military.doc.modules.template.mapper.DocTemplateV2Mapper;
 import com.military.doc.modules.template.mapper.DocTemplateChapterMapper;
 import com.military.doc.modules.template.mapper.DocTemplateCategoryMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -52,6 +53,7 @@ public class ContextAssemblyService {
     private final VectorIndexService vectorIndexService;
     private final EmbeddingProperties embeddingProperties;
     private final ProjectMasterDataService masterDataService;
+    private final ObjectMapper objectMapper;
     private SmartTruncationService smartTruncationService; // setter injected
 
     // 内网部署，模型上下文窗口充足，不再硬编码截断
@@ -75,7 +77,8 @@ public class ContextAssemblyService {
                                   FileTextExtractor fileTextExtractor,
                                   VectorIndexService vectorIndexService,
                                   EmbeddingProperties embeddingProperties,
-                                  ProjectMasterDataService masterDataService) {
+                                  ProjectMasterDataService masterDataService,
+                                  ObjectMapper objectMapper) {
         this.projectMapper = projectMapper;
         this.inputFileMapper = inputFileMapper;
         this.projectStageMapper = projectStageMapper;
@@ -90,6 +93,35 @@ public class ContextAssemblyService {
         this.vectorIndexService = vectorIndexService;
         this.embeddingProperties = embeddingProperties;
         this.masterDataService = masterDataService;
+        this.objectMapper = objectMapper;
+    }
+
+    /** Fast context assembly without OCR/embedding (for real-time scenarios). */
+    public String assembleBasicContext(Long projectId) {
+        if (projectId == null) return "";
+        StringBuilder ctx = new StringBuilder();
+        try {
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) return "";
+            ctx.append("- 项目名称: ").append(nullToEmpty(project.getProjectName())).append("\n");
+            ctx.append("- 项目类型: ").append(nullToEmpty(project.getProjectType())).append("\n");
+            ctx.append("- 适用标准: ").append(nullToEmpty(project.getApplicableStandards())).append("\n");
+            
+            // Master data (fast)
+            try {
+                Map<String, Object> masterData = masterDataService.getFlattenedData(projectId);
+                if (masterData != null && !masterData.isEmpty()) {
+                    ctx.append("- 关键参数:\n");
+                    for (Map.Entry<String, Object> e : masterData.entrySet()) {
+                        if (e.getValue() != null && !e.getValue().toString().isBlank())
+                            ctx.append("  ").append(e.getKey()).append(": ").append(e.getValue()).append("\n");
+                    }
+                }
+            } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("Basic context assembly failed: {}", e.getMessage());
+        }
+        return ctx.toString();
     }
 
     public String assembleContext(Long projectId) {
@@ -102,10 +134,10 @@ public class ContextAssemblyService {
             return "";
         }
         ctx.append("## 项目信息\n");
-        ctx.append("- 项目编号: ").append(project.getProjectCode()).append("\n");
-        ctx.append("- 项目名称: ").append(project.getProjectName()).append("\n");
-        ctx.append("- 项目类型: ").append(project.getProjectType()).append("\n");
-        ctx.append("- 密级: ").append(project.getSecurityLevel()).append("\n");
+        ctx.append("- 项目编号: ").append(nullToEmpty(project.getProjectCode())).append("\n");
+        ctx.append("- 项目名称: ").append(nullToEmpty(project.getProjectName())).append("\n");
+        ctx.append("- 项目类型: ").append(nullToEmpty(project.getProjectType())).append("\n");
+        ctx.append("- 密级: ").append(nullToEmpty(project.getSecurityLevel())).append("\n");
         ctx.append("- 适用标准: ").append(nullToEmpty(project.getApplicableStandards())).append("\n\n");
 
         // 2. Input files
@@ -124,18 +156,56 @@ public class ContextAssemblyService {
             }
         }
 
-        // 3. Master data
+        // 3. Master data — structured known/missing split
         try {
             Map<String, Object> masterData = masterDataService.getFlattenedData(projectId);
             if (!masterData.isEmpty()) {
-                ctx.append("## 项目主数据\n");
+                List<String> knownItems = new ArrayList<>();
+                List<String> missingItems = new ArrayList<>();
+                
                 for (Map.Entry<String, Object> entry : masterData.entrySet()) {
                     Object value = entry.getValue();
-                    if (value == null) continue;
-                    String str = value instanceof String ? (String) value : value.toString();
-                    ctx.append("- **").append(entry.getKey()).append("**: ").append(str).append("\n");
+                    String key = entry.getKey();
+                    String str = null;
+                    boolean hasValue = false;
+                    
+                    if (value instanceof String s) {
+                        str = s;
+                        hasValue = !str.isBlank() && !"null".equals(str);
+                    } else if (value instanceof Number || value instanceof Boolean) {
+                        str = String.valueOf(value);
+                        hasValue = true;
+                    } else if (value != null) {
+                        try {
+                            str = objectMapper.writeValueAsString(value);
+                            if (str.length() > 500) str = str.substring(0, 500) + "...";
+                            hasValue = !str.isBlank() && !"null".equals(str) && !"[]".equals(str) && !"{}".equals(str);
+                        } catch (Exception e) {
+                            continue;
+                        }
+                    }
+                    
+                    if (hasValue && str != null) {
+                        knownItems.add(formatFieldLabel(key) + ": " + str);
+                    } else {
+                        missingItems.add(formatFieldLabel(key));
+                    }
                 }
-                ctx.append("\n");
+                
+                if (!knownItems.isEmpty()) {
+                    ctx.append("## 已知数据（必须原样使用，不得修改）\n");
+                    for (String item : knownItems) {
+                        ctx.append("- ").append(item).append("\n");
+                    }
+                    ctx.append("\n");
+                }
+                if (!missingItems.isEmpty()) {
+                    ctx.append("## 缺失数据（可用GJB默认值填充但必须标记[⚠待核实]）\n");
+                    for (String item : missingItems) {
+                        ctx.append("- ").append(item).append("（缺失）\n");
+                    }
+                    ctx.append("\n");
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to load master data for project {}: {}", projectId, e.getMessage());
@@ -324,6 +394,39 @@ public class ContextAssemblyService {
         sb.append(nullToEmpty(project.getProjectType())).append(" ");
         sb.append(nullToEmpty(project.getApplicableStandards()));
         return sb.toString().trim();
+    }
+
+
+    /** Format camelCase field names to readable Chinese labels where possible. */
+    private String formatFieldLabel(String key) {
+        // Common field label mappings
+        return switch (key) {
+            case "productName" -> "产品名称";
+            case "productType" -> "产品类型";
+            case "mtbfValue", "mtbfHours", "mtbf" -> "MTBF(h)";
+            case "mtbcfHours", "mtbcf" -> "MTBCF(h)";
+            case "reliabilityAtTime" -> "可靠度R(t)";
+            case "reliabilityTimeHours" -> "可靠度对应时间(h)";
+            case "serviceLifeYears" -> "使用寿命(年)";
+            case "storageReliability" -> "贮存可靠度";
+            case "failureCriteria" -> "故障判据";
+            case "verificationMethod" -> "验证方法";
+            case "requirementSource" -> "要求来源";
+            case "tempRange", "operatingTemp" -> "工作温度范围";
+            case "vibration" -> "振动条件";
+            case "humidity" -> "湿度要求";
+            case "saltSpray" -> "盐雾要求";
+            case "emcRequirement" -> "电磁兼容要求";
+            case "componentList" -> "元器件清单";
+            case "componentQualityLevel" -> "元器件质量等级";
+            case "reliabilityModel" -> "可靠性模型";
+            case "missionProfile" -> "任务剖面";
+            case "deratingLevel" -> "降额等级";
+            case "applicableStandards" -> "适用标准";
+            case "environmentCategory" -> "GJB299D环境类别";
+            case "lifecyclePhase", "developmentStage" -> "研制阶段";
+            default -> key;
+        };
     }
 
     private String nullToEmpty(String s) {

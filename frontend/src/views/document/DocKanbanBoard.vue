@@ -277,21 +277,36 @@
       <div v-if="draftItem" style="margin-bottom:12px">
         <el-tag size="small" type="info">{{ draftItem.docCode }}</el-tag>
         <span style="margin-left:8px;font-weight:500">{{ draftItem.docName }}</span>
+        <el-tag v-if="draftItem.docCategory" size="small" type="success" style="margin-left:8px">{{ draftItem.docCategory }}</el-tag>
       </div>
       <el-alert v-if="!healthOk" title="AI 服务未连接，无法生成初稿" type="error" :closable="false" show-icon style="margin-bottom:12px" />
-      <el-form label-width="100px">
-        <el-form-item label="参考目录">
-          <div style="display:flex;align-items:center;gap:8px;width:100%">
-            <el-select v-model="draftCatalogId" placeholder="可选，选择目录条目提供更精确的文档规格" filterable clearable style="flex:1" :disabled="draftStreaming" :loading="catalogLoading">
-              <el-option v-for="c in catalogEntries" :key="c.id" :label="`${c.docCode} - ${c.docName}`" :value="c.id!" />
-            </el-select>
-            <el-icon v-if="catalogLoading" class="is-loading"><Loading /></el-icon>
-          </div>
-          <div style="font-size:12px;color:var(--el-text-color-secondary);margin-top:4px">可选：选择目录条目可提供更精确的文档规格。不选时使用当前文档元数据，AI 仍会参考模板、输入文件和军标来生成。</div>
-        </el-form-item>
-      </el-form>
-      <el-alert v-if="!catalogLoading && catalogEntries.length === 0" :title="`该项目暂无目录条目，将使用当前文档元数据生成（仍会参考输入文件和军标）`" type="info" :closable="false" show-icon style="margin-top:8px" />
-      <div v-if="draftContent || draftStreaming" class="draft-output">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px">
+        <template #title>
+          系统将自动匹配文档模板、项目主数据、适用军标和输入文件来生成初稿。如无模板则通过AI+GJB标准自动编排章节结构
+        </template>
+      </el-alert>
+      <div v-if="draftProgress" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px">
+          <span>生成进度：{{ draftProgress.current }}/{{ draftProgress.total }}</span>
+          <span style="color:var(--el-text-color-secondary)">{{ draftProgress.title }}</span>
+          <span>已生成 {{ (draftProgress.chars / 1024).toFixed(1) }} KB</span>
+        </div>
+        <el-progress :percentage="Math.round(draftProgress.current/draftProgress.total*100)" :stroke-width="8" :text-inside="true" />
+      </div>
+      <!-- Structure review (Phase 1) -->
+      <div v-if="draftStructure" class="structure-review">
+        <el-alert title="文档结构已生成，请审核修改后保存" type="success" :closable="false" show-icon style="margin-bottom:12px" />
+        <el-input v-model="draftContent" type="textarea" :rows="20" placeholder="在此编辑文档结构..." />
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <el-button type="primary" :loading="draftSaving" @click="applyStructureAndGenerate">
+            保存并使用此结构生成
+          </el-button>
+          <el-button type="success" @click="saveStructureToTemplate">
+            保存为模板
+          </el-button>
+        </div>
+      </div>
+      <div v-else-if="draftContent || draftStreaming" class="draft-output">
         <div class="draft-output-header">
           <span>生成结果</span>
           <span v-if="draftStreaming" style="color:var(--el-color-warning)">生成中，已接收 {{ draftCharCount }} 字...</span>
@@ -390,7 +405,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useProjectStore } from '@/stores/project'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, RefreshRight, FolderOpened, Loading, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, RefreshRight, FolderOpened, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import {
   getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
@@ -399,9 +414,10 @@ import { getCompletionSummaryBatch, getCompletionSummary } from '@/api/doc-chapt
 import CompletenessProgressBar from '@/components/CompletenessProgressBar.vue'
 import DocxExportDialog from '@/components/DocxExportDialog.vue'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
-import { getDocCatalogsByProject, type DocCatalogItem } from '@/api/doc-catalog'
 import {
-  proofread, preReview, streamDraft, saveDraft
+  proofread, preReview, streamDraft, saveDraft,
+  applyDraftStructure, saveStructureAsTemplate,
+  type GenerationProgress
 } from '@/api/ai'
 import { getDictItems, type DictItem } from '@/api/dict'
 
@@ -822,33 +838,58 @@ async function handleTransition() {
 // ---- AI: Draft Generation ----
 const showDraftDialog = ref(false)
 const draftItem = ref<DocLedgerItem | null>(null)
-const draftCatalogId = ref<number | null>(null)
 const draftStreaming = ref(false)
 const draftContent = ref('')
 const draftCharCount = ref(0)
 const draftSaving = ref(false)
-const catalogEntries = ref<DocCatalogItem[]>([])
+const draftProgress = ref<GenerationProgress | null>(null)
+const draftStructure = ref<any>(null)
 let draftAbortController: AbortController | null = null
 
-const catalogLoading = ref(false)
+async function applyStructureAndGenerate() {
+  if (!draftStructure.value || !draftItem.value?.id) return
+  draftSaving.value = true
+  try {
+    await applyDraftStructure({
+      docLedgerId: draftItem.value.id,
+      projectId,
+      chapters: draftStructure.value.chapters,
+      markdownContent: draftStructure.value.markdownContent,
+      suggestedTemplateName: draftStructure.value.suggestedTemplateName,
+      gjbStandardRef: draftStructure.value.gjbStandardRef,
+      saveAsTemplate: true
+    })
+    ElMessage.success('章节结构已应用并保存为模板')
+    showDraftDialog.value = false
+    draftStructure.value = null
+    // Now start actual content generation
+    generateDraft(draftItem.value)
+    setTimeout(() => startDraftGeneration(), 500)
+  } catch {
+    ElMessage.error('应用结构失败')
+  } finally {
+    draftSaving.value = false
+  }
+}
+
+async function saveStructureToTemplate() {
+  if (!draftStructure.value) return
+  try {
+    await saveStructureAsTemplate({
+      chapters: draftStructure.value.chapters,
+      markdownContent: draftStructure.value.markdownContent,
+      suggestedTemplateName: draftStructure.value.suggestedTemplateName,
+      gjbStandardRef: draftStructure.value.gjbStandardRef
+    })
+    ElMessage.success('模板已保存')
+  } catch {
+    ElMessage.error('保存模板失败')
+  }
+}
 
 async function generateDraft(item: DocLedgerItem) {
-  draftItem.value = item
-  draftContent.value = ''
-  draftCharCount.value = 0
-  draftCatalogId.value = item.catalogId || null
-  catalogEntries.value = []
-  catalogLoading.value = true
-  showDraftDialog.value = true
-  try {
-    const res = await getDocCatalogsByProject(projectId)
-    catalogEntries.value = res.data.data || []
-    // Auto-select if document has no catalogId and there's exactly one entry
-    if (!draftCatalogId.value && catalogEntries.value.length === 1) {
-      draftCatalogId.value = catalogEntries.value[0].id!
-    }
-  } catch { catalogEntries.value = [] }
-  finally { catalogLoading.value = false }
+  // Navigate to AI Chat (now Doubao-style doc writing page)
+  router.push({ name: 'ChatPage', query: { projectId, docLedgerId: item.id } })
 }
 
 function startDraftGeneration() {
@@ -860,10 +901,12 @@ function startDraftGeneration() {
   draftStreaming.value = true
   draftContent.value = ''
   draftCharCount.value = 0
+  draftProgress.value = null
 
+  // System auto-matches template via checklist chain — no manual selection needed
   draftAbortController = streamDraft(
     projectId,
-    draftCatalogId.value,
+    null, // catalogId: auto-matched by backend
     draftItem.value?.id ?? null,
     (chunk: string) => {
       draftContent.value += chunk
@@ -878,6 +921,15 @@ function startDraftGeneration() {
     (err: Error) => {
       draftStreaming.value = false
       ElMessage.error(`生成失败: ${err.message}`)
+    },
+    (p: GenerationProgress) => {
+      draftProgress.value = p
+    },
+    (structure: any) => {
+      // Phase 1 complete: AI generated structure for review
+      draftStreaming.value = false
+      draftContent.value = structure.markdownContent || ''
+      draftStructure.value = structure
     }
   )
 }
@@ -897,7 +949,6 @@ async function handleSaveDraft() {
     await saveDraft({
       projectId,
       docLedgerId: draftItem.value.id ?? undefined,
-      catalogId: draftCatalogId.value ?? undefined,
       stageId: selectedStageId.value ?? undefined,
       docName: draftItem.value.docName || 'AI 生成文档',
       docType: draftItem.value.docType || 'MANAGEMENT_DOC',
@@ -1057,6 +1108,8 @@ watch(treeFilter, (val) => {
 .draft-output { margin-top:16px; border:1px solid var(--el-border-color); border-radius:6px; overflow:hidden; }
 .draft-output-header { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:var(--el-fill-color-light); border-bottom:1px solid var(--el-border-color); font-size:13px; }
 .draft-output-body { padding:16px; max-height:300px; overflow-y:auto; background:#fff; font-size:14px; line-height:1.8; }
+.structure-review { margin-top:12px; }
+.structure-review :deep(textarea) { font-family:'Courier New',monospace; font-size:13px; line-height:1.6; min-height:400px; }
 .markdown-body :deep(h1) { font-size:20px; margin:16px 0 8px; border-bottom:1px solid var(--el-border-color); padding-bottom:4px; }
 .markdown-body :deep(h2) { font-size:18px; margin:14px 0 6px; }
 .markdown-body :deep(h3) { font-size:16px; margin:12px 0 4px; }

@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import com.military.doc.modules.document.service.DocumentDependencyService;
+import com.military.doc.modules.document.service.DocumentDependencyService.DependencyCheckResult;
 
 /**
  * AI 文档初稿生成与保存。
@@ -46,19 +48,22 @@ public class DraftGenerationController {
     private final DocVersionService docVersionService;
     private final DocChapterService docChapterService;
     private final FileStorageService fileStorageService;
+    private final DocumentDependencyService dependencyService;
 
     public DraftGenerationController(DraftGenerationService draftGenerationService,
                                       DocLedgerService docLedgerService,
                                       DocFileService docFileService,
                                       DocVersionService docVersionService,
                                       DocChapterService docChapterService,
-                                      FileStorageService fileStorageService) {
+                                      FileStorageService fileStorageService,
+                              DocumentDependencyService dependencyService) {
         this.draftGenerationService = draftGenerationService;
         this.docLedgerService = docLedgerService;
         this.docFileService = docFileService;
         this.docVersionService = docVersionService;
         this.docChapterService = docChapterService;
         this.fileStorageService = fileStorageService;
+        this.dependencyService = dependencyService;
     }
 
     @GetMapping("/draft/stream")
@@ -81,7 +86,7 @@ public class DraftGenerationController {
                         log.debug("SSE send aborted");
                         throw new RuntimeException("SSE_ABORT");
                     }
-                });
+                }, (c, t, title, chars) -> {});
                 emitter.send(SseEmitter.event().name("done").data("complete"));
                 emitter.complete();
             } catch (RuntimeException e) {
@@ -197,4 +202,13 @@ public class DraftGenerationController {
         if (v instanceof String s) { try { return Long.parseLong(s); } catch (NumberFormatException ignored) {} }
         return null;
     }
+
+    /** 检查文档生成的前置条件（通用） */
+    @GetMapping("/prerequisites")
+    public Result<DependencyCheckResult> checkPrerequisites(
+            @RequestParam Long projectId,
+            @RequestParam String docType) {
+        return Result.success(dependencyService.checkPrerequisites(projectId, docType));
+    }
+
 }

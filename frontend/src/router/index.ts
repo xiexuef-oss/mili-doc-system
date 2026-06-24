@@ -58,8 +58,8 @@ const router = createRouter({
             {
               path: 'ai-chat',
               name: 'ChatPage',
-              component: () => import('@/views/project/ChatPage.vue'),
-              meta: { title: 'AI 对话' }
+              component: () => import('@/views/ai/AiDocumentCanvasPage.vue'),
+              meta: { title: 'AI 文档画布' }
             },
             {
               path: 'ai-generate',
@@ -311,6 +311,12 @@ const router = createRouter({
           meta: { title: '会议意见汇总' }
         }
       ]
+    },
+    {
+      path: '/dialogue-writer',
+      name: 'DialogueWriter',
+      component: () => import('@/views/project/DialogueWriterPage.vue'),
+      meta: { title: '对话式写作' }
     }
   ]
 })

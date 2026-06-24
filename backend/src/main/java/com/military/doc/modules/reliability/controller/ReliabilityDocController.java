@@ -24,6 +24,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.military.doc.modules.document.service.DocumentDependencyService;
+import com.military.doc.modules.document.service.DocumentDependencyService.DependencyCheckResult;
+import com.military.doc.ai.service.QualityScoringService;
+import com.military.doc.ai.service.AutoReviewService;
+import com.military.doc.ai.service.ConsistencyCheckService;
+import com.military.doc.ai.service.DialogueWritingService;
+import com.military.doc.ai.service.DiffAnalysisService;
+import com.military.doc.ai.service.EnterpriseBaselineService;
+import com.military.doc.ai.service.GjbExportService;
+import java.time.LocalDateTime;
 
 /**
  * 可靠性文档生成控制器。
@@ -40,19 +50,43 @@ public class ReliabilityDocController {
     private final RelRequirementMapper relRequirementMapper;
     private final DocLedgerMapper docLedgerMapper;
     private final ProjectStageMapper projectStageMapper;
+    private final DocumentDependencyService dependencyService;
+    private final QualityScoringService qualityScoringService;
+    private final AutoReviewService autoReviewService;
+    private final ConsistencyCheckService consistencyCheckService;
+    private final DialogueWritingService dialogueWritingService;
+    private final DiffAnalysisService diffAnalysisService;
+    private final EnterpriseBaselineService enterpriseBaselineService;
+    private final GjbExportService gjbExportService;
 
     public ReliabilityDocController(ReliabilityGenerationService reliabilityGenerationService,
                                      ReliabilityPredictor reliabilityPredictor,
                                      ReliabilityAllocator reliabilityAllocator,
                                      RelRequirementMapper relRequirementMapper,
                                      DocLedgerMapper docLedgerMapper,
-                                     ProjectStageMapper projectStageMapper) {
+                                     ProjectStageMapper projectStageMapper,
+                                     DocumentDependencyService dependencyService,
+                                     QualityScoringService qualityScoringService,
+                                     AutoReviewService autoReviewService,
+                                     ConsistencyCheckService consistencyCheckService,
+                                     DialogueWritingService dialogueWritingService,
+                                     DiffAnalysisService diffAnalysisService,
+                                     EnterpriseBaselineService enterpriseBaselineService,
+                                     GjbExportService gjbExportService) {
         this.reliabilityGenerationService = reliabilityGenerationService;
         this.reliabilityPredictor = reliabilityPredictor;
         this.reliabilityAllocator = reliabilityAllocator;
         this.relRequirementMapper = relRequirementMapper;
         this.docLedgerMapper = docLedgerMapper;
         this.projectStageMapper = projectStageMapper;
+        this.dependencyService = dependencyService;
+        this.qualityScoringService = qualityScoringService;
+        this.autoReviewService = autoReviewService;
+        this.consistencyCheckService = consistencyCheckService;
+        this.dialogueWritingService = dialogueWritingService;
+        this.diffAnalysisService = diffAnalysisService;
+        this.enterpriseBaselineService = enterpriseBaselineService;
+        this.gjbExportService = gjbExportService;
     }
 
     // ===== A档：可靠性大纲 =====
@@ -292,4 +326,91 @@ public class ReliabilityDocController {
             return null;
         }
     }
+
+    /**
+     * 检查文档生成的前置条件。
+     */
+    @GetMapping("/projects/{projectId}/{docType}/prerequisites")
+    public Result<DependencyCheckResult> checkPrerequisites(
+            @PathVariable Long projectId,
+            @PathVariable String docType) {
+        DependencyCheckResult result = dependencyService.checkPrerequisites(projectId, docType);
+        return Result.success(result);
+    }
+
+
+
+    // ===== Phase 3: 质量体系 =====
+
+    /** 文档质量评分 */
+    @GetMapping("/documents/{ledgerId}/quality-score")
+    public Result<QualityScoringService.QualityScore> getQualityScore(@PathVariable Long ledgerId) {
+        return Result.success(qualityScoringService.scoreDocument(ledgerId));
+    }
+
+    /** 自动审查报告 */
+    @GetMapping("/documents/{ledgerId}/auto-review")
+    public Result<AutoReviewService.ReviewReport> getAutoReview(@PathVariable Long ledgerId) {
+        return Result.success(autoReviewService.review(ledgerId));
+    }
+
+    /** 跨文档一致性检查 */
+    @GetMapping("/projects/{projectId}/consistency-check")
+    public Result<ConsistencyCheckService.ConsistencyReport> checkConsistency(@PathVariable Long projectId) {
+        return Result.success(consistencyCheckService.checkProject(projectId));
+    }
+
+    // ===== Phase 4: 对话式写作 =====
+
+    /** 开始对话式写作会话 */
+    @PostMapping("/dialogue/sessions")
+    public Result<DialogueWritingService.DialogueSession> startDialogue(
+            @RequestParam Long projectId,
+            @RequestParam String docType,
+            @RequestParam(defaultValue = "文档") String docName) {
+        return Result.success(dialogueWritingService.startSession(projectId, docType, docName));
+    }
+
+    /** 发送对话消息 */
+    @PostMapping("/dialogue/sessions/{sessionId}/message")
+    public Result<DialogueWritingService.DialogueResponse> sendDialogueMessage(
+            @PathVariable String sessionId,
+            @RequestBody Map<String, String> body) {
+        return Result.success(dialogueWritingService.processMessage(sessionId, body.get("message")));
+    }
+
+    /** 获取对话会话状态 */
+    @GetMapping("/dialogue/sessions/{sessionId}")
+    public Result<DialogueWritingService.DialogueSession> getDialogueSession(@PathVariable String sessionId) {
+        return Result.success(dialogueWritingService.getSession(sessionId));
+    }
+
+    // ===== Phase 5: 学习进化 =====
+
+    /** 终稿差异分析 */
+    @PostMapping("/documents/{ledgerId}/diff-analysis")
+    public Result<DiffAnalysisService.DiffReport> analyzeDiff(
+            @PathVariable Long ledgerId,
+            @RequestBody Map<String, String> body) {
+        DiffAnalysisService.DiffReport report = diffAnalysisService.analyze(ledgerId, body.get("finalContent"));
+        // Update enterprise baseline
+        enterpriseBaselineService.updateFromDiff(
+            docLedgerMapper.selectById(ledgerId).getProjectId(), report);
+        return Result.success(report);
+    }
+
+    /** 企业基线摘要 */
+    @GetMapping("/baseline/summary")
+    public Result<Map<String, Object>> getBaselineSummary() {
+        return Result.success(enterpriseBaselineService.getBaselineSummary());
+    }
+
+    // ===== Phase 6: 扩展能力 =====
+
+    /** GJB 格式导出 */
+    @GetMapping(value = "/documents/{ledgerId}/export", produces = "text/plain;charset=UTF-8")
+    public String exportDocument(@PathVariable Long ledgerId) {
+        return gjbExportService.exportAsText(ledgerId);
+    }
+
 }

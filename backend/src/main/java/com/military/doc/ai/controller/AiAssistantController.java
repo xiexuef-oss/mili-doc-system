@@ -7,6 +7,7 @@ import com.military.doc.ai.util.MarkdownChapterParser;
 import com.military.doc.ai.entity.EmbeddingIndexTask;
 import com.military.doc.ai.entity.GenerationFeedback;
 import com.military.doc.ai.mapper.GenerationFeedbackMapper;
+import com.military.doc.ai.service.AiChapterStructureService;
 import com.military.doc.ai.service.AiAuditService;
 import com.military.doc.ai.service.BatchGenerationService;
 import com.military.doc.ai.service.IncrementalGenerationService;
@@ -75,6 +76,8 @@ public class AiAssistantController {
     private final VectorIndexService vectorIndexService;
     private final AiAuditService aiAuditService;
     private final SensitiveDataScrubber sensitiveDataScrubber;
+    private final AiChapterStructureService aiChapterStructureService;
+    private final com.military.doc.ai.service.DocumentStructureService documentStructureService;
     private final IncrementalGenerationService incrementalGenerationService;
     private final GenerationFeedbackMapper feedbackMapper;
     private final DocFileService docFileService;
@@ -104,6 +107,8 @@ public class AiAssistantController {
                                   VectorIndexService vectorIndexService,
                                   AiAuditService aiAuditService,
                                   SensitiveDataScrubber sensitiveDataScrubber,
+                                  AiChapterStructureService aiChapterStructureService,
+                                  com.military.doc.ai.service.DocumentStructureService documentStructureService,
                                   IncrementalGenerationService incrementalGenerationService,
                                   GenerationFeedbackMapper feedbackMapper,
                                   DocFileService docFileService,
@@ -132,6 +137,8 @@ public class AiAssistantController {
         this.vectorIndexService = vectorIndexService;
         this.aiAuditService = aiAuditService;
         this.sensitiveDataScrubber = sensitiveDataScrubber;
+        this.aiChapterStructureService = aiChapterStructureService;
+        this.documentStructureService = documentStructureService;
         this.incrementalGenerationService = incrementalGenerationService;
         this.feedbackMapper = feedbackMapper;
         this.docFileService = docFileService;
@@ -282,30 +289,35 @@ public class AiAssistantController {
     }
 
     @GetMapping("/draft/stream")
-    @Operation(summary = "流式生成文档初稿（SSE）")
+    @Operation(summary = "流式生成文档初稿（SSE），逐章生成+即时保存+进度事件")
     public SseEmitter streamDraft(@RequestParam Long projectId,
                                    @RequestParam(required = false) Long catalogId,
                                    @RequestParam(required = false) Long docLedgerId,
                                    Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
-        SseEmitter emitter = new SseEmitter(300000L);
-        log.info("Draft stream requested: projectId={}, catalogId={}, docLedgerId={}, userId={}", projectId, catalogId, docLedgerId, userId);
+        SseEmitter emitter = new SseEmitter(1800000L); // 30min timeout for large docs
+        log.info("Draft stream: projectId={}, docLedgerId={}, userId={}", projectId, docLedgerId, userId);
 
-        // Capture security context for async thread
         var securityContext = SecurityContextHolder.getContext();
-
         CompletableFuture.runAsync(() -> {
             SecurityContextHolder.setContext(securityContext);
             try {
-                draftGenerationService.generateStream(projectId, catalogId, docLedgerId, chunk -> {
-                    try {
-                        emitter.send(SseEmitter.event().name("chunk").data(chunk));
-                    } catch (Exception e) {
-                        // Client disconnected — stop processing gracefully, don't cascade error
-                        log.debug("SSE send aborted (client disconnected): {}", e.getMessage());
-                        throw new RuntimeException("SSE_ABORT", e);
-                    }
-                });
+                draftGenerationService.generateStream(projectId, catalogId, docLedgerId,
+                    chunk -> {
+                        try {
+                            emitter.send(SseEmitter.event().name("chunk").data(chunk));
+                        } catch (Exception e) {
+                            throw new RuntimeException("SSE_ABORT", e);
+                        }
+                    },
+                    (current, total, title, chars) -> {
+                        try {
+                            String progressJson = String.format(
+                                "{\"current\":%d,\"total\":%d,\"title\":\"%s\",\"chars\":%d}",
+                                current, total, title.replace("\"", "\\\""), chars);
+                            emitter.send(SseEmitter.event().name("progress").data(progressJson));
+                        } catch (Exception ignored) {}
+                    });
                 emitter.send(SseEmitter.event().name("done").data("complete"));
                 emitter.complete();
             } catch (RuntimeException e) {
@@ -314,18 +326,17 @@ public class AiAssistantController {
                 } else {
                     log.warn("Draft stream interrupted: {}", e.getMessage());
                 }
-                try { emitter.complete(); } catch (Exception ignored) {}
+                try { emitter.complete(); } catch (Exception ig) {}
             } catch (Exception e) {
                 log.error("Draft stream failed", e);
-                try { emitter.completeWithError(e); } catch (Exception ignored) {}
+                try { emitter.completeWithError(e); } catch (Exception ig) {}
             } finally {
                 SecurityContextHolder.clearContext();
             }
         });
 
         emitter.onTimeout(() -> log.warn("SSE timeout for draft stream"));
-        emitter.onError(ex -> log.warn("SSE error for draft stream: {}", ex.getMessage()));
-
+        emitter.onError(ex -> log.warn("SSE error: {}", ex.getMessage()));
         return emitter;
     }
 
@@ -436,67 +447,27 @@ public class AiAssistantController {
         ledger.setUpdatedBy(userId);
         docLedgerService.updateById(ledger);
 
-        // 7. Parse markdown into hierarchical chapter tree using robust regex parser
+        // 7. Fill content into chapters (only if chapters are empty — per-chapter gen already saves)
         if (content != null && !content.isBlank()) {
-            // Skip if chapters already exist (chat agent/pipeline may have created them)
-            long chapterCount = docChapterService.count(new LambdaQueryWrapper<DocChapter>()
-                .eq(DocChapter::getDocLedgerId, ledger.getId()).eq(DocChapter::getDeleted, 0));
-            if (chapterCount > 0) {
-                log.info("Chapters already exist for ledger {}, skipping chapter creation", ledger.getId());
-            } else {
-                // Delete old chapters when overwriting
-                if (!isNew) {
-                    docChapterService.remove(new LambdaQueryWrapper<DocChapter>()
-                        .eq(DocChapter::getDocLedgerId, ledger.getId()));
-                }
+            List<DocChapter> existingChapters = docChapterService.list(
+                new LambdaQueryWrapper<DocChapter>()
+                    .eq(DocChapter::getDocLedgerId, ledger.getId())
+                    .eq(DocChapter::getDeleted, 0)
+                    .orderByAsc(DocChapter::getOrderNum));
 
-                var roots = MarkdownChapterParser.parse(content);
-            if (roots.isEmpty()) {
-                // No headings found — create a single fallback chapter
-                DocChapter chapter = new DocChapter();
-                chapter.setDocLedgerId(ledger.getId());
-                chapter.setChapterNumber("1");
-                chapter.setChapterTitle("初稿内容");
-                chapter.setChapterLevel(1);
-                chapter.setOrderNum(1);
-                chapter.setParentId(0L);
-                chapter.setContent(content);
-                chapter.setFillStatus("DRAFT");
-                chapter.setFillPercentage(100);
-                chapter.setCreatedBy(userId);
-                chapter.setUpdatedBy(userId);
-                docChapterService.save(chapter);
-                log.info("Created single fallback chapter for ledger {}", ledger.getId());
+            boolean hasContent = existingChapters.stream()
+                .anyMatch(c -> c.getContent() != null && !c.getContent().isBlank());
+
+            if (!hasContent) {
+                // Per-chapter generation didn't run — fall back to content mapping
+                if (!existingChapters.isEmpty()) {
+                    int filled = mapContentToExistingChapters(existingChapters, content, userId);
+                    log.info("Mapped AI content to {} existing chapters for ledger {}", filled, ledger.getId());
+                } else {
+                    createChaptersFromAiContent(ledger.getId(), content, userId);
+                }
             } else {
-                var flat = MarkdownChapterParser.flatten(roots);
-                List<DocChapter> chapters = new ArrayList<>();
-                for (int i = 0; i < flat.size(); i++) {
-                    var fs = flat.get(i);
-                    DocChapter dc = new DocChapter();
-                    dc.setDocLedgerId(ledger.getId());
-                    dc.setChapterNumber(fs.section().number() != null ? fs.section().number() : String.valueOf(i + 1));
-                    dc.setChapterTitle(truncate(fs.section().title(), 250));
-                    dc.setChapterLevel(Math.min(fs.section().level(), 5));
-                    dc.setOrderNum(fs.orderNum());
-                    dc.setParentId(0L);
-                    dc.setContent(truncate(fs.section().content(), 50000));
-                    dc.setFillStatus("DRAFT");
-                    dc.setFillPercentage(fs.section().content() != null && !fs.section().content().isBlank() ? 100 : 0);
-                    dc.setCreatedBy(userId);
-                    dc.setUpdatedBy(userId);
-                    chapters.add(dc);
-                }
-                docChapterService.saveBatch(chapters);
-                // Second pass: resolve parentId using hierarchy from parser
-                for (int i = 0; i < flat.size(); i++) {
-                    int pi = flat.get(i).parentFlatIndex();
-                    if (pi >= 0 && pi < chapters.size()) {
-                        chapters.get(i).setParentId(chapters.get(pi).getId());
-                        docChapterService.updateById(chapters.get(i));
-                    }
-                }
-                log.info("Created {} chapters from markdown for ledger {}", chapters.size(), ledger.getId());
-            } // end else (chapterCount == 0)
+                log.info("Chapters already have content from per-chapter generation, skipping content mapping");
             }
         }
 
@@ -772,6 +743,139 @@ public class AiAssistantController {
         return s.length() <= maxLen ? s : s.substring(0, maxLen);
     }
 
+    /**
+     * Map AI-generated one-shot content to existing template chapters.
+     * Parses content by headings and matches each section to a template chapter by number.
+     * Template chapters define the structure — AI content only fills them in.
+     */
+    private int mapContentToExistingChapters(List<DocChapter> existingChapters,
+                                              String content, Long userId) {
+        // Parse content into sections
+        var roots = MarkdownChapterParser.parse(content);
+        if (roots.isEmpty()) {
+            // No headings — put all content into the first chapter
+            if (!existingChapters.isEmpty()) {
+                DocChapter first = existingChapters.get(0);
+                first.setContent(truncate(content, 50000));
+                first.setFillStatus("FILLED");
+                first.setFillPercentage(100);
+                first.setUpdatedBy(userId);
+                docChapterService.updateById(first);
+                return 1;
+            }
+            return 0;
+        }
+
+        var flat = MarkdownChapterParser.flatten(roots);
+        // Build chapter number → index map for existing chapters
+        Map<String, DocChapter> byNumber = new java.util.LinkedHashMap<>();
+        for (DocChapter ch : existingChapters) {
+            if (ch.getChapterNumber() != null) {
+                byNumber.put(ch.getChapterNumber().trim(), ch);
+            }
+        }
+
+        int filled = 0;
+        for (var fs : flat) {
+            String num = fs.section().number();
+            if (num == null) continue;
+
+            // Try exact match first, then normalized match (strip leading zeros)
+            DocChapter target = byNumber.get(num.trim());
+            if (target == null) {
+                // Try matching by normalized number (e.g., "3.01" → "3.1")
+                String normalized = num.trim().replaceAll("\\.0+", ".");
+                for (var entry : byNumber.entrySet()) {
+                    String keyNorm = entry.getKey().replaceAll("\\.0+", ".");
+                    if (keyNorm.equals(normalized)) {
+                        target = entry.getValue();
+                        break;
+                    }
+                }
+            }
+            if (target == null) continue;
+
+            String sectionContent = fs.section().content();
+            if (sectionContent != null && !sectionContent.isBlank()) {
+                target.setContent(truncate(sectionContent, 50000));
+                target.setFillStatus("FILLED");
+                target.setFillPercentage(100);
+                target.setUpdatedBy(userId);
+                docChapterService.updateById(target);
+                filled++;
+            }
+        }
+
+        // Mark chapters without matched content as EMPTY
+        for (DocChapter ch : existingChapters) {
+            if (ch.getContent() == null || ch.getContent().isBlank()) {
+                ch.setFillStatus("EMPTY");
+                ch.setFillPercentage(0);
+                docChapterService.updateById(ch);
+            }
+        }
+
+        return filled;
+    }
+
+    /**
+     * Create chapters from AI-generated content for documents WITHOUT a template.
+     * Uses the AI chapter structure service to first build a proper hierarchical outline,
+     * then fills content into matching chapters.
+     */
+    private void createChaptersFromAiContent(Long docLedgerId, String content, Long userId) {
+        // Parse content to extract section structure
+        var roots = MarkdownChapterParser.parse(content);
+        if (roots.isEmpty()) {
+            // Fallback: single chapter
+            DocChapter ch = new DocChapter();
+            ch.setDocLedgerId(docLedgerId);
+            ch.setChapterNumber("1");
+            ch.setChapterTitle("初稿内容");
+            ch.setChapterLevel(1);
+            ch.setOrderNum(1);
+            ch.setParentId(0L);
+            ch.setContent(truncate(content, 50000));
+            ch.setFillStatus("FILLED");
+            ch.setFillPercentage(100);
+            ch.setCreatedBy(userId);
+            ch.setUpdatedBy(userId);
+            docChapterService.save(ch);
+            return;
+        }
+
+        // Build proper hierarchical chapters from parsed sections
+        var flat = MarkdownChapterParser.flatten(roots);
+        List<DocChapter> chapters = new ArrayList<>();
+        for (int i = 0; i < flat.size(); i++) {
+            var fs = flat.get(i);
+            DocChapter dc = new DocChapter();
+            dc.setDocLedgerId(docLedgerId);
+            dc.setChapterNumber(fs.section().number() != null ? fs.section().number() : String.valueOf(i + 1));
+            dc.setChapterTitle(truncate(fs.section().title(), 100));
+            dc.setChapterLevel(Math.min(fs.section().level(), 5));
+            dc.setOrderNum(fs.orderNum());
+            dc.setParentId(0L);
+            dc.setContent(truncate(fs.section().content(), 50000));
+            dc.setFillStatus("FILLED");
+            dc.setFillPercentage(100);
+            dc.setCreatedBy(userId);
+            dc.setUpdatedBy(userId);
+            chapters.add(dc);
+        }
+        docChapterService.saveBatch(chapters);
+
+        // Second pass: resolve parent-child hierarchy
+        for (int i = 0; i < flat.size(); i++) {
+            int pi = flat.get(i).parentFlatIndex();
+            if (pi >= 0 && pi < chapters.size()) {
+                chapters.get(i).setParentId(chapters.get(pi).getId());
+                docChapterService.updateById(chapters.get(i));
+            }
+        }
+        log.info("Created {} chapters from AI content for ledger {}", chapters.size(), docLedgerId);
+    }
+
     // ========== Generation Feedback ==========
 
     @PostMapping("/feedback")
@@ -941,6 +1045,171 @@ public class AiAssistantController {
         });
 
         return emitter;
+    }
+
+    // ========== Two-Phase Structure Generation (无模板时：生成→审核→保存→生成) ==========
+
+    @PostMapping("/draft/apply-structure")
+    @Operation(summary = "应用用户审核后的文档结构：初始化章节+保存为模板")
+    public Result<Map<String, Object>> applyReviewedStructure(
+            @RequestBody Map<String, Object> body, Authentication authentication) {
+        Long docLedgerId = toLong(body.get("docLedgerId"));
+        Long projectId = toLong(body.get("projectId"));
+        boolean saveAsTemplate = Boolean.TRUE.equals(body.get("saveAsTemplate"));
+        Long categoryId = toLong(body.get("categoryId"));
+        Long userId = (Long) authentication.getPrincipal();
+
+        if (docLedgerId == null) return Result.error("PARAM_ERROR", "docLedgerId is required");
+
+        try {
+            // Parse the structure from request
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> chaptersRaw = (List<Map<String, Object>>) body.get("chapters");
+            String markdown = (String) body.get("markdownContent");
+            String templateName = (String) body.get("suggestedTemplateName");
+            String gjbRef = (String) body.get("gjbStandardRef");
+
+            List<com.military.doc.ai.service.DocumentStructureService.StructureChapter> chapters = new ArrayList<>();
+            if (chaptersRaw != null) {
+                for (Map<String, Object> m : chaptersRaw) {
+                    chapters.add(new com.military.doc.ai.service.DocumentStructureService.StructureChapter(
+                        (String) m.get("chapterNumber"), (String) m.get("chapterTitle"),
+                        ((Number) m.getOrDefault("chapterLevel", 1)).intValue(),
+                        ((Number) m.getOrDefault("orderNum", 0)).intValue(),
+                        Boolean.TRUE.equals(m.get("isRequired")),
+                        (String) m.get("writingTips"), (String) m.get("description")));
+                }
+            }
+
+            var structure = new com.military.doc.ai.service.DocumentStructureService.GeneratedStructure(
+                markdown, chapters, templateName, gjbRef, chapters.size());
+
+            // Apply to doc ledger
+            List<DocChapter> created = draftGenerationService.applyReviewedStructure(docLedgerId, structure, saveAsTemplate);
+
+            Map<String, Object> result = new java.util.LinkedHashMap<>();
+            result.put("chaptersCreated", created.size());
+            result.put("savedAsTemplate", saveAsTemplate);
+            result.put("message", "已创建 " + created.size() + " 个章节，可以开始生成内容");
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("Failed to apply structure: {}", e.getMessage(), e);
+            return Result.error("APPLY_ERROR", "应用文档结构失败: " + e.getMessage());
+        }
+    }
+
+    // ========== Document Structure Generation (无模板时的AI结构编排) ==========
+
+    @PostMapping("/structure/generate")
+    @Operation(summary = "AI生成文档结构（MD格式，可供人工编辑后保存为模板）")
+    public Result<com.military.doc.ai.service.DocumentStructureService.GeneratedStructure> generateStructure(
+            @RequestBody Map<String, Object> body) {
+        Long projectId = toLong(body.get("projectId"));
+        Long docLedgerId = toLong(body.get("docLedgerId"));
+        if (projectId == null || docLedgerId == null) {
+            return Result.error("PARAM_ERROR", "projectId and docLedgerId are required");
+        }
+        return Result.success(documentStructureService.generate(projectId, docLedgerId));
+    }
+
+    @PostMapping("/structure/save-template")
+    @Operation(summary = "将AI生成的文档结构保存为系统模板")
+    public Result<Map<String, Object>> saveStructureAsTemplate(
+            @RequestBody Map<String, Object> body, Authentication authentication) {
+        Long categoryId = toLong(body.get("categoryId"));
+        Long userId = (Long) authentication.getPrincipal();
+        try {
+            // Reconstruct GeneratedStructure from the request body
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> chaptersRaw = (List<Map<String, Object>>) body.get("chapters");
+            String markdown = (String) body.get("markdownContent");
+            String templateName = (String) body.get("suggestedTemplateName");
+            String gjbRef = (String) body.get("gjbStandardRef");
+
+            List<com.military.doc.ai.service.DocumentStructureService.StructureChapter> chapters = new ArrayList<>();
+            if (chaptersRaw != null) {
+                for (Map<String, Object> m : chaptersRaw) {
+                    chapters.add(new com.military.doc.ai.service.DocumentStructureService.StructureChapter(
+                        (String) m.get("chapterNumber"),
+                        (String) m.get("chapterTitle"),
+                        ((Number) m.getOrDefault("chapterLevel", 1)).intValue(),
+                        ((Number) m.getOrDefault("orderNum", 0)).intValue(),
+                        Boolean.TRUE.equals(m.get("isRequired")),
+                        (String) m.get("writingTips"),
+                        (String) m.get("description")
+                    ));
+                }
+            }
+
+            var structure = new com.military.doc.ai.service.DocumentStructureService.GeneratedStructure(
+                markdown, chapters, templateName, gjbRef, chapters.size());
+
+            Long templateId = documentStructureService.saveAsTemplate(structure, categoryId, userId);
+            return Result.success(Map.of("templateId", templateId, "templateName", templateName));
+        } catch (Exception e) {
+            log.error("Failed to save structure as template", e);
+            return Result.error("SAVE_ERROR", "保存模板失败: " + e.getMessage());
+        }
+    }
+
+    // ========== AI Chapter Structure Generation ==========
+
+    @PostMapping("/chapter-structure/preview")
+    @Operation(summary = "AI 智能生成文档章节结构预览（不持久化）。可根据项目背景+文档类型+参考模板+用户补充要求生成层级化章节树")
+    public Result<AiChapterStructureService.StructureResponse> previewChapterStructure(
+            @RequestBody AiChapterStructureService.StructureRequest req,
+            Authentication authentication) {
+        if (req.projectId == null && req.docLedgerId == null) {
+            return Result.error("PARAM_ERROR", "projectId or docLedgerId is required");
+        }
+        log.info("AI chapter structure preview: projectId={}, docLedgerId={}, optimize={}",
+                req.projectId, req.docLedgerId, req.optimize);
+        AiChapterStructureService.StructureResponse result = aiChapterStructureService.generatePreview(req);
+        return Result.success(result);
+    }
+
+    @PostMapping("/chapter-structure/apply")
+    @Operation(summary = "将 AI 生成的章节结构应用到指定文档台账（替换现有章节）")
+    public Result<Map<String, Object>> applyChapterStructure(
+            @RequestBody Map<String, Object> body,
+            Authentication authentication) {
+        Long docLedgerId = toLong(body.get("docLedgerId"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> nodesRaw = (List<Map<String, Object>>) body.get("chapters");
+        Long userId = (Long) authentication.getPrincipal();
+
+        if (docLedgerId == null || nodesRaw == null || nodesRaw.isEmpty()) {
+            return Result.error("PARAM_ERROR", "docLedgerId and chapters are required");
+        }
+
+        // Parse nodes from the raw request body
+        List<AiChapterStructureService.AiChapterNode> nodes;
+        try {
+            String json = objectMapper.writeValueAsString(nodesRaw);
+            nodes = objectMapper.readValue(json,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<AiChapterStructureService.AiChapterNode>>() {});
+        } catch (Exception e) {
+            return Result.error("PARAM_ERROR", "章节数据格式错误: " + e.getMessage());
+        }
+
+        List<DocChapter> created = aiChapterStructureService.applyStructure(docLedgerId, nodes, userId);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("created", created.size());
+        result.put("message", "已应用 AI 生成的章节结构，共 " + created.size() + " 个章节");
+        return Result.success(result);
+    }
+
+    @PostMapping("/chapter-structure/optimize")
+    @Operation(summary = "AI 优化现有章节结构：分析现有结构，智能补充缺失章节、调整层级关系、完善编写提示")
+    public Result<AiChapterStructureService.StructureResponse> optimizeChapterStructure(
+            @RequestBody AiChapterStructureService.StructureRequest req) {
+        if (req.docLedgerId == null) {
+            return Result.error("PARAM_ERROR", "docLedgerId is required");
+        }
+        req.optimize = true;
+        log.info("AI chapter structure optimization: docLedgerId={}", req.docLedgerId);
+        AiChapterStructureService.StructureResponse result = aiChapterStructureService.generatePreview(req);
+        return Result.success(result);
     }
 
     /**

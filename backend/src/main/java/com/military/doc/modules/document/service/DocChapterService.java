@@ -31,4 +31,25 @@ public interface DocChapterService extends IService<DocChapter> {
 
     /** Get chapter by id */
     DocChapter getById(Long chapterId);
+
+    /** Validate chapter structure: sequential numbering, proper nesting, required chapters */
+    ChapterStructureValidation validateStructure(Long docLedgerId);
+
+    /** Auto-fix chapter numbering and hierarchy based on template or level-based inference */
+    ChapterStructureValidation fixStructure(Long docLedgerId);
+
+    /** Validation result */
+    record ChapterStructureValidation(
+        boolean valid,
+        int totalChapters,
+        int issuesFound,
+        List<StructureIssue> issues,
+        String summary
+    ) {}
+
+    record StructureIssue(
+        String level,       // ERROR or WARNING
+        String chapterRef,  // e.g., "3.2" or "章节#7510"
+        String description
+    ) {}
 }

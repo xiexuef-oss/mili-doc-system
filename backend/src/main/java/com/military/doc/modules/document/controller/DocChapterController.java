@@ -26,6 +26,7 @@ public class DocChapterController {
     @Autowired(required = false) private DraftGenerationService draftGenerationService;
     @Autowired(required = false) private VariableMappingService variableMappingService;
     @Autowired(required = false) private MasterDataExtractionService masterDataExtractionService;
+    @Autowired(required = false) private com.military.doc.ai.service.ChapterEditService chapterEditService;
 
     @PostMapping("/init")
     public Result<List<DocChapter>> initFromTemplate(@RequestParam Long docLedgerId,
@@ -128,8 +129,39 @@ public class DocChapterController {
         return Result.success(Map.of("filledCount", count));
     }
 
+    @PostMapping("/{id}/ai-edit")
+    public Result<Map<String, Object>> aiEditChapter(@PathVariable Long id,
+                                                      @RequestBody Map<String, String> body) {
+        String actionStr = body.get("action"); // rewrite / expand / shorten / polish
+        String instruction = body.get("instruction");
+        if (actionStr == null || actionStr.isBlank()) {
+            return Result.error("PARAM_ERROR", "action is required (rewrite/expand/shorten/polish)");
+        }
+        com.military.doc.ai.service.ChapterEditService.EditAction action;
+        try {
+            action = com.military.doc.ai.service.ChapterEditService.EditAction.valueOf(actionStr);
+        } catch (IllegalArgumentException e) {
+            return Result.error("PARAM_ERROR", "invalid action: " + actionStr);
+        }
+        String result = chapterEditService.edit(id, action, instruction);
+        if (result != null && !result.isBlank()) {
+            docChapterService.updateContent(id, result, null, 0L);
+        }
+        return Result.success(Map.of("content", result != null ? result : ""));
+    }
+
     @PostMapping("/extract-master-data")
     public Result<Map<String, Object>> extractMasterData(@RequestParam Long projectId) {
         return Result.success(masterDataExtractionService.extractFromInputFiles(projectId));
+    }
+
+    @GetMapping("/ledger/{docLedgerId}/validate")
+    public Result<DocChapterService.ChapterStructureValidation> validateStructure(@PathVariable Long docLedgerId) {
+        return Result.success(docChapterService.validateStructure(docLedgerId));
+    }
+
+    @PostMapping("/ledger/{docLedgerId}/fix")
+    public Result<DocChapterService.ChapterStructureValidation> fixStructure(@PathVariable Long docLedgerId) {
+        return Result.success(docChapterService.fixStructure(docLedgerId));
     }
 }

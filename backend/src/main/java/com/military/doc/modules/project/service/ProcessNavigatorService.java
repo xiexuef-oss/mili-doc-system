@@ -8,6 +8,8 @@ import com.military.doc.modules.project.mapper.ConfigurationBaselineMapper;
 import com.military.doc.modules.project.mapper.ProjectStageMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.military.doc.modules.document.service.DocumentDependencyService;
+import com.military.doc.modules.document.service.DocumentDependencyService.DependencyCheckResult;
 
 import java.util.*;
 
@@ -20,6 +22,7 @@ public class ProcessNavigatorService {
     @Autowired private ProjectStageMapper stageMapper;
     @Autowired private DocLedgerMapper docLedgerMapper;
     @Autowired private ConfigurationBaselineMapper baselineMapper;
+    @Autowired private DocumentDependencyService dependencyService;
 
     public Map<String, Object> getNavigatorData(Long projectId) {
         List<ProjectStage> stages = stageMapper.selectList(

@@ -29,6 +29,11 @@ public class DocTemplateChapter {
     private String sampleContent;
     private Boolean isReusableElement;
 
+    /** 最小字数下限 */
+    private Integer minWords;
+    /** 完成度计算权重 (0.0-1.0)，默认1.0 */
+    private Double completionWeight;
+
     // === Template DOCX auto-parsed fields ===
     /** 原始 Word 样式名 (如 Heading1, Heading2) */
     private String headingStyle;

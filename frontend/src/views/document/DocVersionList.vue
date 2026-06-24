@@ -15,7 +15,9 @@
       <el-table-column prop="versionStatus" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.versionStatus === 'PUBLISHED' ? 'success' : row.versionStatus === 'DRAFT' ? 'info' : 'warning'" size="small">{{ row.versionStatus }}</el-tag>
-        </template>
+        
+  <DiffViewer v-model="diffVisible" :ledger-id="diffLedgerId" />
+</template>
       </el-table-column>
       <el-table-column prop="changeSummary" label="变更说明" min-width="220" show-overflow-tooltip />
       <el-table-column prop="submitTime" label="提交时间" width="160" />
@@ -48,12 +50,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import DiffViewer from '@/components/DiffViewer.vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { getDocVersions, createDocVersion, updateDocVersion, type DocVersionItem } from '@/api/doc-version'
 
 const route = useRoute()
+const diffVisible = ref(false)
+const diffLedgerId = ref(0)
 const docFileId = Number(route.params.docFileId)
 
 const loading = ref(false); const saving = ref(false)

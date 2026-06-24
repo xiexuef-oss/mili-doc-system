@@ -535,7 +535,7 @@ public class ChatAgentService {
             if (onProgress != null && contentBuf.length() % 200 < 100) {
                 onProgress.accept("已生成 " + contentBuf.length() + " 字...");
             }
-        });
+        }, (c, t, title, chars) -> {});
         String content = contentBuf.toString();
         if (onProgress != null && content != null && !content.isEmpty()) {
             onProgress.accept("生成完成，" + content.length() + " 字，正在保存...");

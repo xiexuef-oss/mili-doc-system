@@ -68,6 +68,27 @@ export function switchLlmProvider(provider: string) {
   return api.put('/ai/provider', { provider })
 }
 
+export function applyDraftStructure(params: {
+  docLedgerId: number
+  projectId: number
+  chapters: any[]
+  markdownContent?: string
+  suggestedTemplateName?: string
+  gjbStandardRef?: string
+  saveAsTemplate?: boolean
+}) {
+  return api.post('/ai/draft/apply-structure', params)
+}
+
+export function saveStructureAsTemplate(params: {
+  chapters: any[]
+  markdownContent?: string
+  suggestedTemplateName?: string
+  gjbStandardRef?: string
+}) {
+  return api.post('/ai/structure/save-template', params)
+}
+
 export function saveDraft(params: {
   projectId: number
   catalogId?: number
@@ -81,13 +102,22 @@ export function saveDraft(params: {
   return api.post('/ai/draft/save', params)
 }
 
+export interface GenerationProgress {
+  current: number
+  total: number
+  title: string
+  chars: number
+}
+
 export function streamDraft(
   projectId: number,
   catalogId: number | null,
   docLedgerId: number | null,
   onChunk: (text: string) => void,
   onDone: (fullText: string) => void,
-  onError: (err: Error) => void
+  onError: (err: Error) => void,
+  onProgress?: (p: GenerationProgress) => void,
+  onStructure?: (structure: any) => void
 ): AbortController {
   const controller = new AbortController()
   const token = getToken()
@@ -128,17 +158,29 @@ export function streamDraft(
         if (line.startsWith('event:')) {
           eventType = line.substring(6).trim()
         } else if (line.startsWith('data:')) {
-          // SSE format: "data: <payload>". Strip the "data:" (5 chars).
           const raw = line.substring(5)
           const data = raw.startsWith(' ') ? raw.substring(1) : raw
           if (eventType === 'chunk') {
-            fullText += data
-            onChunk(data)
+            // Check for structure event (Phase 1: no-template structure generation)
+            if (data.startsWith('__STRUCTURE__:')) {
+              try {
+                const json = data.substring('__STRUCTURE__:'.length)
+                const structure = JSON.parse(json)
+                onStructure?.(structure)
+              } catch { /* ignore parse error */ }
+            } else {
+              fullText += data
+              onChunk(data)
+            }
+          } else if (eventType === 'progress') {
+            try {
+              const p = JSON.parse(data) as GenerationProgress
+              onProgress?.(p)
+            } catch { /* ignore malformed progress */ }
           } else if (eventType === 'done') {
             onDone(fullText)
             return
           }
-          // DO NOT reset eventType here - multiple data: lines belong to same event
         }
       }
     }
@@ -454,4 +496,9 @@ export function streamBatchGenerate(
     if (err.name !== 'AbortError') onError(err)
   })
   return controller
+}
+
+/** 检查文档生成的前置条件 */
+export function checkDraftPrerequisites(projectId: number, docType: string) {
+  return request.get(`/ai/draft/v2/prerequisites?projectId=${projectId}&docType=${docType}`)
 }

@@ -3,7 +3,15 @@
     <el-page-header @back="$router.back()" title="返回">
       <template #content>
         <span class="page-title">可靠性设计工作台</span>
-      </template>
+      
+  <!-- Prerequisites check -->
+  <PrerequisitesCheck
+    v-model="prereqVisible"
+    :project-id="projectId"
+    :doc-type="prereqDocType"
+    @proceed="onPrereqProceed"
+  />
+</template>
     </el-page-header>
 
     <el-alert type="info" :closable="false" style="margin-top:16px">
@@ -44,14 +52,14 @@
           <el-card shadow="never" class="doc-card">
             <div class="doc-title">📋 可靠性大纲 <el-tag size="small" type="info">纯文本</el-tag></div>
             <div class="doc-desc">依据 GJB 450B，覆盖 100/300/400 系列工作项目</div>
-            <el-button :type="isGenerated('outline') ? 'default' : 'primary'" :loading="generating==='outline'" @click="generateDoc('outline')">{{ genBtnLabel('outline') }}</el-button>
+            <el-button :type="isGenerated('outline') ? 'default' : 'primary'" :loading="generating==='outline'" @click="checkThenGenerate('reliability_outline', () => generateDoc('outline'))">{{ genBtnLabel('outline') }}</el-button>
           </el-card>
         </el-col>
         <el-col :span="12">
           <el-card shadow="never" class="doc-card">
             <div class="doc-title">🔻 降额设计报告 <el-tag size="small" type="info">纯文本</el-tag></div>
             <div class="doc-desc">依据 GJB/Z 35，逐类器件降额审核</div>
-            <el-button :type="isGenerated('derating') ? 'default' : 'primary'" :loading="generating==='derating'" @click="generateDoc('derating')">{{ genBtnLabel('derating') }}</el-button>
+            <el-button :type="isGenerated('derating') ? 'default' : 'primary'" :loading="generating==='derating'" @click="checkThenGenerate('derating', () => generateDoc('derating'))">{{ genBtnLabel('derating') }}</el-button>
           </el-card>
         </el-col>
         <el-col :span="12" style="margin-top:12px">
@@ -189,7 +197,7 @@
       </div>
       <template #footer>
         <el-button @click="showPredictionDialog=false">取消</el-button>
-        <el-button type="primary" @click="generatePrediction" :loading="generating==='prediction'">生成预计报告</el-button>
+        <el-button type="primary" @click="checkThenGenerate('reliability_prediction', generatePrediction)" :loading="generating==='prediction'">生成预计报告</el-button>
       </template>
     </el-dialog>
 
@@ -224,7 +232,7 @@
       <template #footer>
         <el-button @click="showAllocationDialog=false">取消</el-button>
         <el-button @click="runAllocationPreview">预览</el-button>
-        <el-button type="primary" @click="generateAllocation" :loading="generating==='allocation'">生成分配报告</el-button>
+        <el-button type="primary" @click="checkThenGenerate('reliability_allocation', generateAllocation)" :loading="generating==='allocation'">生成分配报告</el-button>
       </template>
     </el-dialog>
   </div>
@@ -235,6 +243,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getRelRequirements, saveRelRequirement, generateReliabilityOutline, generateDeratingReport, generatePredictionReport, previewPrediction, generateAllocationReport, previewAllocation } from '@/api/reliability'
+import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
 
 const route = useRoute()
 const projectId = computed(() => Number(route.params.projectId) || 0)
@@ -335,6 +344,22 @@ function openReqDialog() {
 }
 
 // Progress helpers now inline in generateDoc/generatePrediction/generateAllocation
+
+
+// Prerequisites check
+const prereqVisible = ref(false)
+const prereqDocType = ref('')
+const prereqCallback = ref(null as (() => void) | null)
+
+function checkThenGenerate(docType: string, callback: () => void) {
+  prereqDocType.value = docType
+  prereqCallback.value = callback
+  prereqVisible.value = true
+}
+
+function onPrereqProceed() {
+  if (prereqCallback.value) prereqCallback.value()
+}
 
 async function generateDoc(type: string) {
   // Show progress

@@ -1,0 +1,155 @@
+# ============================================================
+# 文档依赖关系配置
+# 定义每种文档类型的前置文档和数据要求
+# 
+# 依赖类型:
+#   hard  — 硬依赖，未满足时无法生成
+#   soft  — 软依赖，未满足时可生成但标记警告
+#   conflict — 跨文档冲突检查规则
+# ============================================================
+
+document_dependencies:
+  # === A 档：纯文本生成 ===
+  reliability_outline:
+    name: "可靠性保证大纲"
+    code: "REL-OUTLINE-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品基本信息）"
+
+  reliability_plan:
+    name: "可靠性工作计划"
+    code: "REL-PLAN-001"
+    hard:
+      - doc: reliability_outline
+        description: "可靠性大纲（确定工作项目）"
+
+  reliability_design_criteria:
+    name: "可靠性设计准则"
+    code: "REL-CRITERIA-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品信息）"
+    soft:
+      - doc: reliability_outline
+        description: "可靠性大纲（参考可靠性要求）"
+
+  derating:
+    name: "降额设计报告"
+    code: "REL-DERATING-001"
+    hard:
+      - doc: master_data
+        description: "主数据（元器件清单）"
+    soft:
+      - doc: reliability_outline
+        description: "可靠性大纲（确定降额等级）"
+
+  thermal_design:
+    name: "热设计报告"
+    code: "REL-THERMAL-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品信息、环境条件）"
+
+  emc_design:
+    name: "电磁兼容性设计报告"
+    code: "REL-EMC-001"
+    hard:
+      - doc: master_data
+        description: "主数据（电磁兼容要求）"
+
+  maintainability_outline:
+    name: "维修性大纲"
+    code: "REL-MAINTAIN-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品信息、维修性要求）"
+
+  testability_outline:
+    name: "测试性大纲"
+    code: "REL-TEST-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品信息、测试性要求）"
+
+  safety_outline:
+    name: "安全性大纲"
+    code: "REL-SAFETY-001"
+    hard:
+      - doc: master_data
+        description: "主数据（产品信息、安全性要求）"
+
+  env_adaptability:
+    name: "耐环境设计报告"
+    code: "REL-ENV-001"
+    hard:
+      - doc: master_data
+        description: "主数据（环境参数）"
+
+  # === B 档：计算+文本 ===
+  reliability_prediction:
+    name: "可靠性预计报告"
+    code: "REL-PRED-001"
+    hard:
+      - doc: reliability_outline
+        description: "可靠性大纲（MTBF、可靠性模型、任务剖面）"
+      - doc: master_data
+        description: "主数据（产品类型、元器件清单）"
+    soft:
+      - doc: gjb299d_data
+        description: "GJB/Z 299D 失效率数据库"
+      - field: master_data.componentQualityLevel
+        description: "元器件质量等级"
+
+  reliability_allocation:
+    name: "可靠性分配报告"
+    code: "REL-ALLOC-001"
+    hard:
+      - doc: reliability_outline
+        description: "可靠性大纲（MTBF要求）"
+      - doc: reliability_prediction
+        description: "可靠性预计报告（各单元失效率）"
+
+  # === C 档：数据驱动分析 ===
+  fmeca:
+    name: "FMECA"
+    code: "REL-FMECA-001"
+    hard:
+      - doc: reliability_outline
+        description: "可靠性大纲（功能框图）"
+      - doc: reliability_prediction
+        description: "可靠性预计报告（失效率数据）"
+
+  reliability_test_outline:
+    name: "可靠性鉴定试验大纲"
+    code: "REL-TESTOUT-001"
+    hard:
+      - doc: reliability_outline
+        description: "可靠性大纲（MTBF要求）"
+    soft:
+      - doc: fmeca
+        description: "FMECA（故障模式清单）"
+
+  critical_items:
+    name: "关键件重要件清单"
+    code: "REL-CRITICAL-001"
+    hard:
+      - doc: fmeca
+        description: "FMECA（危害性分析结果）"
+
+# 跨文档一致性检查规则
+consistency_checks:
+  - name: "大纲MTBF与预计报告MTBF一致"
+    docs: [reliability_outline, reliability_prediction]
+    fields: [mtbf, predicted_mtbf]
+    rule: "大纲中的MTBF值应当在预计报告中引用并验证"
+
+  - name: "大纲可靠性模型与预计报告模型一致"
+    docs: [reliability_outline, reliability_prediction]
+    fields: [reliability_model, prediction_model]
+    rule: "两文档中的可靠性模型描述应当一致"
+
+  - name: "大纲中的环境条件与降额报告一致"
+    docs: [reliability_outline, derating]
+    fields: [environment, derating_environment]
+    rule: "降额报告中的环境描述应与大纲一致"

@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -211,6 +211,10 @@ async function handleAutoFill() {
   } catch { ElMessage.error('自动填充失败') }
   autoFilling.value = false
 }
+
+watch(() => route.params.chapterId, (newId) => {
+  if (newId) loadChapter()
+})
 
 onMounted(loadChapter)
 </script>

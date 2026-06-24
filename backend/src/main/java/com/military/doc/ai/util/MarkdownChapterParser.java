@@ -16,6 +16,11 @@ public class MarkdownChapterParser {
     /** Matches markdown headings: # Title, ##Title, ### 1. Scope, etc. Space after # is optional. */
     private static final Pattern HEADING = Pattern.compile("^(#{1,5})\\s*(.+)$", Pattern.MULTILINE);
 
+    /** Sentence-ending punctuation for smart title truncation. */
+    private static final Pattern SENTENCE_END = Pattern.compile("[。；，、\\.;,]");
+    /** Max reasonable title length before we consider it "content leaked into title". */
+    private static final int MAX_TITLE_LENGTH = 80;
+
     /**
      * A parsed section with its heading level, title, and body content.
      */
@@ -68,9 +73,29 @@ public class MarkdownChapterParser {
                 number = numMatcher.group(1);
                 cleanTitle = numMatcher.group(2);
             }
-            // Truncate overly long titles — AI sometimes puts heading+body on one line
-            if (cleanTitle.length() > 100) {
-                cleanTitle = cleanTitle.substring(0, 100) + "...";
+            // Smart truncation: if title is too long, content leaked into it.
+            // Find first sentence-ending punctuation and truncate there.
+            if (cleanTitle.length() > MAX_TITLE_LENGTH) {
+                Matcher endMatcher = SENTENCE_END.matcher(cleanTitle);
+                int cutPoint = -1;
+                // Find the earliest sentence end that's at least 10 chars in
+                while (endMatcher.find()) {
+                    if (endMatcher.start() >= 10) {
+                        cutPoint = endMatcher.end();
+                        break;
+                    }
+                }
+                if (cutPoint > 0 && cutPoint < cleanTitle.length()) {
+                    cleanTitle = cleanTitle.substring(0, cutPoint).trim();
+                } else {
+                    // No sentence end found — hard truncate at max length
+                    cleanTitle = cleanTitle.substring(0, MAX_TITLE_LENGTH).trim() + "...";
+                }
+            }
+            // Clean up: remove leading/trailing punctuation artifacts
+            cleanTitle = cleanTitle.replaceAll("^[，,、。；;：:\\s]+", "").replaceAll("[，,、。；;：:\\s]+$", "");
+            if (cleanTitle.isEmpty() && number != null) {
+                cleanTitle = "第" + number + "章"; // fallback title
             }
 
             // Content before this heading (if any) is preamble

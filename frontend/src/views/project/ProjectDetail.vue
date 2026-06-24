@@ -38,7 +38,8 @@
       <template #header>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span>项目主数据概览</span>
-          <el-button size="small" type="primary" @click="$router.push({ name: 'ProjectMasterData', params: { projectId: $route.params.projectId } })">
+          <el-button size="small" @click="handleConsistencyCheck" :icon="CircleCheck">一致性检查</el-button>
+        <el-button size="small" type="primary" @click="$router.push({ name: 'ProjectMasterData', params: { projectId: $route.params.projectId } })">
             编辑主数据
           </el-button>
         </div>
@@ -157,6 +158,19 @@ onMounted(async () => {
     // error handled
   }
 })
+
+async function handleConsistencyCheck() {
+  try {
+    const res = await request.get(`/reliability/projects/${projectId.value}/consistency-check`)
+    const data = res.data?.data
+    if (data?.issues?.length) {
+      const text = data.issues.map((i: any) => `${i.severity === 'error' ? '❌' : '⚠️'} ${i.description}`).join('\n')
+      ElMessageBox.alert(text, `一致性检查 (${data.totalIssues}个问题)`, { confirmButtonText: '知道了' })
+    } else {
+      ElMessage.success('所有文档一致性检查通过')
+    }
+  } catch { ElMessage.error('检查失败') }
+}
 </script>
 
 <style scoped>
