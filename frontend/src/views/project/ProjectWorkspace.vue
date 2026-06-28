@@ -141,5 +141,7 @@ watch(() => route.name, (name) => {
 }
 .workspace-content {
   padding: 0;
+  height: calc(100vh - 220px);
+  overflow: hidden;
 }
 </style>

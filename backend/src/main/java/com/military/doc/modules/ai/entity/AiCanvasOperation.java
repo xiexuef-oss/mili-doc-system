@@ -12,6 +12,10 @@ public class AiCanvasOperation {
     private Long documentId;
     private Long userId;
     private String operationType;
+    private String modelName;
+    private Integer promptTokens;
+    private Integer completionTokens;
+    private Integer totalTokens;
     @TableField(typeHandler = com.military.doc.common.mybatis.JsonbTypeHandler.class) private String patches;
     @TableField(typeHandler = com.military.doc.common.mybatis.JsonbTypeHandler.class) private String beforeSnapshot;
     @TableField(typeHandler = com.military.doc.common.mybatis.JsonbTypeHandler.class) private String afterSnapshot;

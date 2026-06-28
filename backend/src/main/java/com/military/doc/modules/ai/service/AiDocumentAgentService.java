@@ -3,7 +3,7 @@ package com.military.doc.modules.ai.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
-import com.military.doc.ai.llm.LlmClient;
+import com.military.doc.ai.llm.DelegatingLlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
 import com.military.doc.modules.ai.entity.AiDocument;
 import com.military.doc.modules.ai.entity.AiDocumentSection;
@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 
 @Slf4j @Service @RequiredArgsConstructor
 public class AiDocumentAgentService {
-    private final LlmClient llmClient;
+    private final DelegatingLlmClient llmClient;
     private final PromptTemplateService promptService;
     private final ContextAssemblyService contextAssembly;
     private final AiDocumentSectionService sectionService;
@@ -41,14 +41,14 @@ public class AiDocumentAgentService {
             log.warn("Context assembly failed, proceeding without project context: {}", e.getMessage());
         }
         String prompt = "文档类型：" + nvl(doc.getDocumentType()) + "\n用户需求：" + doc.getSourcePrompt() + "\n\n项目背景：\n" + nvl(context);
-        String raw = llmClient.chat(system, prompt);
+        String raw = llmClient.chat(system, prompt);  // quickChat: no document context
         raw = cleanLlmOutput(raw);
 
         try {
             List<CanvasPatch.SectionDTO> outline = parseJsonArray(raw, CanvasPatch.SectionDTO.class);
             if (outline == null || outline.isEmpty()) {
                 log.warn("Outline generation returned empty, retrying with stricter prompt");
-                raw = llmClient.chat(system + "\n必须输出至少5个章节的JSON数组。", prompt);
+                raw = llmClient.chatWithAudit(system + "\n必须输出至少5个章节的JSON数组。", prompt, "canvas-gen", doc.getProjectId());
                 raw = cleanLlmOutput(raw);
                 outline = parseJsonArray(raw, CanvasPatch.SectionDTO.class);
             }
@@ -89,7 +89,7 @@ public class AiDocumentAgentService {
         ctx.append("\n当前章节：").append(section.getTitle());
         ctx.append("\n请撰写本章节正文，篇幅300-800字。直接输出正文，不要任何解释。");
 
-        String result = llmClient.chat(system, ctx.toString());
+        String result = llmClient.chatWithAudit(system, ctx.toString(), "canvas-gen", doc.getProjectId());
         result = cleanLlmOutput(result);
         return (result != null && !result.isBlank()) ? result : "";
     }
@@ -130,7 +130,7 @@ public class AiDocumentAgentService {
                 prompt = writtenSoFar.toString() + "\n\n以上是已写内容。请继续写下一章（一级标题），如果文档已经完整可以写## END 表示结束。\n格式：\n## 章节标题\n正文内容...";
             }
             
-            String raw = llmClient.chat(system, prompt);
+            String raw = llmClient.chat(system, prompt);  // quickChat: no document context
             raw = cleanLlmOutput(raw);
             if (raw == null || raw.isBlank() || raw.contains("## END")) {
                 onMessage.accept("文档撰写完成");
@@ -242,7 +242,7 @@ public class AiDocumentAgentService {
             "\"reasoning\":\"简短推理\"}");
 
         String context = buildSectionContext(doc, secs);
-        String raw = llmClient.chat(system, context + "\n用户消息：" + message);
+        String raw = llmClient.chatWithAudit(system, context + "\n用户消息：" + message, "canvas-gen", doc.getProjectId());
         raw = cleanLlmOutput(raw);
 
         try {
@@ -349,7 +349,7 @@ public class AiDocumentAgentService {
             }
         }
         String system = "你是文档摘要专家。为以下文档生成简洁摘要（100-300字）。";
-        String result = llmClient.chat(system, sb.toString());
+        String result = llmClient.chatWithAudit(system, sb.toString(), "canvas-gen", doc.getProjectId());
         return List.of(patch("set_document_title", Map.of("title", doc.getTitle())),
             patch("set_outline", Map.of("sections", List.of(
                 Map.of("id", -1L, "title", "摘要", "level", 1, "sortOrder", 0,
@@ -462,7 +462,11 @@ public class AiDocumentAgentService {
     /** Clean common LLM output artifacts. */
     private String cleanLlmOutput(String raw) {
         if (raw == null) return "";
-        return raw.replaceFirst("^(null)+", "").trim();
+        String result = raw.trim();
+        // Remove ALL markdown heading lines (LLM sometimes generates full doc instead of single section)
+        result = result.replaceAll("(?m)^#{1,4}\\s+[^\\n]*\\n?", "").trim();
+        result = result.replaceFirst("^(null)+", "").trim();
+        return result;
     }
 
     private CanvasPatch.Patch patch(String type, Object payload) {
@@ -479,7 +483,7 @@ public class AiDocumentAgentService {
 
     /** Quick chat without document context (for selection edits). */
     public String quickChat(String system, String prompt) {
-        String raw = llmClient.chat(system, prompt);
+        String raw = llmClient.chat(system, prompt);  // quickChat: no document context
         return cleanLlmOutput(raw);
     }
 

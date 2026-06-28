@@ -25,8 +25,8 @@ public class OpenAiCompatibleClient implements LlmClient {
 
     public static final MediaType JSON_MEDIA = MediaType.get("application/json; charset=utf-8");
 
-    private static final int MAX_RETRIES = 3;
-    private static final long BASE_DELAY_MS = 1000;
+    private static final int MAX_RETRIES = 1;
+    private static final long BASE_DELAY_MS = 500;
 
     public OpenAiCompatibleClient(OkHttpClient httpClient, LlmProperties properties,
                                    ObjectMapper objectMapper, LlmProviderService providerService) {

@@ -1,3 +1,55 @@
+/* ============================================
+   军工项目文档策划与编制一体机 — 全局样式
+   设计系统: Navy Professional + Minimalism
+   ============================================ */
+
+/* ---- Design Tokens (CSS Variables) ---- */
+:root {
+  /* Primary palette — 海军蓝专业配色 */
+  --md-primary-50: #EFF4FA;
+  --md-primary-100: #D6E3F3;
+  --md-primary-200: #B1C9E7;
+  --md-primary-300: #7DA7D6;
+  --md-primary-400: #4A84C2;
+  --md-primary-500: #2C5F9E;
+  --md-primary-600: #1E3A5F;
+  --md-primary-700: #172D4A;
+  --md-primary-800: #0F2038;
+  --md-primary-900: #0A1628;
+
+  /* Semantic colors */
+  --md-success: #22C55E;
+  --md-warning: #F59E0B;
+  --md-danger: #EF4444;
+  --md-info: #3B82F6;
+
+  /* Neutrals */
+  --md-gray-50: #F8FAFC;
+  --md-gray-100: #F1F5F9;
+  --md-gray-200: #E2E8F0;
+  --md-gray-300: #CBD5E1;
+  --md-gray-400: #94A3B8;
+  --md-gray-500: #64748B;
+  --md-gray-600: #475569;
+  --md-gray-700: #334155;
+  --md-gray-800: #1E293B;
+  --md-gray-900: #0F172A;
+
+  /* Shadows */
+  --md-shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --md-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --md-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+
+  /* Radius */
+  --md-radius-sm: 6px;
+  --md-radius-md: 8px;
+  --md-radius-lg: 12px;
+
+  /* Transitions */
+  --md-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Reset ---- */
 * {
   margin: 0;
   padding: 0;
@@ -6,5 +58,170 @@
 
 html, body, #app {
   height: 100%;
-  font-family: 'Helvetica Neue', Helvetica, Arial, 'Microsoft YaHei', sans-serif;
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  color: var(--md-gray-800);
+  background: var(--md-gray-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--md-gray-300);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--md-gray-400);
+}
+
+/* ---- Element Plus Theme Overrides ---- */
+:root {
+  /* Override Element Plus primary color to navy blue */
+  --el-color-primary: var(--md-primary-500);
+  --el-color-primary-light-3: var(--md-primary-400);
+  --el-color-primary-light-5: var(--md-primary-300);
+  --el-color-primary-light-7: var(--md-primary-200);
+  --el-color-primary-light-8: var(--md-primary-100);
+  --el-color-primary-light-9: var(--md-primary-50);
+  --el-color-primary-dark-2: var(--md-primary-600);
+
+  --el-color-success: var(--md-success);
+  --el-color-warning: var(--md-warning);
+  --el-color-danger: var(--md-danger);
+
+  /* Border radius */
+  --el-border-radius-base: var(--md-radius-sm);
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 20px;
+
+  /* Font */
+  --el-font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont,
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* Background */
+  --el-bg-color-page: var(--md-gray-50);
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+
+  /* Border */
+  --el-border-color-base: var(--md-gray-200);
+  --el-border-color-light: var(--md-gray-200);
+  --el-border-color-lighter: var(--md-gray-100);
+
+  /* Text */
+  --el-text-color-primary: var(--md-gray-800);
+  --el-text-color-regular: var(--md-gray-700);
+  --el-text-color-secondary: var(--md-gray-500);
+  --el-text-color-placeholder: var(--md-gray-400);
+}
+
+/* ---- Element Plus Component Fine-tuning ---- */
+
+/* Card */
+.el-card {
+  border-radius: var(--md-radius-md) !important;
+  box-shadow: var(--md-shadow-sm) !important;
+  transition: box-shadow var(--md-transition);
+}
+.el-card:hover {
+  box-shadow: var(--md-shadow-md) !important;
+}
+
+/* Button */
+.el-button {
+  font-weight: 500;
+  border-radius: var(--md-radius-sm);
+  transition: all var(--md-transition);
+}
+.el-button--primary {
+  box-shadow: 0 2px 4px rgba(44, 95, 158, 0.2);
+}
+.el-button--primary:hover {
+  box-shadow: 0 4px 8px rgba(44, 95, 158, 0.3);
+}
+
+/* Table */
+.el-table {
+  border-radius: var(--md-radius-md);
+  overflow: hidden;
+}
+.el-table th.el-table__cell {
+  background: var(--md-gray-50);
+  color: var(--md-gray-700);
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 2px solid var(--md-gray-200);
+}
+
+/* Menu (sidebar override via scoped styles in MainLayout) */
+
+/* Tag */
+.el-tag {
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Dialog */
+.el-dialog {
+  border-radius: var(--md-radius-lg);
+  box-shadow: var(--md-shadow-lg);
+}
+.el-dialog__header {
+  border-bottom: 1px solid var(--md-gray-100);
+  padding: 20px 24px;
+  margin-right: 0;
+}
+.el-dialog__body {
+  padding: 24px;
+}
+
+/* Input / Select */
+.el-input__wrapper, .el-select .el-input__wrapper {
+  border-radius: var(--md-radius-sm);
+  box-shadow: 0 0 0 1px var(--md-gray-200) inset !important;
+  transition: box-shadow var(--md-transition);
+}
+.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--md-gray-300) inset !important;
+}
+.el-input.is-focus .el-input__wrapper {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset !important;
+}
+
+/* Pagination */
+.el-pagination {
+  --el-pagination-button-bg-color: var(--md-gray-50);
+}
+.el-pagination .btn-prev, .el-pagination .btn-next {
+  border-radius: var(--md-radius-sm);
+}
+
+/* Tabs */
+.el-tabs__item {
+  font-weight: 500;
+}
+.el-tabs__active-bar {
+  height: 2px;
+}
+
+/* Badge */
+.el-badge__content {
+  font-weight: 500;
+}
+
+/* Empty */
+.el-empty__description {
+  color: var(--md-gray-400);
 }

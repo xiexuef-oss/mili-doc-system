@@ -13,6 +13,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j @RestController @RequestMapping("/api/v1/ai-documents") @RequiredArgsConstructor @Tag(name="AI文档画布")
 public class AiDocumentController {
@@ -20,6 +21,9 @@ public class AiDocumentController {
     private final AiDocumentSectionService sectionService;
     private final AiCanvasPatchService patchService;
     private final AiDocumentAgentService agentService;
+    private final AiDocumentWorkflowService workflowService;
+    /** Tracks async generation progress: docId -> {completed, total, status, error} */
+    private final ConcurrentHashMap<Long, Map<String, Object>> generationTasks = new ConcurrentHashMap<>();
 
     private Long userId(Authentication a) { return (Long) a.getPrincipal(); }
 
@@ -55,7 +59,23 @@ public class AiDocumentController {
         AiDocument doc = docService.getById(id);
         if (doc == null) return Result.error("NOT_FOUND","document not found");
         List<AiDocumentSection> secs = sectionService.getByDocumentId(id);
-        return Result.success(Map.of("document",doc,"sections",secs));
+        Map<String, Object> data = new HashMap<>();
+        data.put("document", doc);
+        data.put("sections", secs);
+        // Parse contentJson to avoid double-encoding issues in JSON response
+        try {
+            String cj = doc.getContentJson();
+            data.put("contentJson", cj != null ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(cj, Map.class) : null);
+        } catch (Exception e) {
+            data.put("contentJson", doc.getContentJson());
+        }
+        try {
+            String oj = doc.getOutlineJson();
+            data.put("outlineJson", oj != null ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(oj, List.class) : null);
+        } catch (Exception e) {
+            data.put("outlineJson", doc.getOutlineJson());
+        }
+        return Result.success(data);
     }
 
     @PostMapping("/{id}/generate")
@@ -169,6 +189,47 @@ public class AiDocumentController {
         return Result.success(Map.of("ok", true));
     }
 
+    @PutMapping("/{id}")
+    public Result<?> updateDocument(@PathVariable Long id, @RequestBody Map<String,Object> body, Authentication auth) {
+        AiDocument doc = requireOwnership(id, auth);
+        String title = (String) body.get("title");
+        String description = (String) body.get("description");
+        String status = (String) body.get("status");
+        if (title != null) docService.updateTitle(id, title);
+        if (status != null) docService.updateStatus(id, status);
+        return Result.success(Map.of("ok", true));
+    }
+
+    @GetMapping("/{id}/export")
+    public Result<?> exportDocument(@PathVariable Long id,
+                                    @RequestParam(defaultValue = "markdown") String format,
+                                    Authentication auth) {
+        AiDocument doc = requireOwnership(id, auth);
+        String content;
+        String filename;
+        switch (format) {
+            case "html":
+                content = doc.getContentJson() != null ? "<pre>" + doc.getContentJson() + "</pre>" : "";
+                filename = doc.getTitle() + ".html";
+                break;
+            case "text":
+            case "txt":
+                content = doc.getContentJson() != null ? doc.getContentJson() : "";
+                filename = doc.getTitle() + ".txt";
+                break;
+            case "json":
+                content = doc.getContentJson();
+                filename = doc.getTitle() + ".json";
+                break;
+            case "markdown":
+            default:
+                content = doc.getContentJson() != null ? doc.getContentJson() : "";
+                filename = doc.getTitle() + ".md";
+                break;
+        }
+        return Result.success(Map.of("filename", filename, "content", content, "format", format));
+    }
+
     @PostMapping("/{id}/ai/edit-selection")
     public Result<?> aiEditSelection(@PathVariable Long id, @RequestBody Map<String,Object> body, Authentication auth) {
         requireOwnership(id, auth);
@@ -212,6 +273,133 @@ public class AiDocumentController {
     }
 
     @GetMapping("/{id}/operations") public Result<List<AiCanvasOperation>> listOperations(@PathVariable Long id, Authentication auth) { requireOwnership(id, auth); return Result.success(patchService.listOperations(id)); }
+
+    // ──────────────── Workflow APIs ────────────────
+
+    @GetMapping("/project/{projectId}/checklist")
+    public Result<List<Map<String, Object>>> getProjectDocChecklist(@PathVariable Long projectId, Authentication auth) {
+        return Result.success(workflowService.getProjectDocChecklist(projectId));
+    }
+
+    @PostMapping("/from-catalog")
+    public Result<Map<String, Object>> startDocumentFromCatalog(@RequestBody Map<String, Object> body, Authentication auth) {
+        Long projectId = toLong(body.get("projectId"));
+        Long catalogId = toLong(body.get("catalogId"));
+        String docName = (String) body.get("docName");
+        String docType = (String) body.get("docType");
+        Long ledgerId = toLong(body.get("ledgerId"));
+        
+        log.info("startDocumentFromCatalog: projectId={}, catalogId={}, docName={}, docType={}, ledgerId={}, userId={}", 
+            projectId, catalogId, docName, docType, ledgerId, userId(auth));
+        
+        if (projectId == null || projectId <= 0) {
+            return Result.error("PARAM_ERROR", "项目ID不能为空");
+        }
+        
+        return Result.success(workflowService.startDocumentFromCatalog(projectId, catalogId, docName, docType, ledgerId, userId(auth)));
+    }
+
+    @PostMapping("/{id}/load-template")
+    public Result<Map<String, Object>> loadOutlineFromTemplate(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
+        requireOwnership(id, auth);
+        Long templateId = toLong(body.get("templateId"));
+        return Result.success(workflowService.loadOutlineFromTemplate(id, templateId, userId(auth)));
+    }
+
+    @PostMapping("/{id}/generate-template")
+    public Result<Map<String, Object>> generateTemplateFromKnowledge(@PathVariable Long id, Authentication auth) {
+        requireOwnership(id, auth);
+        return Result.success(workflowService.generateTemplateFromKnowledge(id, userId(auth)));
+    }
+
+    @PostMapping("/{id}/confirm-template")
+    public Result<?> confirmTemplate(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
+        requireOwnership(id, auth);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> outline = (List<Map<String, Object>>) body.get("outline");
+        workflowService.confirmTemplateAndStartWriting(id, outline, userId(auth));
+        return Result.success(Map.of("ok", true));
+    }
+
+    @PostMapping("/{id}/generate-content")
+    public SseEmitter generateContent(@PathVariable Long id, Authentication auth) {
+        requireOwnership(id, auth);
+        SseEmitter emitter = new SseEmitter(1800000L); // 30 min for large docs
+        CompletableFuture.runAsync(() -> {
+            try {
+                workflowService.generateContentFromOutline(id, progress -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("progress").data(progress));
+                    } catch (Exception ignored) {}
+                });
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+        return emitter;
+    }
+
+    /** Start background content generation — returns immediately with status endpoint for polling */
+    @PostMapping("/{id}/generate-content-async")
+    public Result<Map<String, Object>> generateContentAsync(@PathVariable Long id, Authentication auth) {
+        requireOwnership(id, auth);
+        Map<String, Object> task = new HashMap<>();
+        task.put("status", "started");
+        task.put("completed", 0);
+        task.put("total", 0);
+        task.put("message", "开始生成...");
+        generationTasks.put(id, task);
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                task.put("status", "generating");
+                workflowService.generateContentFromOutline(id, progress -> {
+                    String s = (String) progress.getOrDefault("status", "");
+                    if ("generating".equals(s)) {
+                        task.put("message", "正在写：" + progress.get("section"));
+                    } else if ("progress".equals(s)) {
+                        task.put("completed", progress.getOrDefault("completed", 0));
+                        task.put("total", progress.getOrDefault("total", 0));
+                        task.put("message", "已完成 " + progress.get("completed") + "/" + progress.get("total"));
+                    } else if ("completed".equals(s)) {
+                        task.put("status", "done");
+                        task.put("message", progress.getOrDefault("message", "生成完成"));
+                    }
+                });
+                task.putIfAbsent("status", "done");
+                task.put("message", "文档生成完成");
+            } catch (Exception e) {
+                log.error("Async generation failed for doc {}", id, e);
+                task.put("status", "failed");
+                task.put("message", "生成失败：" + e.getMessage());
+            }
+        });
+        return Result.success(Map.of("ok", true, "message", "后台生成已启动"));
+    }
+
+    /** Poll generation progress */
+    @GetMapping("/{id}/generation-status")
+    public Result<Map<String, Object>> generationStatus(@PathVariable Long id, Authentication auth) {
+        requireOwnership(id, auth);
+        Map<String, Object> task = generationTasks.getOrDefault(id, Map.of("status", "idle", "message", "无生成任务"));
+        return Result.success(task);
+    }
+
+    @PostMapping("/{id}/link-ledger")
+    public Result<?> linkToDocLedger(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
+        requireOwnership(id, auth);
+        Long catalogId = toLong(body.get("catalogId"));
+        return Result.success(workflowService.linkToDocLedger(id, catalogId, userId(auth)));
+    }
+
+    @PostMapping("/{id}/save-ledger")
+    public Result<?> saveToDocLedger(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
+        requireOwnership(id, auth);
+        Long ledgerId = toLong(body.get("ledgerId"));
+        workflowService.saveToDocLedger(id, ledgerId, userId(auth));
+        return Result.success(Map.of("ok", true));
+    }
 
     private Long toLong(Object v) { if(v==null)return null; if(v instanceof Long l)return l; if(v instanceof Integer i)return i.longValue(); try{return Long.parseLong(v.toString());}catch(Exception e){return null;} }
 }

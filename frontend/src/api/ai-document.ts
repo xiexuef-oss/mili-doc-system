@@ -35,6 +35,44 @@ export function listOperations(docId: number) { return api.get(`/ai-documents/${
 export function updateDocumentContent(docId: number, contentJson: any) {
   return api.put(`/ai-documents/${docId}/content`, { contentJson: JSON.stringify(contentJson) })
 }
+export function updateDocumentTitle(docId: number, title: string) {
+  return api.put(`/ai-documents/${docId}`, { title })
+}
+export function exportDocument(docId: number, format: string) {
+  return api.get(`/ai-documents/${docId}/export`, { params: { format } })
+}
+export function getProjectDocChecklist(projectId: number) {
+  return api.get(`/ai-documents/project/${projectId}/checklist`)
+}
+export function startDocumentFromCatalog(projectId: number, catalogId: number, docName?: string, docType?: string, ledgerId?: number) {
+  return api.post('/ai-documents/from-catalog', { projectId, catalogId, docName, docType, ledgerId })
+}
+export function loadOutlineFromTemplate(docId: number, templateId: number) {
+  return api.post(`/ai-documents/${docId}/load-template`, { templateId })
+}
+export function generateTemplateFromKnowledge(docId: number) {
+  return api.post(`/ai-documents/${docId}/generate-template`)
+}
+export function confirmTemplate(docId: number, outline: any[]) {
+  return api.post(`/ai-documents/${docId}/confirm-template`, { outline })
+}
+export function generateContent(docId: number) {
+  return api.post(`/ai-documents/${docId}/generate-content`, {}, { responseType: 'stream' })
+}
+/** Start async content generation (non-SSE, reliable) */
+export function generateContentAsync(docId: number) {
+  return api.post(`/ai-documents/${docId}/generate-content-async`)
+}
+/** Poll generation progress */
+export function getGenerationStatus(docId: number) {
+  return api.get(`/ai-documents/${docId}/generation-status`)
+}
+export function linkToDocLedger(docId: number, catalogId: number) {
+  return api.post(`/ai-documents/${docId}/link-ledger`, { catalogId })
+}
+export function saveToDocLedger(docId: number, ledgerId: number) {
+  return api.post(`/ai-documents/${docId}/save-ledger`, { ledgerId })
+}
 export function aiEditSelection(docId: number, params: {
   blockId: string; selectedText: string; beforeText: string; afterText: string
   headingPath: string[]; mode: string; instruction?: string
@@ -54,6 +92,7 @@ export function streamGenerateDocument(
 ): AbortController {
   const controller = new AbortController()
   const token = getToken()
+  console.log('[SSE] Starting stream for doc', docId)
   fetch(`/api/v1/ai-documents/${docId}/generate`, {
     method: 'POST',
     headers: {
@@ -62,15 +101,17 @@ export function streamGenerateDocument(
     },
     signal: controller.signal
   }).then(async res => {
-    if (!res.ok) { onDone(); return }
+    console.log('[SSE] Response:', res.status, res.statusText)
+    if (!res.ok) { console.error('[SSE] Bad response'); onDone(); return }
     const reader = res.body?.getReader()
-    if (!reader) { onDone(); return }
+    if (!reader) { console.error('[SSE] No reader'); onDone(); return }
     const decoder = new TextDecoder()
     let buf = '', eventType = ''
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
+      if (done) { console.log('[SSE] Stream done'); break }
+      const chunk = decoder.decode(value, { stream: true })
+      buf += chunk
       const lines = buf.split('\n')
       buf = lines.pop() || ''
       for (const line of lines) {
@@ -80,10 +121,16 @@ export function streamGenerateDocument(
           let raw = line.substring(5)
           const data = raw.startsWith(' ') ? raw.substring(1) : raw
           if (eventType === 'patch') {
-            try { onPatch(JSON.parse(data)) } catch (e) { console.warn('SSE patch parse error:', e) }
+            try {
+              const patch = JSON.parse(data)
+              console.log('[SSE] patch:', patch.type)
+              onPatch(patch)
+            } catch (e) { console.warn('[SSE] parse error:', e) }
           } else if (eventType === 'message') {
+            console.log('[SSE] message:', data.substring(0, 60))
             onMessage(data)
           } else if (eventType === 'done') {
+            console.log('[SSE] DONE event')
             onDone()
             return
           }
@@ -91,6 +138,6 @@ export function streamGenerateDocument(
       }
     }
     onDone()
-  }).catch(() => { onDone() })
+  }).catch((e) => { console.error('[SSE] fetch error:', e); onDone() })
   return controller
 }

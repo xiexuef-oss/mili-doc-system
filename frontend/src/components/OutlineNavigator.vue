@@ -29,12 +29,27 @@ const outline = computed(() => props.items || [])
 </script>
 
 <style scoped>
-.outline-nav { width: 160px; min-width: 120px; overflow-y: auto; height: 100%; border-right: 1px solid var(--el-border-color-light); padding: 8px 0; background: var(--el-fill-color-lighter); flex-shrink: 0; }
-.on-header { font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); padding: 4px 10px 8px; }
+.outline-nav { width: 180px; min-width: 140px; overflow-y: auto; height: 100%; border-right: 1px solid var(--el-border-color-light); padding: 8px 0; background: #fafbfc; flex-shrink: 0; }
+.on-header { font-size: 12px; font-weight: 600; color: var(--el-text-color-secondary); padding: 4px 12px 10px; border-bottom: 1px solid var(--el-border-color-lighter); margin-bottom: 4px; }
 .on-list { display: flex; flex-direction: column; }
-.on-item { padding: 4px 8px; cursor: pointer; font-size: 12px; border-radius: 3px; margin: 0 4px; transition: background .15s; line-height: 1.4; }
-.on-item:hover { background: var(--el-fill-color); }
-.on-item.active { background: var(--el-color-primary-light-9); color: var(--el-color-primary); font-weight: 600; }
+.on-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 0;
+  margin: 0;
+  transition: all .15s;
+  line-height: 1.4;
+  border-left: 3px solid transparent;
+  color: var(--el-text-color-regular);
+}
+.on-item:hover { background: #e8f0fe; color: var(--el-color-primary); }
+.on-item.active {
+  background: #e8f0fe;
+  color: var(--el-color-primary);
+  font-weight: 600;
+  border-left-color: var(--el-color-primary);
+}
 .on-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-empty { padding: 12px 8px; font-size: 11px; color: #c0c4cc; text-align: center; }
 </style>

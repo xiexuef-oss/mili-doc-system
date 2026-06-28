@@ -18,6 +18,10 @@ public class AiDocument {
     private String sourcePrompt;
     private String status;
     @TableField(typeHandler = JsonbTypeHandler.class)
+    private String contentJson;
+                @TableField(typeHandler = JsonbTypeHandler.class)
+    private String outlineJson;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String metadata;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
