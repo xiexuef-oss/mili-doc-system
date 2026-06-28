@@ -133,14 +133,15 @@ public class LayeredGenerationService {
 
         int total = chapters.size();
         int threads = Math.min(6, total);
+        int completed = 0;
         var pool = Executors.newFixedThreadPool(threads);
+        try {
         var futures = new ArrayList<Future<ChapterResult>>();
 
         for (DocChapter ch : chapters) {
             futures.add(pool.submit(() -> generateSingleChapter(ch, projectId)));
         }
 
-        int completed = 0;
         for (int i = 0; i < total; i++) {
             try {
                 ChapterResult cr = futures.get(i).get(180, TimeUnit.SECONDS);
@@ -171,7 +172,9 @@ public class LayeredGenerationService {
             }
             onProgress.accept(completed);
         }
-        pool.shutdown();
+        } finally {
+            pool.shutdown();
+        }
         log.info("Layered generation chapter step: {}/{} completed", completed, total);
     }
 

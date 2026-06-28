@@ -53,6 +53,12 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- Flyway: database migration management (version managed by spring-boot-starter-parent) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

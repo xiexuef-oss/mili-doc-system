@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocFile;
 import com.military.doc.modules.document.service.DocCatalogService;
@@ -33,6 +34,9 @@ public class DocCatalogController {
     @Autowired
     private DocFileService docFileService;
 
+    @Autowired
+    private ProjectAccessGuard accessGuard;
+
     private boolean hasDraft(Long catalogId) {
         Long count = docFileService.count(
             new LambdaQueryWrapper<DocFile>().eq(DocFile::getCatalogId, catalogId));
@@ -42,6 +46,7 @@ public class DocCatalogController {
     @PostMapping
     @Operation(summary = "创建文档目录条目")
     public Result<DocCatalog> create(@RequestBody DocCatalog catalog, Authentication authentication) {
+        accessGuard.requireMember(catalog.getProjectId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         catalog.setCreatedBy(userId);
         catalog.setUpdatedBy(userId);
@@ -93,12 +98,14 @@ public class DocCatalogController {
         Long userId = (Long) authentication.getPrincipal();
         DocCatalog existing = docCatalogService.getById(id);
         if (existing == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        accessGuard.requireMember(existing.getProjectId(), authentication);
 
         if (hasDraft(id)) {
             return Result.error("HAS_DRAFT", "该目录条目已生成文档初稿，不可修改。如需修改，请先删除关联的文档初稿");
         }
 
         catalog.setId(id);
+        catalog.setProjectId(existing.getProjectId());
         catalog.setUpdatedBy(userId);
         docCatalogService.updateById(catalog);
         return Result.success(docCatalogService.getById(id));
@@ -106,7 +113,10 @@ public class DocCatalogController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除文档目录条目（已生成初稿的条目不可删除）")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id, Authentication authentication) {
+        DocCatalog existing = docCatalogService.getById(id);
+        if (existing == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        accessGuard.requireMember(existing.getProjectId(), authentication);
         if (hasDraft(id)) {
             return Result.error("HAS_DRAFT", "该目录条目已生成文档初稿，不可删除。请先删除关联的文档初稿");
         }
@@ -149,6 +159,7 @@ public class DocCatalogController {
         if (projectId == null || stageId == null || stageCode == null || stageCode.isEmpty()) {
             return Result.error("PARAM_ERROR", "projectId, stageId and stageCode are required");
         }
+        accessGuard.requireMember(projectId, authentication);
 
         List<DocCatalog> catalogs = stageCatalogTemplateService.generateByStage(
             projectId, stageId, stageCode, userId, overwrite);
@@ -169,6 +180,7 @@ public class DocCatalogController {
         Long userId = (Long) authentication.getPrincipal();
         DocCatalog catalog = docCatalogService.getById(id);
         if (catalog == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        accessGuard.requireMember(catalog.getProjectId(), authentication);
         if (!"DRAFT".equals(catalog.getStatus())) {
             return Result.error("STATUS_ERROR", "仅草稿状态的目录可下发");
         }
@@ -187,6 +199,7 @@ public class DocCatalogController {
         Long userId = (Long) authentication.getPrincipal();
         DocCatalog catalog = docCatalogService.getById(id);
         if (catalog == null) return Result.error("NOT_FOUND", "目录条目不存在");
+        accessGuard.requireMember(catalog.getProjectId(), authentication);
         if (!"ISSUED".equals(catalog.getStatus())) {
             return Result.error("STATUS_ERROR", "仅已下发状态的目录可变更");
         }

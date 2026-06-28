@@ -3,12 +3,16 @@ package com.military.doc.modules.project.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.project.entity.Project;
+import com.military.doc.modules.project.entity.ProjectMember;
+import com.military.doc.modules.project.service.ProjectMemberService;
 import com.military.doc.modules.project.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,15 +22,28 @@ public class ProjectController {
 
     @Autowired
     private ProjectService projectService;
+    @Autowired
+    private ProjectMemberService projectMemberService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping
     @Operation(summary = "创建项目")
+    @Transactional
     public Result<Project> create(@RequestBody Project project, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         project.setCreatedBy(userId);
         project.setUpdatedBy(userId);
         project.setStatus("DRAFT");
         projectService.save(project);
+
+        ProjectMember owner = new ProjectMember();
+        owner.setProjectId(project.getId());
+        owner.setUserId(userId);
+        owner.setMemberPosition("OWNER");
+        owner.setStatus("ACTIVE");
+        projectMemberService.save(owner);
+
         return Result.success(project);
     }
 
@@ -57,6 +74,7 @@ public class ProjectController {
     @PutMapping("/{id}")
     @Operation(summary = "更新项目")
     public Result<Project> update(@PathVariable Long id, @RequestBody Project project, Authentication authentication) {
+        accessGuard.requireMember(id, authentication);
         Long userId = (Long) authentication.getPrincipal();
         project.setId(id);
         project.setUpdatedBy(userId);
@@ -67,6 +85,7 @@ public class ProjectController {
     @PutMapping("/{id}/current-stage")
     @Operation(summary = "更新项目当前阶段")
     public Result<Project> updateCurrentStage(@PathVariable Long id, @RequestBody StageUpdateRequest request, Authentication authentication) {
+        accessGuard.requireMember(id, authentication);
         Long userId = (Long) authentication.getPrincipal();
         Project project = projectService.getById(id);
         if (project == null) {

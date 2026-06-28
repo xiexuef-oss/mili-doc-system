@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocVersion;
 import com.military.doc.modules.document.service.DocVersionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,10 +21,13 @@ public class DocVersionController {
 
     @Autowired
     private DocVersionService docVersionService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping
     @Operation(summary = "创建文档版本")
     public Result<DocVersion> create(@RequestBody DocVersion version, Authentication authentication) {
+        accessGuard.requireMemberForFile(version.getDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         version.setCreatedBy(userId);
         version.setUpdatedBy(userId);
@@ -68,8 +72,12 @@ public class DocVersionController {
     @PutMapping("/{id}")
     @Operation(summary = "更新版本信息")
     public Result<DocVersion> update(@PathVariable Long id, @RequestBody DocVersion version, Authentication authentication) {
+        DocVersion existing = docVersionService.getById(id);
+        if (existing == null) throw com.military.doc.common.exception.BusinessException.notFound("文档版本不存在: id=" + id);
+        accessGuard.requireMemberForFile(existing.getDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         version.setId(id);
+        version.setDocFileId(existing.getDocFileId());
         version.setUpdatedBy(userId);
         docVersionService.updateById(version);
         return Result.success(docVersionService.getById(id));

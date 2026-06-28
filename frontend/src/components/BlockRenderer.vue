@@ -36,6 +36,8 @@
 </template>
 
 <script setup lang="ts">
+import { sanitizeHtml } from '@/utils/sanitize'
+
 defineProps<{ blocks: {id:number,type:string,content:string}[] }>()
 
 function stripInline(text: string): string {
@@ -43,13 +45,14 @@ function stripInline(text: string): string {
 }
 
 function renderInline(text: string): string {
-  return text
+  const escaped = text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/<strong>/g,'<strong>').replace(/<\/strong>/g,'</strong>')
     .replace(/<em>/g,'<em>').replace(/<\/em>/g,'</em>')
     .replace(/<del>/g,'<del>').replace(/<\/del>/g,'</del>')
     .replace(/<u>/g,'<u>').replace(/<\/u>/g,'</u>')
     .replace(/<code>/g,'<code>').replace(/<\/code>/g,'</code>')
+  return sanitizeHtml(escaped)
 }
 
 function extractListItems(content: string): string[] {

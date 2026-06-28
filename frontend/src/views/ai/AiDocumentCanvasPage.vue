@@ -232,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted, onDeactivated, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, EditPen, Document } from '@element-plus/icons-vue'
@@ -710,9 +710,22 @@ async function saveToLedger() {
   }
 }
 
-onUnmounted(() => {
+function cleanupTimersAndObservers() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
   headingObserver?.disconnect()
   headingObserver = null
+}
+
+onUnmounted(() => {
+  cleanupTimersAndObservers()
+})
+
+// keep-alive: clean up timers on tab switch, prevent background polling leaks
+onDeactivated(() => {
+  cleanupTimersAndObservers()
 })
 
 // Re-observe headings when outline changes

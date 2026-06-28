@@ -43,6 +43,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import request from '@/api/index'
 import { ElMessage } from 'element-plus'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const props = defineProps<{ projectId: number; docType: string; docName?: string }>()
 
@@ -56,7 +57,7 @@ const msgRef = ref<HTMLElement>()
 
 const renderedPreview = computed(() => {
   if (!session.value?.docContent) return '<p style="color:#909399">对话开始后将在此显示文档预览</p>'
-  return session.value.docContent.replace(/\n/g, '<br>')
+  return sanitizeHtml(session.value.docContent.replace(/\n/g, '<br>'))
 })
 
 async function init() {

@@ -12,6 +12,7 @@ import com.military.doc.modules.project.entity.ProjectStage;
 import com.military.doc.modules.project.mapper.ProjectStageMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -65,8 +66,10 @@ public class StageDocChecklistController {
     @PostMapping("/projects/{projectId}/stages/{stageId}/checklist/sync-to-ledger")
     @Operation(summary = "手动将文档清单同步到文档台账")
     public Result<Map<String, Object>> syncToLedger(@PathVariable Long projectId,
-                                                     @PathVariable Long stageId) {
-        int count = docLedgerService.syncFromChecklist(projectId, stageId, 0L);
+                                                     @PathVariable Long stageId,
+                                                     Authentication authentication) {
+        Long operatorId = (Long) authentication.getPrincipal();
+        int count = docLedgerService.syncFromChecklist(projectId, stageId, operatorId);
         return Result.success(Map.of("syncedCount", count, "message", "成功同步 " + count + " 条到文档台账"));
     }
 

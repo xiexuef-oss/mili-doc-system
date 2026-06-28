@@ -244,6 +244,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getRelRequirements, saveRelRequirement, generateReliabilityOutline, generateDeratingReport, generatePredictionReport, previewPrediction, generateAllocationReport, previewAllocation } from '@/api/reliability'
 import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const route = useRoute()
 const projectId = computed(() => Number(route.params.projectId) || 0)
@@ -285,12 +286,12 @@ const progressPercent = ref(0)
 const progressText = ref('')
 const elapsed = ref(0)
 let progressTimer: ReturnType<typeof setInterval> | null = null
-const renderedContent = computed(() => generatedContent.value
+const renderedContent = computed(() => sanitizeHtml(generatedContent.value
   .replace(/^### (.+)$/gm, '<h4>$1</h4>')
   .replace(/^## (.+)$/gm, '<h3>$1</h3>')
   .replace(/^# (.+)$/gm, '<h2>$1</h2>')
   .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  .replace(/\n/g, '<br>'))
+  .replace(/\n/g, '<br>')))
 
 const showPredictionDialog = ref(false)
 const predictionEnv = ref('G_FIX')

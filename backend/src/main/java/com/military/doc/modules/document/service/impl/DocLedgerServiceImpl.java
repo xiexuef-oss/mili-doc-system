@@ -29,8 +29,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 @Service
 public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger> implements DocLedgerService {
+
+    /** Per-(projectId, catalogId) locks to prevent concurrent findOrCreateDraftLedger race. */
+    private static final ConcurrentHashMap<String, Object> DRAFTING_LOCKS = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
         "PLANNED",    Set.of("DRAFTING"),
@@ -64,6 +69,9 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
 
     @Autowired
     private com.military.doc.modules.document.mapper.CompletenessCheckResultMapper completenessCheckResultMapper;
+
+    @Autowired
+    private com.military.doc.modules.document.mapper.DocApprovalRecordMapper approvalRecordMapper;
 
     @Override
     @Transactional
@@ -329,11 +337,15 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
         accountingMapper.delete(new LambdaQueryWrapper<ConfigurationStatusAccounting>()
             .eq(ConfigurationStatusAccounting::getDocLedgerId, id));
 
-        // 4. Delete status transition logs
+        // 4. Delete approval records
+        approvalRecordMapper.delete(new LambdaQueryWrapper<com.military.doc.modules.document.entity.DocApprovalRecord>()
+            .eq(com.military.doc.modules.document.entity.DocApprovalRecord::getDocLedgerId, id));
+
+        // 5. Delete status transition logs
         logMapper.delete(new LambdaQueryWrapper<DocLedgerLog>()
             .eq(DocLedgerLog::getDocLedgerId, id));
 
-        // 5. Delete the ledger itself
+        // 6. Delete the ledger itself
         removeById(id);
     }
 
@@ -352,40 +364,50 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
     @Transactional
     public DocLedger findOrCreateDraftLedger(Long projectId, Long stageId, Long catalogId,
                                               String docName, String docType, Long operatorId) {
-        // Try to find existing DRAFTING ledger by catalogId
-        if (catalogId != null) {
-            List<DocLedger> existing = list(new LambdaQueryWrapper<DocLedger>()
-                .eq(DocLedger::getProjectId, projectId)
-                .eq(DocLedger::getCatalogId, catalogId)
-                .eq(DocLedger::getLifecycleStatus, "DRAFTING")
-                .orderByDesc(DocLedger::getId)
-                .last("LIMIT 1"));
-            if (!existing.isEmpty()) {
-                DocLedger ledger = existing.get(0);
-                if (docName != null && !docName.equals(ledger.getDocName())) ledger.setDocName(docName);
-                if (docType != null) ledger.setDocType(docType);
+        // Serialize per (projectId, catalogId) to prevent concurrent duplicate DRAFTING ledgers
+        String lockKey = projectId + ":" + (catalogId != null ? catalogId : "NONE");
+        Object lock = DRAFTING_LOCKS.computeIfAbsent(lockKey, k -> new Object());
+        synchronized (lock) {
+            try {
+                // Try to find existing DRAFTING ledger by catalogId
+                if (catalogId != null) {
+                    List<DocLedger> existing = list(new LambdaQueryWrapper<DocLedger>()
+                        .eq(DocLedger::getProjectId, projectId)
+                        .eq(DocLedger::getCatalogId, catalogId)
+                        .eq(DocLedger::getLifecycleStatus, "DRAFTING")
+                        .orderByDesc(DocLedger::getId)
+                        .last("LIMIT 1"));
+                    if (!existing.isEmpty()) {
+                        DocLedger ledger = existing.get(0);
+                        if (docName != null && !docName.equals(ledger.getDocName())) ledger.setDocName(docName);
+                        if (docType != null) ledger.setDocType(docType);
+                        ledger.setStageId(stageId);
+                        ledger.setUpdatedBy(operatorId);
+                        ledger.setUpdatedAt(LocalDateTime.now());
+                        updateById(ledger);
+                        return ledger;
+                    }
+                }
+
+                // Create new
+                DocLedger ledger = new DocLedger();
+                ledger.setProjectId(projectId);
                 ledger.setStageId(stageId);
+                ledger.setCatalogId(catalogId);
+                ledger.setDocName(docName != null ? docName : "AI 生成文档");
+                ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
+                ledger.setLifecycleStatus("DRAFTING");
+                ledger.setRequiredFlag(true);
+                ledger.setCreatedBy(operatorId);
                 ledger.setUpdatedBy(operatorId);
+                ledger.setCreatedAt(LocalDateTime.now());
                 ledger.setUpdatedAt(LocalDateTime.now());
-                updateById(ledger);
+                save(ledger);
                 return ledger;
+            } finally {
+                // Clean up lock entries to prevent memory leak
+                DRAFTING_LOCKS.remove(lockKey);
             }
         }
-
-        // Create new
-        DocLedger ledger = new DocLedger();
-        ledger.setProjectId(projectId);
-        ledger.setStageId(stageId);
-        ledger.setCatalogId(catalogId);
-        ledger.setDocName(docName != null ? docName : "AI 生成文档");
-        ledger.setDocType(docType != null ? docType : "MANAGEMENT_DOC");
-        ledger.setLifecycleStatus("DRAFTING");
-        ledger.setRequiredFlag(true);
-        ledger.setCreatedBy(operatorId);
-        ledger.setUpdatedBy(operatorId);
-        ledger.setCreatedAt(LocalDateTime.now());
-        ledger.setUpdatedAt(LocalDateTime.now());
-        save(ledger);
-        return ledger;
     }
 }

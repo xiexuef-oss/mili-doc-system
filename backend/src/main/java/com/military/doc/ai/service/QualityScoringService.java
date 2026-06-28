@@ -4,8 +4,12 @@ import com.military.doc.ai.util.AiMeta;
 import com.military.doc.ai.util.AiMetaParser;
 import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.entity.DocLedger;
+import com.military.doc.modules.document.entity.ProjectDocChecklist;
+import com.military.doc.modules.document.entity.StageDocChecklistTemplate;
 import com.military.doc.modules.document.mapper.DocChapterMapper;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
+import com.military.doc.modules.document.mapper.ProjectDocChecklistMapper;
+import com.military.doc.modules.document.mapper.StageDocChecklistTemplateMapper;
 import com.military.doc.modules.template.entity.DocTemplateChapter;
 import com.military.doc.modules.template.mapper.DocTemplateChapterMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,13 +30,19 @@ public class QualityScoringService {
     private final DocLedgerMapper docLedgerMapper;
     private final DocChapterMapper chapterMapper;
     private final DocTemplateChapterMapper templateChapterMapper;
+    private final ProjectDocChecklistMapper checklistMapper;
+    private final StageDocChecklistTemplateMapper stageChecklistTplMapper;
 
     public QualityScoringService(DocLedgerMapper docLedgerMapper,
                                   DocChapterMapper chapterMapper,
-                                  DocTemplateChapterMapper templateChapterMapper) {
+                                  DocTemplateChapterMapper templateChapterMapper,
+                                  ProjectDocChecklistMapper checklistMapper,
+                                  StageDocChecklistTemplateMapper stageChecklistTplMapper) {
         this.docLedgerMapper = docLedgerMapper;
         this.chapterMapper = chapterMapper;
         this.templateChapterMapper = templateChapterMapper;
+        this.checklistMapper = checklistMapper;
+        this.stageChecklistTplMapper = stageChecklistTplMapper;
     }
 
     /**
@@ -146,11 +156,28 @@ public class QualityScoringService {
     }
 
     private List<DocTemplateChapter> getTemplateChapters(DocLedger doc) {
-        // Simplified: get all active template chapters
+        Long templateId = resolveTemplateId(doc);
+        if (templateId == null) return List.of();
         return templateChapterMapper.selectList(
             new LambdaQueryWrapper<DocTemplateChapter>()
-                .isNotNull(DocTemplateChapter::getChapterTitle)
-                .last("LIMIT 50"));
+                .eq(DocTemplateChapter::getTemplateId, templateId)
+                .isNotNull(DocTemplateChapter::getChapterTitle));
+    }
+
+    /**
+     * doc_ledger.checklistItemId → project_doc_checklist.template_id
+     * → stage_doc_checklist_template.template_id (same chain as DocxGenerationService.findTemplate)
+     */
+    private Long resolveTemplateId(DocLedger doc) {
+        if (doc.getChecklistItemId() == null) return null;
+        try {
+            ProjectDocChecklist pdc = checklistMapper.selectById(doc.getChecklistItemId());
+            if (pdc == null || pdc.getTemplateId() == null) return null;
+            StageDocChecklistTemplate sct = stageChecklistTplMapper.selectById(pdc.getTemplateId());
+            return sct != null ? sct.getTemplateId() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Map<String, Integer> extractMetaScores(List<DocChapter> chapters) {

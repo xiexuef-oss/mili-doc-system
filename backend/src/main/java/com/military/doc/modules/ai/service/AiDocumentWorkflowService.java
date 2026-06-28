@@ -304,7 +304,17 @@ public class AiDocumentWorkflowService {
     // ──────────────── 生成文档内容（基于模板大纲） ────────────────
 
     private static final java.util.concurrent.ExecutorService GEN_POOL =
-        java.util.concurrent.Executors.newFixedThreadPool(8);
+        java.util.concurrent.Executors.newFixedThreadPool(8, r -> {
+            Thread t = new Thread(r, "ai-doc-gen");
+            t.setDaemon(true); // daemon threads won't prevent JVM shutdown
+            return t;
+        });
+
+    @jakarta.annotation.PreDestroy
+    public void shutdownGenPool() {
+        GEN_POOL.shutdown();
+        try { GEN_POOL.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+    }
 
     public void generateContentFromOutline(Long documentId, java.util.function.Consumer<Map<String, Object>> onProgress) {
         AiDocument aiDoc = aiDocService.getById(documentId);

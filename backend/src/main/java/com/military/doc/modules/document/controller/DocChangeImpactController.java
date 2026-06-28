@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocChangeImpact;
 import com.military.doc.modules.document.service.DocChangeImpactService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,10 +21,13 @@ public class DocChangeImpactController {
 
     @Autowired
     private DocChangeImpactService impactService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping
     @Operation(summary = "创建变更影响记录")
     public Result<DocChangeImpact> create(@RequestBody DocChangeImpact impact, Authentication authentication) {
+        accessGuard.requireMemberForFile(impact.getImpactedDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         impact.setCreatedBy(userId);
         impact.setUpdatedBy(userId);
@@ -61,8 +65,14 @@ public class DocChangeImpactController {
     @PutMapping("/{id}")
     @Operation(summary = "更新变更影响记录")
     public Result<DocChangeImpact> update(@PathVariable Long id, @RequestBody DocChangeImpact impact, Authentication authentication) {
+        DocChangeImpact existing = impactService.getById(id);
+        if (existing == null) {
+            return Result.error("NOT_FOUND", "变更影响记录不存在");
+        }
+        accessGuard.requireMemberForFile(existing.getImpactedDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         impact.setId(id);
+        impact.setImpactedDocFileId(existing.getImpactedDocFileId());
         impact.setUpdatedBy(userId);
         impactService.updateById(impact);
         return Result.success(impactService.getById(id));
@@ -75,6 +85,7 @@ public class DocChangeImpactController {
         if (impact == null) {
             return Result.error("NOT_FOUND", "变更影响记录不存在");
         }
+        accessGuard.requireMemberForFile(impact.getImpactedDocFileId(), authentication);
         impact.setStatus("CLOSED");
         impact.setClosedAt(LocalDateTime.now());
         impact.setUpdatedBy((Long) authentication.getPrincipal());
@@ -84,7 +95,12 @@ public class DocChangeImpactController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除变更影响记录")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id, Authentication authentication) {
+        DocChangeImpact impact = impactService.getById(id);
+        if (impact == null) {
+            return Result.error("NOT_FOUND", "变更影响记录不存在");
+        }
+        accessGuard.requireMemberForFile(impact.getImpactedDocFileId(), authentication);
         impactService.removeById(id);
         return Result.success();
     }

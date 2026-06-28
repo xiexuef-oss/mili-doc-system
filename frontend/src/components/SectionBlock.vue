@@ -31,6 +31,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const props = defineProps<{
   section: any
@@ -49,7 +50,8 @@ const saveTimer = ref<ReturnType<typeof setTimeout>|null>(null)
 const hasContent = computed(() => props.section.content && props.section.content.length > 50)
 const renderedContent = computed(() => {
   const text = props.section.content || ''
-  return text.replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^/,'<p>').replace(/$/,'</p>')
+  const html = text.replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^/,'<p>').replace(/$/,'</p>')
+  return sanitizeHtml(html)
 })
 
 watch(() => props.section.content, (val) => { if (!editing.value) editText.value = val || '' })

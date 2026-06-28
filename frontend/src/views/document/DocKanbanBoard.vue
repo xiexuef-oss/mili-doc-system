@@ -413,6 +413,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, RefreshRight, FolderOpened, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { sanitizeHtml } from '@/utils/sanitize'
 import {
   getKanbanData, createDocLedger, transitionStatus, getDocLedger, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
@@ -471,10 +472,10 @@ const selectedItem = ref<DocLedgerItem | null>(null)
 const renderedDocContent = computed(() => {
   if (!selectedItem.value?.docContent) return ''
   try {
-    return marked.parse(selectedItem.value.docContent) as string
+    return sanitizeHtml(marked.parse(selectedItem.value.docContent) as string)
   } catch (e) {
     console.error('[renderedDocContent] markdown parse error:', e)
-    return selectedItem.value.docContent
+    return sanitizeHtml(selectedItem.value.docContent)
   }
 })
 const targetStatus = ref('')
@@ -1058,7 +1059,7 @@ function renderMarkdown(text: string): string {
   html = '<p>' + html + '</p>'
   html = html.replace(/\n/g, '<br>')
   html = html.replace(/<p><\/p>/g, '')
-  return html
+  return sanitizeHtml(html)
 }
 
 async function loadDocDicts() {

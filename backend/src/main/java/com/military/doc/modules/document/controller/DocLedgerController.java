@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.entity.DocLedgerLog;
 import com.military.doc.modules.document.service.DocLedgerLogService;
@@ -29,9 +30,13 @@ public class DocLedgerController {
     @Autowired
     private DocLedgerLogService logService;
 
+    @Autowired
+    private ProjectAccessGuard accessGuard;
+
     @PostMapping
     @Operation(summary = "创建台账条目")
     public Result<DocLedger> create(@RequestBody DocLedger ledger, Authentication authentication) {
+        accessGuard.requireMember(ledger.getProjectId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         return Result.success(docLedgerService.createLedger(ledger, userId));
     }
@@ -65,6 +70,7 @@ public class DocLedgerController {
     @PutMapping("/{id}")
     @Operation(summary = "更新台账元数据")
     public Result<DocLedger> update(@PathVariable Long id, @RequestBody DocLedger ledger, Authentication authentication) {
+        accessGuard.requireMemberForLedger(id, authentication);
         Long userId = (Long) authentication.getPrincipal();
         ledger.setId(id);
         ledger.setUpdatedBy(userId);
@@ -78,6 +84,7 @@ public class DocLedgerController {
             @PathVariable Long id,
             @RequestBody StatusTransitionRequest request,
             Authentication authentication) {
+        accessGuard.requireMemberForLedger(id, authentication);
         Long userId = (Long) authentication.getPrincipal();
         docLedgerService.transitionStatus(id, request.getTargetStatus(), userId, request.getRemark());
         return Result.success(docLedgerService.getById(id));
@@ -121,6 +128,7 @@ public class DocLedgerController {
             @RequestParam Long projectId,
             @RequestParam Long stageId,
             Authentication authentication) {
+        accessGuard.requireMember(projectId, authentication);
         Long userId = (Long) authentication.getPrincipal();
         int created = docLedgerService.syncFromCatalog(projectId, stageId, userId);
         return Result.success(Map.of("syncedCount", created));
@@ -128,7 +136,8 @@ public class DocLedgerController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "级联删除文档台账及其关联数据")
-    public Result<?> delete(@PathVariable Long id) {
+    public Result<?> delete(@PathVariable Long id, Authentication authentication) {
+        accessGuard.requireMemberForLedger(id, authentication);
         docLedgerService.deleteLedger(id);
         return Result.success();
     }

@@ -2,6 +2,7 @@ package com.military.doc.modules.document.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocEditSession;
 import com.military.doc.modules.document.service.DocEditSessionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,10 +21,13 @@ public class DocEditSessionController {
 
     @Autowired
     private DocEditSessionService sessionService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping("/open")
     @Operation(summary = "开启编辑会话")
     public Result<DocEditSession> openSession(@RequestBody DocEditSession session, Authentication authentication) {
+        accessGuard.requireMemberForFile(session.getDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         session.setEditorUserId(userId);
         session.setCreatedBy(userId);
@@ -41,6 +45,7 @@ public class DocEditSessionController {
         if (session == null) {
             return Result.error("NOT_FOUND", "编辑会话不存在");
         }
+        accessGuard.requireMemberForFile(session.getDocFileId(), authentication);
         session.setSessionStatus("SUBMITTED");
         session.setSubmittedAt(LocalDateTime.now());
         session.setUpdatedBy((Long) authentication.getPrincipal());
@@ -55,6 +60,7 @@ public class DocEditSessionController {
         if (session == null) {
             return Result.error("NOT_FOUND", "编辑会话不存在");
         }
+        accessGuard.requireMemberForFile(session.getDocFileId(), authentication);
         session.setSessionStatus("CLOSED");
         session.setUpdatedBy((Long) authentication.getPrincipal());
         sessionService.updateById(session);

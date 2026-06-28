@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocEffectiveBaseline;
 import com.military.doc.modules.document.service.DocEffectiveBaselineService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,10 +22,13 @@ public class DocEffectiveBaselineController {
 
     @Autowired
     private DocEffectiveBaselineService baselineService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping
     @Operation(summary = "创建基线记录")
     public Result<DocEffectiveBaseline> create(@RequestBody DocEffectiveBaseline baseline, Authentication authentication) {
+        accessGuard.requireMember(baseline.getProjectId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         baseline.setCreatedBy(userId);
         baseline.setUpdatedBy(userId);
@@ -73,8 +77,14 @@ public class DocEffectiveBaselineController {
     @PutMapping("/{id}")
     @Operation(summary = "更新基线记录")
     public Result<DocEffectiveBaseline> update(@PathVariable Long id, @RequestBody DocEffectiveBaseline baseline, Authentication authentication) {
+        DocEffectiveBaseline existing = baselineService.getById(id);
+        if (existing == null) {
+            return Result.error("NOT_FOUND", "基线记录不存在");
+        }
+        accessGuard.requireMember(existing.getProjectId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         baseline.setId(id);
+        baseline.setProjectId(existing.getProjectId());
         baseline.setUpdatedBy(userId);
         baselineService.updateById(baseline);
         return Result.success(baselineService.getById(id));
@@ -88,6 +98,7 @@ public class DocEffectiveBaselineController {
         if (baseline == null) {
             return Result.error("NOT_FOUND", "基线记录不存在");
         }
+        accessGuard.requireMember(baseline.getProjectId(), authentication);
         baseline.setBaselineStatus("CONFIRMED");
         baseline.setConfirmedBy(userId);
         baseline.setConfirmedAt(LocalDateTime.now());
@@ -98,7 +109,12 @@ public class DocEffectiveBaselineController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除基线记录")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id, Authentication authentication) {
+        DocEffectiveBaseline baseline = baselineService.getById(id);
+        if (baseline == null) {
+            return Result.error("NOT_FOUND", "基线记录不存在");
+        }
+        accessGuard.requireMember(baseline.getProjectId(), authentication);
         baselineService.removeById(id);
         return Result.success();
     }

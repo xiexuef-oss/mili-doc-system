@@ -1,7 +1,9 @@
 package com.military.doc.modules.project.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.project.entity.*;
 import com.military.doc.modules.project.service.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +21,9 @@ public class ConfigurationManagementController {
 
     @Autowired
     private ConfigurationManagementService configService;
+
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @Autowired
     private ConfigurationBaselineService baselineService;
@@ -58,6 +63,7 @@ public class ConfigurationManagementController {
     public Result<ConfigurationItem> createCi(@PathVariable Long projectId,
                                                @RequestBody ConfigurationItem ci,
                                                Authentication auth) {
+        accessGuard.requireMember(projectId, auth);
         Long userId = (Long) auth.getPrincipal();
         ci.setProjectId(projectId);
         ci.setCreatedBy(userId);
@@ -68,8 +74,12 @@ public class ConfigurationManagementController {
 
     @PutMapping("/configuration-items/{id}")
     @Operation(summary = "更新技术状态项")
-    public Result<ConfigurationItem> updateCi(@PathVariable Long id, @RequestBody ConfigurationItem ci) {
+    public Result<ConfigurationItem> updateCi(@PathVariable Long id, @RequestBody ConfigurationItem ci, Authentication auth) {
+        ConfigurationItem existing = ciService.getById(id);
+        if (existing == null) throw BusinessException.notFound("技术状态项不存在: id=" + id);
+        accessGuard.requireMember(existing.getProjectId(), auth);
         ci.setId(id);
+        ci.setProjectId(existing.getProjectId());
         ciService.updateById(ci);
         return Result.success(ciService.getById(id));
     }
@@ -82,6 +92,7 @@ public class ConfigurationManagementController {
                                                          @PathVariable Long stageId,
                                                          @RequestParam String baselineType,
                                                          Authentication auth) {
+        accessGuard.requireMember(projectId, auth);
         Long userId = (Long) auth.getPrincipal();
         return Result.success(configService.createBaseline(projectId, stageId, baselineType, userId));
     }
@@ -112,6 +123,9 @@ public class ConfigurationManagementController {
     @PutMapping("/baselines/{id}/approve")
     @Operation(summary = "批准基线")
     public Result<String> approveBaseline(@PathVariable Long id, Authentication auth) {
+        ConfigurationBaseline baseline = baselineService.getById(id);
+        if (baseline == null) throw BusinessException.notFound("基线不存在: id=" + id);
+        accessGuard.requireMember(baseline.getProjectId(), auth);
         Long userId = (Long) auth.getPrincipal();
         configService.approveBaseline(id, userId);
         return Result.success("基线已批准");
@@ -120,6 +134,9 @@ public class ConfigurationManagementController {
     @PutMapping("/baselines/{id}/effective")
     @Operation(summary = "设置基线为当前有效")
     public Result<String> setBaselineEffective(@PathVariable Long id, Authentication auth) {
+        ConfigurationBaseline baseline = baselineService.getById(id);
+        if (baseline == null) throw BusinessException.notFound("基线不存在: id=" + id);
+        accessGuard.requireMember(baseline.getProjectId(), auth);
         Long userId = (Long) auth.getPrincipal();
         configService.setBaselineEffective(id, userId);
         return Result.success("基线已生效");
@@ -132,6 +149,7 @@ public class ConfigurationManagementController {
     public Result<ConfigurationChangeRequest> createChangeRequest(@PathVariable Long projectId,
                                                                     @RequestBody ConfigurationChangeRequest request,
                                                                     Authentication auth) {
+        accessGuard.requireMember(projectId, auth);
         Long userId = (Long) auth.getPrincipal();
         request.setProjectId(projectId);
         return Result.success(configService.createChangeRequest(request, userId));
@@ -155,6 +173,9 @@ public class ConfigurationManagementController {
     public Result<String> processChangeRequest(@PathVariable Long id,
                                                 @RequestParam String action,
                                                 Authentication auth) {
+        ConfigurationChangeRequest request = changeRequestService.getById(id);
+        if (request == null) throw BusinessException.notFound("更改申请不存在: id=" + id);
+        accessGuard.requireMember(request.getProjectId(), auth);
         Long userId = (Long) auth.getPrincipal();
         configService.processChangeRequest(id, action, userId);
         return Result.success("操作成功");
@@ -183,6 +204,7 @@ public class ConfigurationManagementController {
                                                     @PathVariable Long stageId,
                                                     @RequestParam String auditType,
                                                     Authentication auth) {
+        accessGuard.requireMember(projectId, auth);
         Long userId = (Long) auth.getPrincipal();
         return Result.success(configService.conductAudit(projectId, stageId, auditType, userId));
     }
@@ -206,6 +228,9 @@ public class ConfigurationManagementController {
                                          @RequestParam String auditResult,
                                          @RequestParam(required = false) String auditOpinion,
                                          Authentication auth) {
+        ConfigurationAudit audit = auditService.getById(id);
+        if (audit == null) throw BusinessException.notFound("审核记录不存在: id=" + id);
+        accessGuard.requireMember(audit.getProjectId(), auth);
         Long userId = (Long) auth.getPrincipal();
         configService.completeAudit(id, auditResult, auditOpinion != null ? auditOpinion : "", userId);
         return Result.success("审核已完成");

@@ -3,6 +3,7 @@ package com.military.doc.modules.document.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocFile;
 import com.military.doc.modules.document.service.DocFileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,10 +19,13 @@ public class DocFileController {
 
     @Autowired
     private DocFileService docFileService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping
     @Operation(summary = "创建文档文件")
     public Result<DocFile> create(@RequestBody DocFile docFile, Authentication authentication) {
+        accessGuard.requireMember(docFile.getProjectId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
         docFile.setCreatedBy(userId);
         docFile.setUpdatedBy(userId);
@@ -63,6 +67,7 @@ public class DocFileController {
     @PutMapping("/{id}")
     @Operation(summary = "更新文档文件")
     public Result<DocFile> update(@PathVariable Long id, @RequestBody DocFile docFile, Authentication authentication) {
+        accessGuard.requireMemberForFile(id, authentication);
         Long userId = (Long) authentication.getPrincipal();
         docFile.setId(id);
         docFile.setUpdatedBy(userId);
@@ -72,7 +77,8 @@ public class DocFileController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除文档文件")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id, Authentication authentication) {
+        accessGuard.requireMemberForFile(id, authentication);
         docFileService.removeById(id);
         return Result.success();
     }

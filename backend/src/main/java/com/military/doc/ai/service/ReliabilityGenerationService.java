@@ -239,9 +239,12 @@ public class ReliabilityGenerationService {
         String projectCtx = buildReliabilityContext(projectId, promptName);
         
         // Parallel generation with 4 threads
+        StringBuilder doc = new StringBuilder();
+        int generated = 0;
         var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
         var futures = new java.util.ArrayList<java.util.concurrent.Future<String[]>>();
-        
+
         for (var ch : required) {
             futures.add(pool.submit(() -> {
                 try {
@@ -257,9 +260,7 @@ public class ReliabilityGenerationService {
                 return null;
             }));
         }
-        
-        StringBuilder doc = new StringBuilder();
-        int generated = 0;
+
         for (int i = 0; i < required.size(); i++) {
             try {
                 String[] result = futures.get(i).get(120, java.util.concurrent.TimeUnit.SECONDS);
@@ -271,7 +272,9 @@ public class ReliabilityGenerationService {
                 log.warn("Chapter {} error: {}", required.get(i).getChapterTitle(), e.getMessage());
             }
         }
-        pool.shutdown();
+        } finally {
+            pool.shutdown();
+        }
         log.info("Reliability parallel gen: {}/{} chapters", generated, required.size());
         return generated > 0 ? doc.toString() : generateOneShot(projectId, null, promptName);
     }

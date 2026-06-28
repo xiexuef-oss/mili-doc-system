@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URLEncoder;
@@ -50,7 +51,8 @@ public class DocxController {
     @PostMapping("/parse/{fileObjectId}/update-chapters")
     public Result<Map<String, Object>> parseAndUpdate(@PathVariable String fileObjectId,
                                                        @RequestParam Long docLedgerId,
-                                                       @RequestParam Long operatorId) {
+                                                       Authentication authentication) {
+        Long operatorId = (Long) authentication.getPrincipal();
         int updated = parsingService.updateChapters(docLedgerId, fileObjectId, operatorId);
         return Result.success(Map.of("updatedChapters", updated));
     }

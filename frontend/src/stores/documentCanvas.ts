@@ -21,6 +21,8 @@ export const useDocumentCanvasStore = defineStore('documentCanvas', () => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   async function loadDocument(id: number) {
+    // Flush any pending save before switching documents to prevent cross-document writes
+    flushPendingSave()
     loading.value = true
     try {
       const res = await aiDocApi.getDocument(id)
@@ -54,7 +56,24 @@ export const useDocumentCanvasStore = defineStore('documentCanvas', () => {
     outline.value = extractOutline(json)
     saveStatus.value = 'unsaved'
     if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => saveToServer(), 2000)
+    // Capture document ID at schedule time; abort save if document switched during debounce
+    const docId = document.value?.id
+    const capturedContent = json
+    saveTimer = setTimeout(() => {
+      if (document.value?.id !== docId) return // document switched, skip stale save
+      saveToServer()
+    }, 2000)
+  }
+
+  function flushPendingSave() {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+      // Synchronously flush if there's unsaved content
+      if (saveStatus.value === 'unsaved' && document.value?.id && contentJson.value) {
+        saveToServer()
+      }
+    }
   }
 
   async function saveToServer() {
@@ -253,6 +272,6 @@ export const useDocumentCanvasStore = defineStore('documentCanvas', () => {
     document, contentJson, outline, recentDocuments, activeHeadingId,
     loading, generating, saveStatus, editorText,
     loadDocument, createDocument, loadRecentDocuments, reset,
-    handleContentUpdate, saveToServer, applyCanvasPatches,
+    handleContentUpdate, flushPendingSave, saveToServer, applyCanvasPatches,
   }
 })

@@ -1,5 +1,6 @@
 package com.military.doc.common.storage;
 
+import com.military.doc.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
@@ -50,7 +51,7 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public InputStream download(String objectId) {
         try {
-            return new FileInputStream(uploadDir.resolve(objectId).toFile());
+            return new FileInputStream(resolveSafe(objectId).toFile());
         } catch (FileNotFoundException e) {
             throw new RuntimeException("File not found: " + objectId, e);
         }
@@ -59,7 +60,7 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public void delete(String objectId) {
         try {
-            Files.deleteIfExists(uploadDir.resolve(objectId));
+            Files.deleteIfExists(resolveSafe(objectId));
         } catch (IOException e) {
             throw new RuntimeException("Delete failed", e);
         }
@@ -68,6 +69,18 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String getAccessUrl(String objectId) {
         return "/api/v1/files/download/" + objectId;
+    }
+
+    /** Rejects path traversal / absolute-path injection: resolved path must stay inside uploadDir. */
+    private Path resolveSafe(String objectId) {
+        if (objectId == null || objectId.isBlank()) {
+            throw BusinessException.validation("文件标识不能为空");
+        }
+        Path resolved = uploadDir.resolve(objectId).normalize();
+        if (!resolved.startsWith(uploadDir)) {
+            throw BusinessException.validation("非法的文件标识: " + objectId);
+        }
+        return resolved;
     }
 
     private String getExtension(String filename) {

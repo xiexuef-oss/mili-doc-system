@@ -7,7 +7,7 @@
         <el-tag size="small">{{ writingPhase }}</el-tag>
         <el-button size="small" text @click="writingMode=false">退出</el-button>
       </div>
-      <div class="wp-content" v-html="writingDocPreview || '<p style=color:#909399>开始对话后将在此显示文档内容</p>'"></div>
+      <div class="wp-content" v-html="sanitizeHtml(writingDocPreview) || '<p style=color:#909399>开始对话后将在此显示文档内容</p>'"></div>
     </div>
     <!-- AI功能使用说明 -->
     <el-collapse v-model="helpOpen" style="margin-bottom:8px">
@@ -88,6 +88,7 @@ import { ElMessage } from 'element-plus'
 import { sendMessage, pollTask } from '@/api/chat'
 import { generateReliabilityOutline, generateDeratingReport } from '@/api/reliability'
 import { useProjectStore } from '@/stores/project'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -102,7 +103,8 @@ const msgRef = ref<HTMLElement>()
 const helpOpen = ref<string[]>([])
 
 function renderMarkdown(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+  const html = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+  return sanitizeHtml(html)
 }
 
 async function send() {

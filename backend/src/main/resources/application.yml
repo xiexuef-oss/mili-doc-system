@@ -31,6 +31,14 @@ spring:
       max-file-size: 500MB
       max-request-size: 500MB
       resolve-lazily: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 6
+    # TIP: 旧版 SQL 脚本在 resources/sql/migration_v*.sql（无需 Flyway 管理）
+    #      种子数据在 resources/sql/seed_*.sql 和 db/seed/（手动执行）
+    encoding: UTF-8
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -49,8 +57,8 @@ jwt:
 minio:
   enabled: false
   endpoint: http://localhost:9000
-  accessKey: ${MINIO_ACCESS_KEY:minioadmin}
-  secretKey: ${MINIO_SECRET_KEY:minioadmin}
+  accessKey: ${MINIO_ACCESS_KEY:}
+  secretKey: ${MINIO_SECRET_KEY:}
   bucket: military-doc
 
 knife4j:

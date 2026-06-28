@@ -142,52 +142,55 @@ public class DraftGenerationService {
         String projectContext = contextAssemblyService.assembleContext(projectId);
         int total = chapters.size();
         int threads = Math.min(6, total);
-        var pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
-        var futures = new java.util.ArrayList<java.util.concurrent.Future<String[]>>();
-
-        for (DocChapter ch : chapters) {
-            futures.add(pool.submit(() -> {
-                try {
-                    String heading = buildHeading(ch);
-                    String body = generateSingleChapterContent(projectContext, ch);
-                    if (body != null && !body.isBlank()) {
-                        // Save content to DB immediately
-                        ch.setContent(truncate(body, 50000));
-                        ch.setFillStatus("FILLED");
-                        ch.setFillPercentage(100);
-                        docChapterMapper.updateById(ch);
-                        return new String[]{heading, body, ch.getChapterTitle()};
-                    }
-                } catch (Exception e) {
-                    log.warn("Chapter {} {} failed: {}", ch.getChapterNumber(), ch.getChapterTitle(), e.getMessage());
-                }
-                return null;
-            }));
-        }
-
-        // Collect and stream results in original chapter order
         int generated = 0;
         int totalChars = 0;
-        for (int i = 0; i < total; i++) {
-            String chTitle = chapters.get(i).getChapterTitle();
-            try {
-                String[] result = futures.get(i).get(180, java.util.concurrent.TimeUnit.SECONDS);
-                if (result != null) {
-                    String heading = result[0];
-                    String body = result[1];
-                    onChunk.accept(heading + "\n\n");
-                    onChunk.accept(body + "\n\n");
-                    generated++;
-                    totalChars += body.length();
-                }
-            } catch (Exception e) {
-                log.warn("Chapter {} timed out: {}", chTitle, e.getMessage());
-                onChunk.accept("（章节「" + chTitle + "」生成超时）\n\n");
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        try {
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<String[]>>();
+
+            for (DocChapter ch : chapters) {
+                futures.add(pool.submit(() -> {
+                    try {
+                        String heading = buildHeading(ch);
+                        String body = generateSingleChapterContent(projectContext, ch);
+                        if (body != null && !body.isBlank()) {
+                            // Save content to DB immediately
+                            ch.setContent(truncate(body, 50000));
+                            ch.setFillStatus("FILLED");
+                            ch.setFillPercentage(100);
+                            docChapterMapper.updateById(ch);
+                            return new String[]{heading, body, ch.getChapterTitle()};
+                        }
+                    } catch (Exception e) {
+                        log.warn("Chapter {} {} failed: {}", ch.getChapterNumber(), ch.getChapterTitle(), e.getMessage());
+                    }
+                    return null;
+                }));
             }
-            // Progress update after each chapter
-            onProgress.onProgress(i + 1, total, chTitle, totalChars);
+
+            // Collect and stream results in original chapter order
+            for (int i = 0; i < total; i++) {
+                String chTitle = chapters.get(i).getChapterTitle();
+                try {
+                    String[] result = futures.get(i).get(180, java.util.concurrent.TimeUnit.SECONDS);
+                    if (result != null) {
+                        String heading = result[0];
+                        String body = result[1];
+                        onChunk.accept(heading + "\n\n");
+                        onChunk.accept(body + "\n\n");
+                        generated++;
+                        totalChars += body.length();
+                    }
+                } catch (Exception e) {
+                    log.warn("Chapter {} timed out: {}", chTitle, e.getMessage());
+                    onChunk.accept("（章节「" + chTitle + "」生成超时）\n\n");
+                }
+                // Progress update after each chapter
+                onProgress.onProgress(i + 1, total, chTitle, totalChars);
+            }
+        } finally {
+            pool.shutdown();
         }
-        pool.shutdown();
         log.info("Per-chapter stream done: {}/{} chapters, {} total chars", generated, total, totalChars);
     }
 
@@ -516,6 +519,7 @@ public class DraftGenerationService {
         onChunk.accept("共 " + batches.size() + " 批次，并行生成中...\n\n");
         int[] completed = {0};
         var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
 
         // Build prompts outside lambda, then run in parallel
         var prompts = new java.util.ArrayList<String>();
@@ -561,7 +565,9 @@ public class DraftGenerationService {
             }, pool));
         }
         java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
-        pool.shutdown();
+        } finally {
+            pool.shutdown();
+        }
         log.info("Section gen: {} chapters in {} batches, {} completed",
             deduped.size(), batches.size(), completed[0]);
     }

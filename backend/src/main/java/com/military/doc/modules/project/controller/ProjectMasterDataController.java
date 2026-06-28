@@ -8,6 +8,7 @@ import com.military.doc.modules.project.service.ProjectMasterDataService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -33,7 +34,8 @@ public class ProjectMasterDataController {
     @PostMapping
     public Result<ProjectMasterData> save(@PathVariable Long projectId,
                                            @RequestBody Map<String, Object> data,
-                                           @RequestParam Long operatorId) {
+                                           Authentication authentication) {
+        Long operatorId = (Long) authentication.getPrincipal();
         return Result.success(masterDataService.saveOrUpdateMasterData(projectId, data, operatorId));
     }
 

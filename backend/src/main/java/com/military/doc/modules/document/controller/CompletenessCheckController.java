@@ -4,6 +4,7 @@ import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.CompletenessCheckResult;
 import com.military.doc.modules.document.service.CompletenessCheckService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,7 +19,8 @@ public class CompletenessCheckController {
     @PostMapping("/check")
     public Result<CompletenessCheckResult> check(@RequestParam Long projectId,
                                                   @RequestParam Long docLedgerId,
-                                                  @RequestParam Long operatorId) {
+                                                  Authentication authentication) {
+        Long operatorId = (Long) authentication.getPrincipal();
         return Result.success(checkService.checkDocument(projectId, docLedgerId, operatorId));
     }
 

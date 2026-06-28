@@ -5,10 +5,13 @@ import com.military.doc.ai.context.ChapterWritingContextService;
 import com.military.doc.ai.service.DraftGenerationService;
 import com.military.doc.ai.service.MasterDataExtractionService;
 import com.military.doc.ai.service.VariableMappingService;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.service.DocChapterService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -27,11 +30,21 @@ public class DocChapterController {
     @Autowired(required = false) private VariableMappingService variableMappingService;
     @Autowired(required = false) private MasterDataExtractionService masterDataExtractionService;
     @Autowired(required = false) private com.military.doc.ai.service.ChapterEditService chapterEditService;
+    @Autowired private ProjectAccessGuard accessGuard;
+
+    private Long requireChapterLedger(Long chapterId, Authentication authentication) {
+        DocChapter chapter = docChapterService.getById(chapterId);
+        if (chapter == null) throw BusinessException.notFound("章节不存在: id=" + chapterId);
+        accessGuard.requireMemberForLedger(chapter.getDocLedgerId(), authentication);
+        return chapter.getDocLedgerId();
+    }
 
     @PostMapping("/init")
     public Result<List<DocChapter>> initFromTemplate(@RequestParam Long docLedgerId,
                                                       @RequestParam Long templateId,
-                                                      @RequestParam Long operatorId) {
+                                                      Authentication authentication) {
+        accessGuard.requireMemberForLedger(docLedgerId, authentication);
+        Long operatorId = (Long) authentication.getPrincipal();
         return Result.success(docChapterService.initFromTemplate(docLedgerId, templateId, operatorId));
     }
 
@@ -51,8 +64,15 @@ public class DocChapterController {
     }
 
     @PostMapping("/ledger/summary/batch")
-    public Result<Map<Long, Map<String, Object>>> getSummaryBatch(@RequestBody Map<String, List<Long>> body) {
-        return Result.success(docChapterService.getCompletionSummaryBatch(body.get("docLedgerIds")));
+    public Result<Map<Long, Map<String, Object>>> getSummaryBatch(@RequestBody Map<String, List<Long>> body,
+                                                                    Authentication authentication) {
+        List<Long> docLedgerIds = body.get("docLedgerIds");
+        if (docLedgerIds != null) {
+            for (Long docLedgerId : docLedgerIds) {
+                accessGuard.requireMemberForLedger(docLedgerId, authentication);
+            }
+        }
+        return Result.success(docChapterService.getCompletionSummaryBatch(docLedgerIds));
     }
 
     @GetMapping("/{id}")
@@ -62,15 +82,19 @@ public class DocChapterController {
 
     @PutMapping("/{id}/content")
     public Result<DocChapter> updateContent(@PathVariable Long id,
-                                             @RequestBody Map<String, String> body) {
+                                             @RequestBody Map<String, String> body,
+                                             Authentication authentication) {
+        requireChapterLedger(id, authentication);
+        Long operatorId = (Long) authentication.getPrincipal();
         return Result.success(docChapterService.updateContent(
-                id, body.get("content"), body.get("contentJson"),
-                body.containsKey("operatorId") ? Long.valueOf(body.get("operatorId")) : null));
+                id, body.get("content"), body.get("contentJson"), operatorId));
     }
 
     @PutMapping("/{id}/fill-status")
     public Result<DocChapter> updateFillStatus(@PathVariable Long id,
-                                                @RequestBody Map<String, Object> body) {
+                                                @RequestBody Map<String, Object> body,
+                                                Authentication authentication) {
+        requireChapterLedger(id, authentication);
         return Result.success(docChapterService.updateFillStatus(
                 id,
                 (String) body.get("fillStatus"),
@@ -87,17 +111,22 @@ public class DocChapterController {
 
     @PostMapping("/{id}/generate")
     public Result<String> generateChapter(@PathVariable Long id,
-                                           @RequestParam Long projectId) {
+                                           @RequestParam Long projectId,
+                                           Authentication authentication) {
+        requireChapterLedger(id, authentication);
+        Long operatorId = (Long) authentication.getPrincipal();
         String content = draftGenerationService.generateChapter(id, projectId);
         if (content != null && !content.isBlank()) {
-            docChapterService.updateContent(id, content, null, 0L);
+            docChapterService.updateContent(id, content, null, operatorId);
         }
         return Result.success(content);
     }
 
     @GetMapping("/{id}/generate/stream")
     public SseEmitter generateChapterStream(@PathVariable Long id,
-                                             @RequestParam Long projectId) {
+                                             @RequestParam Long projectId,
+                                             Authentication authentication) {
+        requireChapterLedger(id, authentication);
         SseEmitter emitter = new SseEmitter(300000L); // 5 min timeout
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
@@ -118,20 +147,25 @@ public class DocChapterController {
 
     @PostMapping("/{id}/auto-fill")
     public Result<DocChapter> autoFillChapter(@PathVariable Long id,
-                                               @RequestParam Long projectId) {
+                                               @RequestParam Long projectId,
+                                               Authentication authentication) {
+        requireChapterLedger(id, authentication);
         return Result.success(variableMappingService.autoFillChapter(id, projectId));
     }
 
     @PostMapping("/auto-fill-all")
     public Result<Map<String, Object>> autoFillAll(@RequestParam Long docLedgerId,
-                                                    @RequestParam Long projectId) {
+                                                    @RequestParam Long projectId,
+                                                    Authentication authentication) {
+        accessGuard.requireMemberForLedger(docLedgerId, authentication);
         int count = variableMappingService.autoFillAll(docLedgerId, projectId);
         return Result.success(Map.of("filledCount", count));
     }
 
     @PostMapping("/{id}/ai-edit")
     public Result<Map<String, Object>> aiEditChapter(@PathVariable Long id,
-                                                      @RequestBody Map<String, String> body) {
+                                                      @RequestBody Map<String, String> body,
+                                                      Authentication authentication) {
         String actionStr = body.get("action"); // rewrite / expand / shorten / polish
         String instruction = body.get("instruction");
         if (actionStr == null || actionStr.isBlank()) {
@@ -143,15 +177,18 @@ public class DocChapterController {
         } catch (IllegalArgumentException e) {
             return Result.error("PARAM_ERROR", "invalid action: " + actionStr);
         }
+        requireChapterLedger(id, authentication);
+        Long operatorId = (Long) authentication.getPrincipal();
         String result = chapterEditService.edit(id, action, instruction);
         if (result != null && !result.isBlank()) {
-            docChapterService.updateContent(id, result, null, 0L);
+            docChapterService.updateContent(id, result, null, operatorId);
         }
         return Result.success(Map.of("content", result != null ? result : ""));
     }
 
     @PostMapping("/extract-master-data")
-    public Result<Map<String, Object>> extractMasterData(@RequestParam Long projectId) {
+    public Result<Map<String, Object>> extractMasterData(@RequestParam Long projectId, Authentication authentication) {
+        accessGuard.requireMember(projectId, authentication);
         return Result.success(masterDataExtractionService.extractFromInputFiles(projectId));
     }
 
@@ -161,7 +198,9 @@ public class DocChapterController {
     }
 
     @PostMapping("/ledger/{docLedgerId}/fix")
-    public Result<DocChapterService.ChapterStructureValidation> fixStructure(@PathVariable Long docLedgerId) {
+    public Result<DocChapterService.ChapterStructureValidation> fixStructure(@PathVariable Long docLedgerId,
+                                                                              Authentication authentication) {
+        accessGuard.requireMemberForLedger(docLedgerId, authentication);
         return Result.success(docChapterService.fixStructure(docLedgerId));
     }
 }

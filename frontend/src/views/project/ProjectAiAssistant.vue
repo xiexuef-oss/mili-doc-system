@@ -246,6 +246,7 @@ import {
   type CatalogPreviewResult
 } from '@/api/ai'
 import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const route = useRoute()
 const projectId = computed(() => Number(route.params.projectId))
@@ -308,7 +309,7 @@ function renderMarkdown(text: string): string {
   html = html.replace(/\n/g, '<br>')
   // Clean up empty paragraphs
   html = html.replace(/<p><\/p>/g, '')
-  return html
+  return sanitizeHtml(html)
 }
 
 async function loadData() {

@@ -214,6 +214,7 @@ public class BatchGenerationService {
         int[] completed = {0};
         ExecutorService pool = Executors.newFixedThreadPool(
             Math.min(Runtime.getRuntime().availableProcessors(), 4));
+        try {
 
         // Group by dependency depth
         Map<Integer, List<IndexedItem>> byDepth = new LinkedHashMap<>();
@@ -287,11 +288,15 @@ public class BatchGenerationService {
                 }, pool));
             }
 
-            // Wait for all docs at this depth before proceeding to next depth
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            // Wait for all docs at this depth before proceeding to next depth (with timeout to prevent indefinite hangs)
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .orTimeout(10, TimeUnit.MINUTES)
+                .join();
         }
-        pool.shutdown();
-        try { pool.awaitTermination(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        } finally {
+            pool.shutdown();
+            try { pool.awaitTermination(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        }
 
         // 6. POST_PROCESSING phase + completion
         emitPhase(onEvent, Phase.POST_PROCESSING, total, total, 0);

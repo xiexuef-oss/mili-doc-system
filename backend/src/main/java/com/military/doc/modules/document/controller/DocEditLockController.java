@@ -2,6 +2,7 @@ package com.military.doc.modules.document.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.military.doc.common.result.Result;
+import com.military.doc.common.security.ProjectAccessGuard;
 import com.military.doc.modules.document.entity.DocEditLock;
 import com.military.doc.modules.document.service.DocEditLockService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,10 +20,13 @@ public class DocEditLockController {
 
     @Autowired
     private DocEditLockService lockService;
+    @Autowired
+    private ProjectAccessGuard accessGuard;
 
     @PostMapping("/lock")
     @Operation(summary = "锁定文档")
     public Result<DocEditLock> lock(@RequestBody DocEditLock lock, Authentication authentication) {
+        accessGuard.requireMemberForFile(lock.getDocFileId(), authentication);
         Long userId = (Long) authentication.getPrincipal();
 
         // 检查是否已被锁定
@@ -53,6 +57,7 @@ public class DocEditLockController {
         if (lock == null) {
             return Result.error("NOT_FOUND", "锁定记录不存在");
         }
+        accessGuard.requireMemberForFile(lock.getDocFileId(), authentication);
         lock.setLockStatus("RELEASED");
         lock.setUpdatedBy((Long) authentication.getPrincipal());
         lockService.updateById(lock);
@@ -78,7 +83,12 @@ public class DocEditLockController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除锁定记录")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@PathVariable Long id, Authentication authentication) {
+        DocEditLock lock = lockService.getById(id);
+        if (lock == null) {
+            return Result.error("NOT_FOUND", "锁定记录不存在");
+        }
+        accessGuard.requireMemberForFile(lock.getDocFileId(), authentication);
         lockService.removeById(id);
         return Result.success();
     }

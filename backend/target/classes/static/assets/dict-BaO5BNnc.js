@@ -1,1 +1,0 @@
-import{t as e}from"./api-D39N_Z9z.js";function t(){return e.get(`/dicts/types`)}function n(t){return e.get(`/dicts/items/${t}`)}function r(t){return e.get(`/dicts`,{params:t})}function i(t){return e.post(`/dicts`,t)}function a(t,n){return e.put(`/dicts/${t}`,n)}function o(t){return e.delete(`/dicts/${t}`)}export{r as a,t as i,o as n,a as o,n as r,i as t};

@@ -1,1 +1,0 @@
-import{t as e}from"./api-D39N_Z9z.js";function t(t){return e.get(`/projects`,{params:t})}function n(t){return e.get(`/projects/${t}`)}function r(t){return e.post(`/projects`,t)}function i(t,n){return e.put(`/projects/${t}`,n)}export{i,n,t as r,r as t};
