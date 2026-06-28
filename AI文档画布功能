@@ -1,0 +1,1627 @@
+
+本章节汇总当前自研AI结构化文档画布的全部核心功能、编辑功能、渲染功能、底层能力、扩展功能，为复刻开发、功能迭代提供标准化清单，所有功能均基于DDXML结构化协议+六大指令引擎实现。
+10.1 核心底层能力（系统基石功能）
+- 结构化块级存储能力：文档以唯一ID块数组形式存储，区分标题、段落、列表、表格等不同区块，实现文档结构化管理，彻底规避Markdown全文错乱问题。
+- LLM受控结构化生成能力：强制大模型遵循固定协议输出合规DDXML标签，禁止自由文本、非法标签，自动完成ID自增、特殊字符转义、层级规整。
+- 无刷新局部更新能力：摒弃传统编辑器全文重绘逻辑，仅对指定ID区块进行替换、删除、修改，编辑过程不丢失全文格式、不打乱文档层级。
+- 全链路容错解析能力：支持标签嵌套校验、ID去重纠错、非法内容过滤、特殊字符兜底转义，保障文档渲染、编辑零崩溃。
+- 轻量化跨端渲染能力：自研原生DOM解析引擎，无需Quill、Slate等重型编辑器框架，适配Vue3/React，渲染高效、加载速度快。
+10.2 AI智能创作功能（核心业务功能）
+- AI一键整文生成：根据用户需求，自动生成完整层级结构化文档，包含标题、多级章节、段落、列表、要点梳理，格式统一规范。
+- AI精准续写拓展：定位指定文档区块，智能续写内容，匹配原文风格、逻辑、层级，不重复、不脱节，保持全文连贯性。
+- AI全文优化改写：支持全文润色、语句优化、逻辑梳理、内容扩写/精简，改写后保留原有文档结构与所有区块ID。
+- AI局部精准修改：针对单个段落、列表、章节进行定向优化，仅修改目标区块，不影响文档其他内容。
+- AI内容纠错校准：自动修正语病、逻辑漏洞、格式错误、层级混乱，统一全文排版规范。
+- AI智能总结提炼：可对全文或指定区块提炼核心要点、摘要、关键结论，生成结构化总结内容。
+10.3 六大指令编辑能力（系统核心操作）
+- 文档创建指令：全新生成完整合规DDXML结构化文档，覆盖空白文档或替换原有文档，自动初始化唯一自增ID序列。
+- 块替换指令：通过指定区块唯一ID，精准替换整块内容，支持任意标签类型区块替换，局部更新、格式无缝衔接。
+- 文本替换指令：不改动文档标签结构与区块层级，仅对指定文本内容进行精准替换、微调，适配细节修改场景。
+- 块删除指令：批量/单个删除指定ID的完整区块，包含区块内部所有子内容（列表、子段落等），自动适配全文排版。
+- 文本删除指令：精准定位并删除文档内指定字符、语句，无残留格式碎片。
+- 智能问答指令：支持纯文本问答交互，不操作文档内容，实现答疑、解读、方案咨询，兼顾编辑与对话能力。
+10.4 全品类富文本渲染功能
+- 基础文本渲染：支持多级标题（主标题、二级、三级、四级标题）、常规段落文本，自动区分层级样式、行间距、段间距。
+- 行内样式渲染：原生支持文字加粗、斜体、删除线、下划线、行内代码标注，样式精准生效且不破坏文档结构。
+- 列表结构化渲染：完美适配有序列表、无序列表，支持多层列表嵌套，自动规整序号、缩进格式。
+- 高级模块渲染：支持高亮块、引用块、水平分割线、代码块（带语言标注）、表格全组件渲染（表头、表体、单元格）。
+- 专业内容渲染：预留公式、图表、流程图渲染接口，可无缝拓展多模态专业内容展示。
+10.5 文档结构管理功能
+- 全局ID管控：全文档区块ID全局唯一、严格自增，自动防重复、防跳号，杜绝编辑时ID冲突。
+- 层级自动规整：AI生成与编辑时自动校准文档层级，标题、章节、段落逻辑分层清晰，无层级错乱、越级嵌套问题。
+- 标签合规校验：系统自动过滤非法HTML标签、自定义标签，仅保留白名单合规标签，保障文档稳定性。
+- 特殊字符转义：自动对大于号、小于号、&等特殊字符转义，避免渲染崩溃、格式乱码。
+10.6 拓展配套功能（可迭代开发）
+- 文档持久化存储：开发阶段支持JSON轻量化存储，生产环境适配MySQL、Redis，实现文档保存、读取、回溯。
+- 格式导出拓展：可拓展支持DDXML、Markdown、Word、PDF等多格式导出，保留原有排版与结构。
+- 多模型兼容适配：兼容GPT、通义千问、讯飞、DeepSeek本地大模型，底层协议通用，无需改造核心架构。
+- 样式全局自定义：支持统一修改文档字体、字号、配色、间距、缩进，一键全局样式适配。
+- 操作容错与回滚：可拓展增加编辑记录、撤销/重做、版本回溯功能，规避误操作问题。
+10.7 系统差异化核心优势功能
+- 区别于传统Markdown编辑器：解决Markdown层级错乱、格式崩坏、无法局部精准编辑的痛点，块级编辑更精准、更稳定。
+- 区别于重型富文本编辑器：无需复杂文档模型、无需处理光标逻辑，轻量化低代码，开发成本低、运行流畅、BUG极少。
+- AI与文档深度融合：所有编辑操作由AI指令驱动，实现「对话即编辑」，无需手动排版、手动调整格式。
+- 高可拓展性：协议标准化、架构解耦，可快速拓展PPT生成、思维导图、数据图表、多模态内容创作能力。
+
+
+
+# AI 文档画布系统需求开发文档
+
+## 1. 文档信息
+
+| 字段 | 内容 |
+|---|---|
+| 文档名称 | AI 文档画布系统需求开发文档 |
+| 版本 | v1.0 |
+| 适用范围 | AI 文档生成、富文本编辑、AI 辅助编辑、文档管理系统 |
+| 目标形态 | 类似豆包 AI 文档画布 / AI Document Canvas |
+| 编写目的 | 明确 AI 文档画布系统的产品需求、功能范围、技术架构、数据模型、接口设计与开发优先级 |
+
+---
+
+## 2. 项目背景
+
+随着 AI 写作和智能办公需求增长，传统的「AI 聊天生成文本」已无法满足复杂文档创作场景。用户不仅希望 AI 能生成一篇完整文档，还希望能够像在 Word、飞书文档、Notion 中一样，对文档任意位置进行编辑、润色、扩写、续写、重排和结构化管理。
+
+本项目拟实现一个 **AI 文档画布系统**，其核心能力是：
+
+> 用户通过左侧 AI 对话与右侧富文本文档画布协同工作，AI 可以生成文档、编辑选区、在光标处插入内容、修改章节、重写全文，并将修改精确应用到文档画布中。
+
+---
+
+## 3. 项目目标
+
+### 3.1 产品目标
+
+建设一个完整的 AI 文档画布系统，支持：
+
+1. 通过 AI 对话生成完整文档。
+2. 通过 AI 生成结构化大纲。
+3. 在右侧文档画布中编辑文档。
+4. 自动从文档标题生成大纲导航。
+5. 点击大纲跳转到文档对应位置。
+6. 用户可选中文本进行 AI 润色、扩写、缩短、改写。
+7. 用户可在光标位置让 AI 继续写或插入内容。
+8. 用户可通过左侧对话驱动文档修改。
+9. 支持文档自动保存、版本历史、操作日志。
+10. 支持后续扩展导入、导出、知识库引用、多人协作。
+
+---
+
+### 3.2 技术目标
+
+系统需要具备以下技术能力：
+
+1. 使用单实例富文本编辑器承载整篇文档。
+2. 文档内容以结构化 JSON 存储，而不是单个 Markdown 字符串。
+3. 使用稳定节点 ID 支持大纲跳转和精准编辑。
+4. 使用 EditorPatch / CanvasPatch 表达 AI 对文档的修改。
+5. 支持 SSE 或流式协议进行 AI 内容生成。
+6. 支持数据库持久化。
+7. 支持权限校验、操作审计和版本恢复。
+8. LLM 调用封装为统一 Provider，便于切换模型。
+
+---
+
+## 4. 核心概念定义
+
+### 4.1 AI 文档画布
+
+AI 文档画布是一个结合 AI 对话与富文本编辑器的文档创作系统。
+
+它由两部分组成：
+
+```text
+左侧：AI Chat Panel
+右侧：Document Canvas
+```
+
+---
+
+### 4.2 Document Canvas
+
+Document Canvas 是右侧文档编辑区域，包含：
+
+1. 文档工具栏
+2. 大纲导航
+3. 富文本正文编辑器
+4. AI 浮动菜单
+5. 版本和保存状态
+
+---
+
+### 4.3 Editor State
+
+富文本编辑器内部的文档状态，通常表现为 JSON 树结构。
+
+示例：
+
+```json
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": {
+        "id": "heading_001",
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "AI 客服系统建设方案"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "id": "para_001"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "本文档用于说明 AI 客服系统建设的背景、目标和实施路径。"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 4.4 CanvasPatch
+
+CanvasPatch 用于表达文档画布级别的操作，例如：
+
+- 创建文档
+- 设置文档标题
+- 更新文档状态
+- 生成大纲
+- 保存文档内容
+
+---
+
+### 4.5 EditorPatch
+
+EditorPatch 用于表达富文本编辑器内部的精确修改，例如：
+
+- 替换选区
+- 光标处插入内容
+- 替换某个节点
+- 删除范围
+- 更新节点属性
+
+---
+
+## 5. 用户角色
+
+| 角色 | 权限说明 |
+|---|---|
+| 普通用户 | 创建、编辑、AI 生成、导出自己的文档 |
+| 团队成员 | 访问团队授权文档 |
+| 管理员 | 管理团队文档、模板、权限、操作日志 |
+| 访客 | 查看被分享的只读文档 |
+
+---
+
+## 6. 用户使用流程
+
+### 6.1 新建 AI 文档流程
+
+```text
+用户进入 AI 文档画布页面
+  ↓
+在左侧输入文档需求
+  ↓
+AI 生成文档大纲
+  ↓
+AI 逐段/逐章节生成正文
+  ↓
+内容流式写入右侧文档画布
+  ↓
+用户继续手动编辑或 AI 编辑
+```
+
+---
+
+### 6.2 任意选区 AI 编辑流程
+
+```text
+用户在文档中选中一段文字
+  ↓
+出现 AI 浮动工具栏
+  ↓
+用户选择润色/扩写/缩短/改写
+  ↓
+前端读取 selection 信息
+  ↓
+发送选中文本和上下文到后端
+  ↓
+AI 返回改写结果
+  ↓
+前端通过 EditorPatch 替换选区
+  ↓
+自动保存并记录操作日志
+```
+
+---
+
+### 6.3 光标处 AI 插入流程
+
+```text
+用户将光标放在任意位置
+  ↓
+点击 AI 继续写 / 插入内容
+  ↓
+前端读取光标前后上下文
+  ↓
+后端生成适合插入的内容
+  ↓
+前端在光标处插入内容
+  ↓
+自动保存
+```
+
+---
+
+### 6.4 对话驱动画布流程
+
+```text
+用户在左侧输入：把第二章写详细一点
+  ↓
+后端识别用户意图
+  ↓
+定位目标章节
+  ↓
+生成修改内容
+  ↓
+返回 CanvasPatch / EditorPatch
+  ↓
+前端应用 Patch
+  ↓
+右侧文档画布更新
+```
+
+---
+
+## 7. 功能范围
+
+### 7.1 P0 必做功能
+
+| 模块 | 功能 |
+|---|---|
+| 页面布局 | 左侧 AI 对话 + 右侧文档画布 |
+| 文档创建 | 根据 Prompt 创建 AI 文档 |
+| AI 生成 | 生成大纲、生成正文 |
+| 富文本编辑 | 单实例富文本编辑器 |
+| 大纲导航 | 从标题节点提取大纲，点击跳转 |
+| 任意选区 AI 编辑 | 润色、扩写、缩短、改写 |
+| 光标 AI 插入 | 光标处继续写、插入段落 |
+| 自动保存 | debounce 保存 contentJson |
+| 版本快照 | AI 修改前创建版本 |
+| 操作日志 | 记录 AI 操作和用户操作 |
+| 权限校验 | 用户只能访问有权限文档 |
+
+---
+
+### 7.2 P1 功能
+
+| 模块 | 功能 |
+|---|---|
+| 对话驱动画布 | 左侧自然语言修改文档 |
+| 当前章节编辑 | 重写章节、扩写章节、缩短章节 |
+| 全文编辑 | 全文润色、全文改写、统一风格 |
+| 导出 | Word、PDF、Markdown |
+| 模板 | 文档模板、保存为模板 |
+| 版本恢复 | 查看版本、恢复版本 |
+| 搜索 | 文档内搜索和替换 |
+| AI 检查 | 错别字、逻辑、重复内容检查 |
+
+---
+
+### 7.3 P2 功能
+
+| 模块 | 功能 |
+|---|---|
+| 知识库 | 引用知识库资料生成文档 |
+| 评论 | 文档评论、选区评论 |
+| 协作 | 多人实时编辑 |
+| 表格 AI | AI 生成表格、补全表格 |
+| 图片 OCR | 图片文字识别 |
+| 导入 | Word、PDF、Markdown 导入 |
+| 语义搜索 | 搜索历史文档和知识库 |
+
+---
+
+## 8. 页面结构设计
+
+### 8.1 页面整体结构
+
+```text
+AiDocumentCanvasPage
+├── ChatPanel
+│   ├── MessageList
+│   ├── ChatMessageItem
+│   ├── ChatInput
+│   └── GenerationProgress
+│
+└── DocumentCanvas
+    ├── DocumentToolbar
+    ├── OutlineNavigator
+    └── RichTextCanvasEditor
+        ├── BubbleAiMenu
+        ├── FloatingAiMenu
+        └── EditorContent
+```
+
+---
+
+## 9. 前端功能需求
+
+### 9.1 ChatPanel
+
+#### 功能说明
+
+左侧 AI 对话区用于用户输入自然语言需求，并展示 AI 回复与操作进度。
+
+#### 功能点
+
+1. 展示对话历史。
+2. 支持用户输入。
+3. 支持发送消息。
+4. 支持生成中 loading。
+5. 支持停止生成。
+6. 支持重新生成。
+7. 支持 AI 回复中的引用跳转。
+8. 支持对话触发文档更新。
+9. 支持展示 AI 修改摘要。
+
+---
+
+### 9.2 DocumentToolbar
+
+#### 功能点
+
+1. 展示文档标题。
+2. 支持编辑标题。
+3. 展示保存状态：
+   - 保存中
+   - 已保存
+   - 保存失败
+4. 展示生成状态。
+5. 提供导出入口。
+6. 提供版本历史入口。
+7. 提供分享入口。
+8. 提供更多操作菜单。
+
+---
+
+### 9.3 OutlineNavigator
+
+#### 功能点
+
+1. 从编辑器 heading 节点提取大纲。
+2. 支持多级标题缩进。
+3. 点击大纲跳转到对应标题。
+4. 滚动时高亮当前章节。
+5. 标题修改后大纲实时更新。
+6. 新增标题后大纲实时更新。
+7. 删除标题后大纲实时更新。
+8. 支持大纲折叠和展开。
+9. 支持通过大纲触发 AI 编辑章节。
+
+---
+
+### 9.4 RichTextCanvasEditor
+
+#### 技术要求
+
+建议使用：
+
+- TipTap / ProseMirror
+- 或 Lexical
+- 或项目已有富文本编辑器
+
+#### 功能点
+
+1. 整篇文档使用一个富文本编辑器实例。
+2. 支持标题、段落、列表、引用、代码块、表格。
+3. 支持富文本样式。
+4. 支持撤销、重做。
+5. 支持自动保存。
+6. 支持选区获取。
+7. 支持光标位置获取。
+8. 支持 EditorPatch 应用。
+9. 支持文档 JSON 导出。
+10. 支持纯文本提取。
+11. 支持 HTML / Markdown 转换。
+
+---
+
+### 9.5 BubbleAiMenu
+
+用户选中文本后显示 AI 浮动工具栏。
+
+#### 功能点
+
+1. 润色
+2. 改写
+3. 扩写
+4. 缩短
+5. 总结
+6. 翻译
+7. 改正式
+8. 改口语
+9. 自定义指令
+10. 替换原文
+11. 插入到下方
+12. 重新生成
+13. 放弃修改
+
+---
+
+### 9.6 FloatingAiMenu
+
+用户在空行或光标处显示快捷 AI 操作。
+
+#### 功能点
+
+1. 继续写
+2. 插入一段
+3. 插入标题
+4. 插入列表
+5. 插入表格
+6. 插入小结
+7. 插入行动项
+8. 自定义生成
+
+---
+
+## 10. 后端功能需求
+
+### 10.1 核心服务
+
+系统需要实现以下服务：
+
+```text
+AiDocumentService
+AiDocumentContentService
+AiDocumentOutlineService
+AiDocumentVersionService
+AiDocumentOperationService
+AiDocumentPermissionService
+AiCanvasAgentService
+AiChatService
+LLMProviderService
+PromptTemplateService
+```
+
+---
+
+### 10.2 AiDocumentService
+
+#### 职责
+
+负责文档基础信息管理。
+
+#### 方法
+
+```ts
+createDocument()
+getDocument()
+listDocuments()
+updateDocument()
+deleteDocument()
+archiveDocument()
+restoreDocument()
+```
+
+---
+
+### 10.3 AiDocumentContentService
+
+#### 职责
+
+负责文档内容保存和读取。
+
+#### 方法
+
+```ts
+saveContent()
+getContent()
+extractText()
+extractOutline()
+updateOutline()
+```
+
+---
+
+### 10.4 AiCanvasAgentService
+
+#### 职责
+
+负责 AI 对文档画布的生成和修改。
+
+#### 方法
+
+```ts
+generateOutline()
+generateDocument()
+generateSection()
+editSelection()
+insertAtCursor()
+editBlock()
+rewriteDocument()
+summarizeDocument()
+handleChatInstruction()
+```
+
+---
+
+### 10.5 AiDocumentVersionService
+
+#### 职责
+
+负责版本快照和恢复。
+
+#### 方法
+
+```ts
+createVersion()
+listVersions()
+getVersion()
+restoreVersion()
+deleteVersion()
+```
+
+---
+
+### 10.6 AiDocumentOperationService
+
+#### 职责
+
+负责操作日志记录。
+
+#### 方法
+
+```ts
+recordOperation()
+listOperations()
+getOperation()
+```
+
+---
+
+## 11. 数据模型设计
+
+### 11.1 ai_documents
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 文档 ID |
+| user_id | string | 创建用户 |
+| organization_id | string | 组织 ID，可选 |
+| title | string | 文档标题 |
+| description | text | 文档描述 |
+| document_type | string | 文档类型 |
+| status | string | 文档状态 |
+| source_prompt | text | 原始生成需求 |
+| content_json | json | 富文本编辑器 JSON |
+| content_text | text | 纯文本 |
+| content_html | text | HTML 内容 |
+| content_markdown | text | Markdown 内容 |
+| outline_json | json | 大纲 JSON |
+| metadata | json | 扩展信息 |
+| created_at | datetime | 创建时间 |
+| updated_at | datetime | 更新时间 |
+| deleted_at | datetime | 删除时间，可选 |
+
+---
+
+### 11.2 ai_chat_sessions
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 会话 ID |
+| document_id | string | 文档 ID |
+| user_id | string | 用户 ID |
+| title | string | 会话标题 |
+| created_at | datetime | 创建时间 |
+| updated_at | datetime | 更新时间 |
+
+---
+
+### 11.3 ai_chat_messages
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 消息 ID |
+| session_id | string | 会话 ID |
+| role | string | user / assistant / system / tool |
+| content | text | 消息内容 |
+| action_type | string | 操作类型 |
+| metadata | json | 扩展信息 |
+| created_at | datetime | 创建时间 |
+
+---
+
+### 11.4 ai_document_versions
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 版本 ID |
+| document_id | string | 文档 ID |
+| user_id | string | 用户 ID |
+| title | string | 版本标题 |
+| reason | string | 创建原因 |
+| snapshot | json | 文档快照 |
+| created_at | datetime | 创建时间 |
+
+---
+
+### 11.5 ai_canvas_operations
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 操作 ID |
+| document_id | string | 文档 ID |
+| user_id | string | 用户 ID |
+| operation_type | string | 操作类型 |
+| canvas_patch | json | CanvasPatch |
+| editor_patch | json | EditorPatch |
+| before_snapshot | json | 操作前快照 |
+| after_snapshot | json | 操作后快照 |
+| status | string | success / failed |
+| error_message | text | 错误信息 |
+| model_name | string | 模型名称 |
+| prompt_tokens | number | 输入 token |
+| completion_tokens | number | 输出 token |
+| created_at | datetime | 创建时间 |
+
+---
+
+## 12. 核心类型设计
+
+### 12.1 DocumentStatus
+
+```ts
+type DocumentStatus =
+  | "draft"
+  | "generating"
+  | "ready"
+  | "failed"
+  | "archived";
+```
+
+---
+
+### 12.2 CanvasPatch
+
+```ts
+type CanvasPatch =
+  | {
+      type: "create_document";
+      payload: {
+        document: AiDocumentDTO;
+      };
+    }
+  | {
+      type: "set_document_title";
+      payload: {
+        title: string;
+      };
+    }
+  | {
+      type: "set_document_status";
+      payload: {
+        status: DocumentStatus;
+      };
+    }
+  | {
+      type: "update_document_content";
+      payload: {
+        contentJson: unknown;
+        contentText?: string;
+        contentHtml?: string;
+        outlineJson?: unknown;
+      };
+    };
+```
+
+---
+
+### 12.3 EditorPatch
+
+```ts
+type EditorPatch =
+  | {
+      type: "replace_range";
+      payload: {
+        range: {
+          from: number;
+          to: number;
+        };
+        content: string | object;
+      };
+    }
+  | {
+      type: "insert_at";
+      payload: {
+        position: number;
+        content: string | object;
+      };
+    }
+  | {
+      type: "delete_range";
+      payload: {
+        range: {
+          from: number;
+          to: number;
+        };
+      };
+    }
+  | {
+      type: "replace_node_content";
+      payload: {
+        nodeId: string;
+        content: string | object;
+      };
+    }
+  | {
+      type: "insert_after_node";
+      payload: {
+        nodeId: string;
+        content: string | object;
+      };
+    }
+  | {
+      type: "set_node_attrs";
+      payload: {
+        nodeId: string;
+        attrs: Record<string, unknown>;
+      };
+    };
+```
+
+---
+
+## 13. API 设计
+
+### 13.1 创建文档
+
+```http
+POST /api/ai-documents
+```
+
+#### 请求
+
+```json
+{
+  "prompt": "帮我写一份 AI 客服系统建设方案",
+  "documentType": "方案",
+  "audience": "公司管理层",
+  "options": {
+    "tone": "正式专业",
+    "length": "中等",
+    "sectionCount": 6
+  }
+}
+```
+
+#### 响应
+
+```json
+{
+  "document": {},
+  "chatSession": {},
+  "patches": []
+}
+```
+
+---
+
+### 13.2 获取文档详情
+
+```http
+GET /api/ai-documents/:id
+```
+
+#### 响应
+
+```json
+{
+  "document": {},
+  "chatSession": {},
+  "messages": [],
+  "versions": []
+}
+```
+
+---
+
+### 13.3 保存文档内容
+
+```http
+PATCH /api/ai-documents/:id/content
+```
+
+#### 请求
+
+```json
+{
+  "contentJson": {},
+  "contentText": "文档纯文本",
+  "contentHtml": "<h1>标题</h1>",
+  "outlineJson": []
+}
+```
+
+---
+
+### 13.4 AI 编辑选区
+
+```http
+POST /api/ai-documents/:id/ai/edit-selection
+```
+
+#### 请求
+
+```json
+{
+  "range": {
+    "from": 120,
+    "to": 180
+  },
+  "selectedText": "需要修改的文本",
+  "beforeText": "前文上下文",
+  "afterText": "后文上下文",
+  "instruction": "润色得更正式一些"
+}
+```
+
+#### 响应
+
+```json
+{
+  "editorPatch": {
+    "type": "replace_range",
+    "payload": {
+      "range": {
+        "from": 120,
+        "to": 180
+      },
+      "content": "润色后的文本"
+    }
+  }
+}
+```
+
+---
+
+### 13.5 光标处插入
+
+```http
+POST /api/ai-documents/:id/ai/insert-at-cursor
+```
+
+#### 请求
+
+```json
+{
+  "position": 245,
+  "beforeText": "光标前上下文",
+  "afterText": "光标后上下文",
+  "instruction": "在这里补充一段实施建议"
+}
+```
+
+---
+
+### 13.6 左侧 AI 对话
+
+```http
+POST /api/ai-documents/:id/chat
+```
+
+#### 请求
+
+```json
+{
+  "message": "把第二章写详细一点",
+  "selection": {
+    "from": 120,
+    "to": 180,
+    "selectedText": "可选"
+  }
+}
+```
+
+#### 响应
+
+```json
+{
+  "reply": "已帮你扩写第二章。",
+  "canvasPatches": [],
+  "editorPatches": []
+}
+```
+
+---
+
+### 13.7 版本列表
+
+```http
+GET /api/ai-documents/:id/versions
+```
+
+---
+
+### 13.8 恢复版本
+
+```http
+POST /api/ai-documents/:id/versions/:versionId/restore
+```
+
+---
+
+### 13.9 操作日志
+
+```http
+GET /api/ai-documents/:id/operations
+```
+
+---
+
+## 14. AI Prompt 需求
+
+### 14.1 生成大纲 Prompt
+
+```text
+你是一名专业文档策划助手。
+
+请根据用户需求生成一份结构化文档大纲。
+
+用户需求：
+{{prompt}}
+
+文档类型：
+{{documentType}}
+
+目标读者：
+{{audience}}
+
+要求：
+1. 只输出 JSON。
+2. 不要输出 Markdown。
+3. JSON 格式如下：
+{
+  "title": "文档标题",
+  "description": "文档简介",
+  "outline": [
+    {
+      "title": "章节标题",
+      "level": 1,
+      "children": []
+    }
+  ]
+}
+4. 章节标题要正式、清晰、适合直接用于文档。
+5. 不要生成正文。
+```
+
+---
+
+### 14.2 编辑选区 Prompt
+
+```text
+你是一名专业中文文档编辑助手。
+
+请根据用户要求，对选中文本进行修改。
+
+文档标题：
+{{documentTitle}}
+
+选中文本前的上下文：
+{{beforeText}}
+
+用户选中的文本：
+{{selectedText}}
+
+选中文本后的上下文：
+{{afterText}}
+
+用户修改要求：
+{{instruction}}
+
+要求：
+1. 只输出修改后的选中文本。
+2. 不要输出解释。
+3. 不要输出标题。
+4. 保留原文核心事实。
+5. 修改后要自然衔接上下文。
+6. 不要编造具体数据、公司名称、政策或案例。
+```
+
+---
+
+### 14.3 光标插入 Prompt
+
+```text
+你是一名专业中文文档写作助手。
+
+请根据用户要求，在当前光标位置生成一段适合插入文档的内容。
+
+文档标题：
+{{documentTitle}}
+
+光标前上下文：
+{{beforeText}}
+
+光标后上下文：
+{{afterText}}
+
+用户要求：
+{{instruction}}
+
+要求：
+1. 只输出要插入的正文内容。
+2. 内容必须自然衔接前后上下文。
+3. 不要重复已有内容。
+4. 不要输出解释。
+5. 不要编造用户未提供的具体事实。
+```
+
+---
+
+### 14.4 对话意图识别 Prompt
+
+```text
+你是 AI 文档画布系统的意图识别模块。
+
+请根据用户输入和当前文档状态，判断用户想执行的操作。
+
+用户输入：
+{{message}}
+
+当前文档标题：
+{{documentTitle}}
+
+当前大纲：
+{{outlineText}}
+
+当前选区：
+{{selectedText}}
+
+请只输出 JSON：
+{
+  "intent": "create_document | edit_selection | insert_at_cursor | edit_section | rewrite_document | summarize_document | add_section | delete_section | rename_section | chat_about_document",
+  "target": {
+    "type": "selection | cursor | heading | document | unknown",
+    "headingTitle": "",
+    "headingId": ""
+  },
+  "instruction": "用户的具体要求",
+  "confidence": 0.0
+}
+```
+
+---
+
+## 15. LLM Provider 设计
+
+### 15.1 接口定义
+
+```ts
+interface LLMProvider {
+  chat(input: LLMChatInput): Promise<LLMChatResult>;
+  streamChat(input: LLMChatInput): AsyncIterable<string>;
+  json<T>(input: LLMChatInput): Promise<T>;
+}
+```
+
+---
+
+### 15.2 要求
+
+1. 支持 OpenAI Compatible API。
+2. API Key 只能在服务端读取。
+3. 支持超时控制。
+4. 支持错误重试。
+5. 支持流式输出。
+6. 支持 JSON 输出解析。
+7. 支持 usage 统计。
+8. 支持模型切换。
+
+---
+
+## 16. 自动保存设计
+
+### 16.1 保存触发
+
+编辑器内容变化后：
+
+```text
+editor.onUpdate
+  ↓
+debounce 1000ms
+  ↓
+提取 contentJson / contentText / contentHtml / outlineJson
+  ↓
+调用保存接口
+```
+
+---
+
+### 16.2 保存状态
+
+前端需要展示：
+
+- 未保存
+- 保存中
+- 已保存
+- 保存失败
+
+---
+
+### 16.3 保存内容
+
+需要保存：
+
+```json
+{
+  "contentJson": {},
+  "contentText": "全文纯文本",
+  "contentHtml": "<h1>...</h1>",
+  "outlineJson": []
+}
+```
+
+---
+
+## 17. 大纲导航设计
+
+### 17.1 大纲生成方式
+
+大纲不从 Section 表生成，而从富文本编辑器中的 heading 节点生成。
+
+```text
+contentJson
+  ↓
+解析 heading 节点
+  ↓
+生成 outlineJson
+  ↓
+渲染 OutlineNavigator
+```
+
+---
+
+### 17.2 Heading 节点要求
+
+每个 heading 必须有稳定 ID：
+
+```json
+{
+  "type": "heading",
+  "attrs": {
+    "id": "heading_abc123",
+    "level": 2
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "项目背景"
+    }
+  ]
+}
+```
+
+---
+
+### 17.3 点击跳转
+
+```ts
+document.getElementById(`heading-${headingId}`)?.scrollIntoView({
+  behavior: "smooth",
+  block: "start"
+});
+```
+
+---
+
+### 17.4 当前章节高亮
+
+使用 IntersectionObserver 监听标题节点进入视口，并更新 `activeHeadingId`。
+
+---
+
+## 18. AI 任意位置编辑设计
+
+### 18.1 获取选区
+
+```ts
+const { from, to } = editor.state.selection;
+const selectedText = editor.state.doc.textBetween(from, to, "\n");
+```
+
+---
+
+### 18.2 获取上下文
+
+```ts
+const beforeText = editor.state.doc.textBetween(
+  Math.max(0, from - 1000),
+  from,
+  "\n"
+);
+
+const afterText = editor.state.doc.textBetween(
+  to,
+  Math.min(editor.state.doc.content.size, to + 1000),
+  "\n"
+);
+```
+
+---
+
+### 18.3 应用替换
+
+```ts
+editor
+  .chain()
+  .focus()
+  .insertContentAt(
+    {
+      from,
+      to
+    },
+    replacement
+  )
+  .run();
+```
+
+---
+
+### 18.4 光标插入
+
+```ts
+editor
+  .chain()
+  .focus()
+  .insertContentAt(position, content)
+  .run();
+```
+
+---
+
+## 19. 版本历史设计
+
+### 19.1 创建版本时机
+
+以下操作前自动创建版本：
+
+1. AI 编辑选区
+2. AI 编辑当前章节
+3. AI 全文改写
+4. 删除大段内容
+5. 恢复历史版本
+6. 用户手动点击保存版本
+
+---
+
+### 19.2 Snapshot 内容
+
+```json
+{
+  "document": {
+    "id": "doc_001",
+    "title": "AI 客服系统建设方案"
+  },
+  "contentJson": {},
+  "contentText": "全文纯文本",
+  "outlineJson": [],
+  "createdAt": "2026-01-01T00:00:00Z"
+}
+```
+
+---
+
+## 20. 操作日志设计
+
+### 20.1 记录内容
+
+每次 AI 操作或关键用户操作需要记录：
+
+1. 操作类型
+2. 操作用户
+3. 操作时间
+4. 操作前快照
+5. 操作后快照
+6. CanvasPatch
+7. EditorPatch
+8. 模型名称
+9. Token 消耗
+10. 操作状态
+11. 错误信息
+
+---
+
+## 21. 权限与安全需求
+
+### 21.1 权限校验
+
+要求：
+
+1. 用户只能访问自己有权限的文档。
+2. 团队文档需要校验组织权限。
+3. 分享文档需要校验分享权限。
+4. 删除、导出、恢复版本需要独立权限。
+5. 所有 API 均需鉴权。
+
+---
+
+### 21.2 AI 安全
+
+要求：
+
+1. API Key 不允许暴露到前端。
+2. 用户输入限制长度。
+3. 输出内容限制长度。
+4. 防止 Prompt Injection。
+5. 敏感内容过滤。
+6. 模型错误信息脱敏。
+7. 记录 AI 操作审计日志。
+
+---
+
+## 22. 非功能需求
+
+### 22.1 性能要求
+
+1. 文档首次加载时间应尽量控制在 3 秒内。
+2. 自动保存不应阻塞编辑。
+3. AI 流式输出首 token 响应尽量小于 3 秒。
+4. 长文档滚动应保持流畅。
+5. 大纲更新不应明显卡顿。
+
+---
+
+### 22.2 可用性要求
+
+1. 单个 AI 操作失败不影响文档继续编辑。
+2. 自动保存失败需要提示用户。
+3. 网络异常后应保留本地内容。
+4. 版本恢复前需要二次确认。
+5. 删除文档需要二次确认。
+
+---
+
+### 22.3 可扩展性要求
+
+1. 支持后续接入不同大模型。
+2. 支持后续接入知识库。
+3. 支持后续接入多人协同。
+4. 支持后续接入 Word / PDF 导出。
+5. 支持后续升级 Block 级编辑。
+
+---
+
+## 23. 推荐技术方案
+
+### 23.1 前端
+
+| 能力 | 推荐 |
+|---|---|
+| 富文本编辑器 | TipTap / ProseMirror |
+| 状态管理 | Zustand |
+| 请求管理 | React Query |
+| 样式 | Tailwind CSS |
+| 流式处理 | SSE / fetch reader |
+| 大纲监听 | IntersectionObserver |
+
+---
+
+### 23.2 后端
+
+| 能力 | 推荐 |
+|---|---|
+| API | Next.js Route Handlers / NestJS / FastAPI |
+| 数据库 | PostgreSQL |
+| ORM | Prisma / TypeORM / Drizzle |
+| LLM | OpenAI Compatible API |
+| 流式输出 | SSE |
+| 文件导出 | docx / puppeteer / libreoffice |
+
+---
+
+## 24. 开发里程碑
+
+### 阶段一：基础文档画布
+
+目标：
+
+- 页面布局
+- 创建文档
+- 富文本编辑器
+- 自动保存
+- 大纲导航
+
+---
+
+### 阶段二：AI 生成
+
+目标：
+
+- AI 生成大纲
+- AI 生成正文
+- 流式写入画布
+- 生成失败重试
+
+---
+
+### 阶段三：AI 任意位置编辑
+
+目标：
+
+- 选区 AI 润色
+- 选区 AI 扩写
+- 选区 AI 缩短
+- 光标处继续写
+- EditorPatch 应用
+
+---
+
+### 阶段四：对话驱动画布
+
+目标：
+
+- 左侧对话
+- 意图识别
+- 修改章节
+- 修改全文
+- 对话返回 Patch
+
+---
+
+### 阶段五：版本与审计
+
+目标：
+
+- 版本快照
+- 版本恢复
+- 操作日志
+- 权限校验
+
+---
+
+### 阶段六：增强能力
+
+目标：
+
+- 导入导出
+- 模板
+- 知识库引用
+- 评论
+- 协作
+
+---
+
+## 25. MVP 验收标准
+
+### 25.1 文档生成
+
+- 用户输入需求后，系统可以生成一篇结构化文档。
+- 文档内容能展示在右侧富文本画布中。
+- 文档内容可以编辑并保存。
+
+---
+
+### 25.2 大纲导航
+
+- 系统可以根据标题自动生成大纲。
+- 点击大纲可以跳转到对应标题。
+- 滚动正文时大纲可以高亮当前章节。
+
+---
+
+### 25.3 AI 选区编辑
+
+- 用户选中文本后，可以点击 AI 润色。
+- AI 返回内容后，系统可以替换原选区。
+- 修改后文档可以自动保存。
+- 操作日志中可以看到本次 AI 编辑记录。
+
+---
+
+### 25.4 光标 AI 插入
+
+- 用户将光标放在任意位置。
+- 点击 AI 继续写后，系统可以在光标处插入生成内容。
+- 插入内容能自然衔接上下文。
+
+---
+
+### 25.5 版本历史
+
+- AI 修改前可以创建版本快照。
+- 用户可以查看历史版本。
+- 用户可以恢复到某个版本。
+
+---
+
+### 25.6 权限安全
+
+- 未登录用户无法访问接口。
+- 用户无法访问他人文档。
+- API Key 不会暴露到前端。
+
+---
+
+## 26. 风险点与解决方案
+
+| 风险 | 说明 | 解决方案 |
+|---|---|---|
+| AI 输出不稳定 | JSON 解析失败或格式异常 | 使用 schema 校验和重试 |
+| 选区位置失效 | 用户编辑后 from/to 变化 | 即时编辑用 range，长期定位用 nodeId |
+| 长文档卡顿 | contentJson 过大 | 分块加载、虚拟滚动、优化大纲提取 |
+| 自动保存频繁 | 请求过多 | debounce + 内容 hash 判断 |
+| AI 编造事实 | 模型幻觉 | Prompt 限制 + 引用来源 + 风险提示 |
+| 越权访问 | documentId 被猜测 | 所有查询带 userId/organizationId |
+| 协同冲突 | 多人同时编辑 | 后续引入 Yjs |
+| 导出格式丢失 | 富文本转 Word/PDF 复杂 | 统一中间格式，逐步支持样式 |
+
+---
+
+## 27. 后续扩展方向
+
+1. 多人协同编辑。
+2. 评论与批注。
+3. 文档分享。
+4. 知识库引用。
+5. 引用来源标注。
+6. Word / PDF 高保真导出。
+7. 文档模板市场。
+8. AI 质量检查。
+9. 语义搜索。
+10. 企业级审计。
+11. 私有化模型部署。
+12. 移动端适配。
+
+---
+
+## 28. 总结
+
+AI 文档画布系统的核心不是简单的 AI 写作，而是：
+
+```text
+AI 对话
++ 单实例富文本编辑器
++ 文档 JSON 树
++ 大纲导航
++ 任意选区编辑
++ 光标处插入
++ EditorPatch
++ 自动保存
++ 版本历史
++ 操作审计
+```
+
+系统实现时应优先保证以下核心闭环：
+
+```text
+用户输入需求
+  ↓
+AI 生成文档
+  ↓
+文档进入富文本画布
+  ↓
+用户任意位置编辑
+  ↓
+AI 对选区或光标进行局部修改
+  ↓
+保存版本和操作日志
+```
+
+只要该闭环成立，就可以逐步扩展导入导出、知识库、协同、评论和企业级权限能力。

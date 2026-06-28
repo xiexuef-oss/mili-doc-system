@@ -5,6 +5,7 @@ D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\review\ma
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\config\EmbeddingProperties.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\common\security\JwtAuthenticationFilter.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocCatalogService.java
+D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\ai\service\AiDocumentWorkflowService.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\ai\mapper\AiAuditLogMapper.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\controller\DocLedgerController.java
 D:\military-doc-sandbox\backend\src\main\java\com\military\doc\modules\document\service\DocChangeImpactService.java

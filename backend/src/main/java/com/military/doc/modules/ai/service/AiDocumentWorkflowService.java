@@ -242,7 +242,12 @@ public class AiDocumentWorkflowService {
         List<AiDocumentSection> sections = sectionService.getByDocumentId(documentId);
         if (sections.isEmpty()) return;
 
-        String system = "你是军工文档撰写专家。为以下章节写正文(300-800字)。只输出正文，不要标题。";
+        String system = "你是军工文档撰写专家。严格只写当前指定章节的正文，不要写其他章节，不要标题，不要大纲。300-800字。";
+
+        // Load project context for relevant content generation
+        String ctx = "";
+        try { ctx = contextAssembly.assembleBasicContext(aiDoc.getProjectId()); } catch (Exception ignored) {}
+        final String projectContext = ctx.length() > 600 ? ctx.substring(0, 600) : ctx;
 
         // Collect sections that need generation
         List<AiDocumentSection> pending = new ArrayList<>();
@@ -271,7 +276,7 @@ public class AiDocumentWorkflowService {
                         onProgress.accept(Map.of("status", "generating", "section", section.getTitle(),
                             "progress", completed.get() * 100 / total));
 
-                        String prompt = "章节：" + section.getTitle() + "\n请写正文(300-800字)";
+                        String prompt = "项目信息：" + projectContext + "\n\n当前章节：" + section.getTitle() + "\n请写正文(300-800字)。严格只写本章内容，不要写其他章节。";
 
                         String content = null;
                         for (int attempt = 0; attempt < 2; attempt++) {
