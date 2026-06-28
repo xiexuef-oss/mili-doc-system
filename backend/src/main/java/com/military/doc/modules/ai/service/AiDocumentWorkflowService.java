@@ -247,7 +247,7 @@ public class AiDocumentWorkflowService {
         // Load project context for relevant content generation
         String ctx = "";
         try { ctx = contextAssembly.assembleBasicContext(aiDoc.getProjectId()); } catch (Exception ignored) {}
-        final String projectContext = ctx.length() > 600 ? ctx.substring(0, 600) : ctx;
+        final String projectContext = ctx.length() > 1200 ? ctx.substring(0, 1200) : ctx;
 
         // Collect sections that need generation
         List<AiDocumentSection> pending = new ArrayList<>();
