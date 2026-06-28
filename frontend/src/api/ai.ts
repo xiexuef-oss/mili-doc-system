@@ -500,5 +500,5 @@ export function streamBatchGenerate(
 
 /** 检查文档生成的前置条件 */
 export function checkDraftPrerequisites(projectId: number, docType: string) {
-  return request.get(`/ai/draft/v2/prerequisites?projectId=${projectId}&docType=${docType}`)
+  return api.get(`/ai/draft/v2/prerequisites?projectId=${projectId}&docType=${docType}`)
 }

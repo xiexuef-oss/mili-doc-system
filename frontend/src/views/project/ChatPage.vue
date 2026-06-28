@@ -19,7 +19,7 @@
           <table style="width:100%;border-collapse:collapse;margin:4px 0">
             <tr style="background:#f5f7fa"><th style="padding:4px 8px;text-align:left;border:1px solid #e4e7ed">功能</th><th style="padding:4px 8px;text-align:left;border:1px solid #e4e7ed">入口</th><th style="padding:4px 8px;text-align:left;border:1px solid #e4e7ed">说明</th></tr>
             <tr><td style="padding:4px 8px;border:1px solid #e4e7ed">📋 文档目录生成</td><td style="padding:4px 8px;border:1px solid #e4e7ed">阶段工作台 → 生成文档清单</td><td style="padding:4px 8px;border:1px solid #e4e7ed">按 GJB 5882 三维分类自动规划阶段文档</td></tr>
-            <tr style="background:#f5f7fa"><td style="padding:4px 8px;border:1px solid #e4e7ed">📝 批量文档生成</td><td style="padding:4px 8px;border:1px solid #e4e7ed">AI生成 Tab</td><td style="padding:4px 8px;border:1px solid #e4e7ed">按模板批量生成阶段全部文档初稿</td></tr>
+            <tr style="background:#f5f7fa"><td style="padding:4px 8px;border:1px solid #e4e7ed">📝 AI文档生成</td><td style="padding:4px 8px;border:1px solid #e4e7ed">AI对话</td><td style="padding:4px 8px;border:1px solid #e4e7ed">从文档台账选择文档，AI智能生成初稿</td></tr>
             <tr><td style="padding:4px 8px;border:1px solid #e4e7ed">✏️ 逐章生成/重写</td><td style="padding:4px 8px;border:1px solid #e4e7ed">文档编辑器</td><td style="padding:4px 8px;border:1px solid #e4e7ed">选中章节后 AI 辅助撰写或重写</td></tr>
           </table>
 

@@ -65,13 +65,13 @@
             :rows="2"
             placeholder="输入你的工程问题..."
             :disabled="streaming"
-            @keydown.enter.exact.prevent="sendMessage"
+            @keydown.enter.exact.prevent="handleSend"
           />
           <el-button
             type="primary"
             :disabled="!userInput.trim() || streaming"
             :loading="streaming"
-            @click="sendMessage"
+            @click="handleSend"
             class="send-btn"
           >
             {{ streaming ? 'AI 思考中...' : '发 送' }}
@@ -112,7 +112,7 @@ function scrollToBottom() {
   })
 }
 
-async function sendMessage() {
+async function handleSend() {
   const text = userInput.value.trim()
   if (!text || streaming.value) return
 

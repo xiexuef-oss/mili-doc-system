@@ -38,6 +38,10 @@ public class DocxGenerationService {
         DocLedger ledger = docLedgerMapper.selectById(docLedgerId);
         if (ledger == null) throw new RuntimeException("文档台账条目不存在: " + docLedgerId);
 
+        // === Load AI-generated content from doc_ledger.doc_content (优先) ===
+        String aiDocContent = ledger.getDocContent();
+        boolean hasAiDocContent = aiDocContent != null && !aiDocContent.isBlank();
+
         // === Find template via checklist chain ===
         DocTemplateV2 template = findTemplate(ledger);
         List<DocTemplateChapter> templateChapters = template != null
@@ -46,7 +50,7 @@ public class DocxGenerationService {
                 .orderByAsc(DocTemplateChapter::getOrderNum))
             : List.of();
 
-        // === Load AI-generated content ===
+        // === Load AI-generated content from DocChapter ===
         Map<String, String> contentByTitle = new java.util.LinkedHashMap<>();
         List<DocChapter> aiChapters = docChapterMapper.selectList(
             new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocChapter>()
@@ -77,13 +81,12 @@ public class DocxGenerationService {
             // Body section: GJB page layout
             GjbStyleHelper.setupBodySection(doc);
 
+            // 如果 doc_content 有内容，直接渲染（AI写作生成的完整文档）
+            if (hasAiDocContent) {
+                GjbStyleHelper.writeMarkdownContent(doc, aiDocContent, 1, GjbStyleHelper.HeadingMode.REAL_HEADING);
+            }
             // If AI chapters exist with content, render them directly (avoids duplicate headings)
-            boolean hasAiContent = aiChapters.stream().anyMatch(c -> c.getContent() != null && !c.getContent().isBlank());
-            if (!hasAiContent && !templateChapters.isEmpty()) {
-                writeTemplateChapters(doc, templateChapters, 0, contentByTitle,
-                    new int[]{0}, showHighlights);
-            } else {
-                // Fallback: render AI chapters directly (legacy mode)
+            else if (!aiChapters.isEmpty() && aiChapters.stream().anyMatch(c -> c.getContent() != null && !c.getContent().isBlank())) {
                 Map<Long, List<DocChapter>> childrenMap = new HashMap<>();
                 for (DocChapter dc : aiChapters) {
                     childrenMap.computeIfAbsent(dc.getParentId(), k -> new ArrayList<>()).add(dc);
@@ -95,6 +98,11 @@ public class DocxGenerationService {
                     chapterCount[0]++;
                     writeChapter(doc, rootCh, childrenMap, 1, chapterCount, new int[]{0}, new int[]{0}, showHighlights);
                 }
+            }
+            // 否则使用模板章节
+            else if (!templateChapters.isEmpty()) {
+                writeTemplateChapters(doc, templateChapters, 0, contentByTitle,
+                    new int[]{0}, showHighlights);
             }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -162,7 +170,7 @@ public class DocxGenerationService {
             }
 
             if (matchedContent != null && !matchedContent.isBlank()) {
-                GjbStyleHelper.writeMarkdownContent(doc, matchedContent, level, true);
+                GjbStyleHelper.writeMarkdownContent(doc, matchedContent, level, GjbStyleHelper.HeadingMode.SKIP);
             } else if (showHighlights && Boolean.TRUE.equals(tc.getIsRequired())) {
                 String title = tc.getChapterTitle() != null ? tc.getChapterTitle() : "";
                 if (title.length() < 50) {
@@ -203,8 +211,8 @@ public class DocxGenerationService {
             if (highlightType != null) {
                 GjbStyleHelper.addHighlightedParagraph(doc, content, highlightType);
             } else {
-                // skipHeadings=true: titles already rendered by addHeading()
-                GjbStyleHelper.writeMarkdownContent(doc, content, level, true);
+                // HeadingMode.SKIP: title already rendered by addHeading() above
+                GjbStyleHelper.writeMarkdownContent(doc, content, level, GjbStyleHelper.HeadingMode.SKIP);
             }
         } else if (showHighlights && chapter.getFillStatus() != null && !"FILLED".equals(chapter.getFillStatus())) {
             // Skip RED marker if title is long — AI may have put body content in the heading line

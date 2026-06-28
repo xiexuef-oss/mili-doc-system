@@ -153,7 +153,7 @@
               </el-dropdown>
             </div>
             <div class="cp-toolbar-actions">
-              <el-button size="small" @click="saveToLedger">保存到台账</el-button>
+              <el-button size="small" :disabled="workflowStep !== 'writing'" @click="saveToLedger">保存到台账</el-button>
               <el-button size="small" @click="showVersionHistory=true">版本历史</el-button>
               <el-button size="small" @click="loadDoc">刷新</el-button>
             </div>
@@ -238,7 +238,8 @@ import { ElMessage } from 'element-plus'
 import { Refresh, EditPen, Document } from '@element-plus/icons-vue'
 import { useDocumentCanvasStore } from '@/stores/documentCanvas'
 import * as aiDocApi from '@/api/ai-document'
-// Template matching now done server-side via getProjectDocChecklist
+import { getKanbanData } from '@/api/doc-ledger'
+import { getTemplates } from '@/api/template-v2'
 import type { EditorSelectionContext } from '@/utils/editorPatch'
 import CanvasEditor from '@/components/CanvasEditor.vue'
 import OutlineNavigator from '@/components/OutlineNavigator.vue'
@@ -540,28 +541,86 @@ function getStatusText(status: string): string {
   return texts[status] || status
 }
 
+function normalizeText(text: string): string {
+  return text.toLowerCase().replace(/[\s()（）【】《》<>]/g, '')
+}
+
 async function loadDocChecklist() {
   if (!projectId) {
     ElMessage.warning('请先选择项目')
     return
   }
   try {
-    // Use AI document checklist API which includes template matching (by templateType)
-    const checklistRes = await aiDocApi.getProjectDocChecklist(projectId)
-    const checklistData = checklistRes.data?.data || []
-
-    docChecklist.value = checklistData.map((item: any) => ({
-      ledgerId: item.ledgerId,
-      catalogId: item.catalogId,
-      docCode: item.docCode,
-      docName: item.docName,
-      docType: item.docType || '',
-      stageId: item.stageId,
-      lifecycleStatus: item.lifecycleStatus,
-      hasTemplate: item.hasTemplate || false,
-      templateId: item.templateId || null,
-      templateName: item.templateName || ''
-    }))
+    const [kanbanRes, templatesRes] = await Promise.all([
+      getKanbanData(projectId),
+      getTemplates()
+    ])
+    
+    const kanban = kanbanRes.data?.data || {}
+    const templates = templatesRes.data?.data || []
+    
+    const allItems: any[] = []
+    Object.values(kanban).forEach((list: any) => {
+      if (Array.isArray(list)) {
+        allItems.push(...list)
+      }
+    })
+    
+    const seen = new Set<number>()
+    const uniqueItems: any[] = []
+    for (const item of allItems) {
+      if (item.id && !seen.has(item.id)) {
+        seen.add(item.id)
+        uniqueItems.push(item)
+      }
+    }
+    
+    docChecklist.value = uniqueItems.map((item: any) => {
+      const itemDocType = item.docType || item.type || item.category || ''
+      const itemName = normalizeText(item.docName || item.name || '')
+      
+      let hasTemplate = false
+      let templateId = null
+      let templateName = ''
+      
+      for (const t of templates) {
+        const tName = normalizeText(t.templateName || '')
+        const tCode = normalizeText(t.templateCode || '')
+        const tType = normalizeText(t.templateType || '')
+        
+        if (tName.length >= 4 && (itemName.includes(tName) || tName.includes(itemName))) {
+          hasTemplate = true
+          templateId = t.id
+          templateName = t.templateName
+          break
+        }
+        if (tCode.length >= 2 && itemDocType && (normalizeText(itemDocType).includes(tCode) || tCode.includes(normalizeText(itemDocType)))) {
+          hasTemplate = true
+          templateId = t.id
+          templateName = t.templateName
+          break
+        }
+        if (tType.length >= 2 && itemDocType && (normalizeText(itemDocType).includes(tType) || tType.includes(normalizeText(itemDocType)))) {
+          hasTemplate = true
+          templateId = t.id
+          templateName = t.templateName
+          break
+        }
+      }
+      
+      return {
+        ledgerId: item.id,
+        catalogId: item.catalogId || item.parentId,
+        docCode: item.docCode || item.code,
+        docName: item.docName || item.name,
+        docType: itemDocType,
+        stageId: item.stageId,
+        lifecycleStatus: item.lifecycleStatus || item.status,
+        hasTemplate,
+        templateId,
+        templateName
+      }
+    })
   } catch (e) {
     console.error('加载文档台账失败:', e)
     ElMessage.error('加载文档台账失败')
@@ -574,17 +633,17 @@ async function selectDocument(doc: any) {
   selectedLedgerId.value = doc.ledgerId
   workflowStep.value = 'template'
 
-  // Step 1: create AI document
-  let docId: number
   try {
-    console.log('[selectDocument] creating doc:', { projectId, docName: doc.docName, docType: doc.docType })
-    const res = await aiDocApi.createDocument({
+    console.log('[selectDocument] initializing doc:', { projectId, docName: doc.docName, docType: doc.docType, templateId: doc.templateId, ledgerId: doc.ledgerId })
+    const res = await aiDocApi.initializeDocument({
       projectId,
-      prompt: `生成文档：${doc.docName}`,
-      documentType: doc.docType || ''
+      docName: doc.docName,
+      docType: doc.docType || '',
+      templateId: doc.hasTemplate ? doc.templateId : undefined,
+      ledgerId: doc.ledgerId
     })
     const payload = res.data?.data
-    console.log('[selectDocument] create response:', JSON.stringify(payload).substring(0, 200))
+    console.log('[selectDocument] initialize response:', JSON.stringify(payload).substring(0, 200))
     if (!payload || !payload.document || !payload.document.id) {
       console.error('[selectDocument] Invalid response structure:', res.data)
       ElMessage.error('创建文档失败：服务器返回数据异常')
@@ -592,35 +651,13 @@ async function selectDocument(doc: any) {
       return
     }
     store.document = payload.document
-    docId = payload.document.id
-    console.log('[selectDocument] created doc id:', docId)
+    templateOutline.value = payload.outline || []
+    templateGenerated.value = payload.templateGenerated !== false
+    console.log('[selectDocument] doc created:', payload.document.id, 'outline count:', templateOutline.value.length)
   } catch (e: any) {
-    console.error('[selectDocument] create error:', e)
+    console.error('[selectDocument] initialize error:', e)
     const msg = e?.response?.data?.message || e?.message || String(e)
     ElMessage.error('创建文档失败：' + msg)
-    workflowStep.value = 'select'
-    return
-  }
-
-  // Step 2: load template outline
-  try {
-    if (doc.hasTemplate && doc.templateId) {
-      console.log('[selectDocument] loading template:', doc.templateId)
-      const templateRes = await aiDocApi.loadOutlineFromTemplate(docId, doc.templateId)
-      templateOutline.value = templateRes.data?.data?.outline || []
-      templateGenerated.value = false
-      console.log('[selectDocument] template loaded, outline count:', templateOutline.value.length)
-    } else {
-      console.log('[selectDocument] generating template from AI')
-      const genRes = await aiDocApi.generateTemplateFromKnowledge(docId)
-      templateOutline.value = genRes.data?.data?.outline || []
-      templateGenerated.value = true
-      console.log('[selectDocument] AI template generated, outline count:', templateOutline.value.length)
-    }
-  } catch (e: any) {
-    console.error('[selectDocument] template error:', e)
-    const msg = e?.response?.data?.message || e?.message || String(e)
-    ElMessage.error('加载模板失败：' + msg)
     workflowStep.value = 'select'
   }
 }
@@ -660,16 +697,16 @@ async function confirmTemplateAndWrite() {
 }
 
 async function saveToLedger() {
-  if (!store.document?.id || !selectedCatalogId.value) return
+  if (!store.document?.id || !selectedLedgerId.value) {
+    ElMessage.warning('未关联文档台账')
+    return
+  }
   try {
-    const res = await aiDocApi.linkToDocLedger(store.document.id, selectedCatalogId.value)
-    const ledger = res.data?.data
-    if (ledger) {
-      await aiDocApi.saveToDocLedger(store.document.id, ledger.id)
-      ElMessage.success('已保存到文档台账')
-    }
-  } catch {
-    ElMessage.error('保存失败')
+    await aiDocApi.saveToDocLedger(store.document.id, selectedLedgerId.value)
+    ElMessage.success('已保存到文档台账')
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || '保存失败'
+    ElMessage.error(msg)
   }
 }
 

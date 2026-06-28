@@ -252,6 +252,12 @@
           >转移</el-button>
         </div>
 
+        <!-- Document content from AI writing -->
+        <div v-if="selectedItem.docContent" style="margin-top:24px">
+          <h4 style="margin-bottom:8px">文档内容</h4>
+          <div class="markdown-body doc-content-wrapper" v-html="renderedDocContent" />
+        </div>
+
         <!-- Logs timeline -->
         <div style="margin-top:24px">
           <h4 style="margin-bottom:8px">操作日志</h4>
@@ -406,8 +412,9 @@ import { useProjectStore } from '@/stores/project'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, RefreshRight, FolderOpened, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
+import { marked } from 'marked'
 import {
-  getKanbanData, createDocLedger, transitionStatus, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
+  getKanbanData, createDocLedger, transitionStatus, getDocLedger, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
 } from '@/api/doc-ledger'
 import { getCompletionSummaryBatch, getCompletionSummary } from '@/api/doc-chapter'
@@ -461,6 +468,15 @@ const showCreateDialog = ref(false)
 const creating = ref(false)
 const showDrawer = ref(false)
 const selectedItem = ref<DocLedgerItem | null>(null)
+const renderedDocContent = computed(() => {
+  if (!selectedItem.value?.docContent) return ''
+  try {
+    return marked.parse(selectedItem.value.docContent) as string
+  } catch (e) {
+    console.error('[renderedDocContent] markdown parse error:', e)
+    return selectedItem.value.docContent
+  }
+})
 const targetStatus = ref('')
 const transitioning = ref(false)
 const logs = ref<DocLedgerLogItem[]>([])
@@ -813,6 +829,13 @@ async function showDetail(item: DocLedgerItem) {
   targetStatus.value = ''
   showDrawer.value = true
   try {
+    const res = await getDocLedger(item.id!)
+    selectedItem.value = res.data.data || item
+    console.log('[showDetail] loaded:', { id: item.id, hasDocContent: !!selectedItem.value?.docContent, contentLen: selectedItem.value?.docContent?.length })
+  } catch (e) {
+    console.error('[showDetail] getDocLedger failed:', e)
+  }
+  try {
     const res = await getDocLedgerLogs(item.id!)
     logs.value = res.data.data || []
   } catch { logs.value = [] }
@@ -1118,6 +1141,29 @@ watch(treeFilter, (val) => {
 .markdown-body :deep(ul) { margin:4px 0; padding-left:24px; }
 .markdown-body :deep(li) { margin:2px 0; }
 .markdown-body :deep(strong) { font-weight:600; }
+
+.doc-content-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  background: #fff;
+}
+.doc-content-wrapper :deep(h1) { font-size:22px; margin:20px 0 12px; border-bottom:1px solid var(--el-border-color); padding-bottom:6px; font-weight:600; }
+.doc-content-wrapper :deep(h2) { font-size:20px; margin:18px 0 10px; font-weight:600; color:var(--el-text-color-primary); }
+.doc-content-wrapper :deep(h3) { font-size:17px; margin:14px 0 8px; font-weight:600; }
+.doc-content-wrapper :deep(h4) { font-size:15px; margin:12px 0 6px; font-weight:600; }
+.doc-content-wrapper :deep(p) { margin:8px 0; text-align: justify; }
+.doc-content-wrapper :deep(ul), .doc-content-wrapper :deep(ol) { margin:8px 0; padding-left:28px; }
+.doc-content-wrapper :deep(li) { margin:4px 0; }
+.doc-content-wrapper :deep(strong) { font-weight:600; }
+.doc-content-wrapper :deep(table) { border-collapse: collapse; width: 100%; margin: 10px 0; }
+.doc-content-wrapper :deep(th), .doc-content-wrapper :deep(td) { border: 1px solid var(--el-border-color); padding: 8px 12px; text-align: left; }
+.doc-content-wrapper :deep(th) { background: var(--el-fill-color-light); font-weight: 600; }
+.doc-content-wrapper :deep(blockquote) { border-left: 4px solid var(--el-color-primary); padding-left: 12px; margin: 10px 0; color: var(--el-text-color-secondary); }
 
 /* Tree view */
 .tree-view { padding:4px 0; }

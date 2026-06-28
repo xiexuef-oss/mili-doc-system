@@ -69,6 +69,77 @@ public class AiDocumentWorkflowService {
         return result;
     }
 
+    // ──────────────── 统一初始化：创建文档+加载/生成模板（事务保证） ────────────────
+
+    @Transactional
+    public Map<String, Object> initializeDocumentWithTemplate(Long projectId, String docName, String docType, Long templateId, Long ledgerId, Long userId) {
+        log.info("initializeDocumentWithTemplate: projectId={}, docName={}, docType={}, templateId={}, ledgerId={}, userId={}",
+            projectId, docName, docType, templateId, ledgerId, userId);
+
+        String finalDocName = (docName != null && !docName.isBlank()) ? docName : "未命名文档";
+        String finalDocType = (docType != null && !docType.isBlank()) ? docType : "";
+
+        AiDocument aiDoc = aiDocService.create(userId, projectId, finalDocName, finalDocType, "");
+        aiDoc.setStatus("template_review");
+        aiDocService.updateById(aiDoc);
+
+        List<Map<String, Object>> outline;
+        boolean templateGenerated;
+
+        try {
+            if (templateId != null && templateId > 0) {
+                DocTemplateV2 template = templateMapper.selectById(templateId);
+                if (template != null) {
+                    outline = loadChaptersAsOutline(templateId);
+                    templateGenerated = false;
+                } else {
+                    outline = generateTemplateOutlineInternal(aiDoc);
+                    templateGenerated = true;
+                }
+            } else {
+                outline = generateTemplateOutlineInternal(aiDoc);
+                templateGenerated = true;
+            }
+        } catch (Exception e) {
+            log.warn("Template load/generate failed, using default outline: {}", e.getMessage());
+            outline = generateDefaultOutline(finalDocType);
+            templateGenerated = true;
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("document", aiDoc);
+        result.put("outline", outline);
+        result.put("templateGenerated", templateGenerated);
+        result.put("ledgerId", ledgerId);
+
+        log.info("initializeDocumentWithTemplate completed: docId={}, outlineSize={}, templateGenerated={}",
+            aiDoc.getId(), outline.size(), templateGenerated);
+        return result;
+    }
+
+    private List<Map<String, Object>> generateTemplateOutlineInternal(AiDocument aiDoc) {
+        String system = promptService.getTemplate("template-generation") != null ? promptService.getTemplate("template-generation") : (
+            "你是军工文档模板专家。根据文档类型和项目信息，生成一份标准的文档模板大纲。\n" +
+            "输出JSON数组，每个元素: {title, level(1-3), description:该章节应包含的内容描述}\n" +
+            "必须符合GJB 5882-2006标准。只输出JSON数组，不要任何说明。");
+        try {
+            String context = "";
+            try {
+                context = contextAssembly.assembleBasicContext(aiDoc.getProjectId());
+            } catch (Exception ignored) {}
+            String prompt = String.format(
+                "文档类型：%s\n文档标题：%s\n项目背景：\n%s\n\n请生成该文档的标准章节结构。",
+                aiDoc.getDocumentType(), aiDoc.getTitle(), context);
+            String raw = llmClient.chatWithAudit(system, prompt, "canvas-template", aiDoc.getProjectId());
+            raw = cleanLlmOutput(raw);
+            List<Map<String, Object>> outline = parseJsonArray(raw);
+            if (outline != null && !outline.isEmpty()) return outline;
+        } catch (Exception e) {
+            log.warn("AI template generation failed: {}", e.getMessage());
+        }
+        return generateDefaultOutline(aiDoc.getDocumentType());
+    }
+
     // ──────────────── 检查是否有模板 ────────────────
 
     public boolean checkHasTemplate(DocCatalog catalog) {
@@ -338,21 +409,94 @@ public class AiDocumentWorkflowService {
 
     @Transactional
     public void saveToDocLedger(Long documentId, Long ledgerId, Long userId) {
+        log.info("saveToDocLedger called: documentId={}, ledgerId={}, userId={}", documentId, ledgerId, userId);
+        
         AiDocument aiDoc = aiDocService.getById(documentId);
+        if (aiDoc == null) {
+            log.warn("saveToDocLedger: AI document not found, id={}", documentId);
+            throw BusinessException.notFound("AI文档不存在: id=" + documentId);
+        }
+        
         DocLedger ledger = ledgerService.getById(ledgerId);
-        if (aiDoc == null || ledger == null) throw BusinessException.notFound("文档或台账不存在");
-
-        List<AiDocumentSection> sections = sectionService.getByDocumentId(documentId);
-        StringBuilder content = new StringBuilder();
-        for (AiDocumentSection sec : sections) {
-            content.append("#".repeat(sec.getLevel())).append(" ").append(sec.getTitle()).append("\n\n");
-            if (sec.getContent() != null) content.append(sec.getContent()).append("\n\n");
+        if (ledger == null) {
+            log.warn("saveToDocLedger: DocLedger not found, id={}", ledgerId);
+            throw BusinessException.notFound("文档台账不存在: id=" + ledgerId);
         }
 
-        // ledger.setDocContent(content.toString()); // TODO: add field to DocLedger
+        StringBuilder content = new StringBuilder();
+        String lastHeadingTitle = null; // 记录上一个标题，用于跳过重复的段落
+        
+        // 优先从 contentJson 提取内容（编辑器实际渲染的内容）
+        if (aiDoc.getContentJson() != null && !aiDoc.getContentJson().isBlank()) {
+            try {
+                Map<String, Object> doc = objectMapper.readValue(aiDoc.getContentJson(), Map.class);
+                List<Map<String, Object>> docContent = (List<Map<String, Object>>) doc.get("content");
+                if (docContent != null) {
+                    for (Map<String, Object> node : docContent) {
+                        String type = (String) node.get("type");
+                        if ("heading".equals(type)) {
+                            Map<String, Object> attrs = (Map<String, Object>) node.get("attrs");
+                            int level = attrs != null ? ((Number) attrs.getOrDefault("level", 1)).intValue() : 1;
+                            List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("content");
+                            StringBuilder textSb = new StringBuilder();
+                            if (children != null) {
+                                for (Map<String, Object> child : children) {
+                                    if ("text".equals(child.get("type"))) {
+                                        textSb.append(child.get("text"));
+                                    }
+                                }
+                            }
+                            lastHeadingTitle = textSb.toString().trim();
+                            content.append("#".repeat(level)).append(" ").append(textSb).append("\n\n");
+                        } else if ("paragraph".equals(type)) {
+                            List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("content");
+                            StringBuilder textSb = new StringBuilder();
+                            if (children != null) {
+                                for (Map<String, Object> child : children) {
+                                    if ("text".equals(child.get("type"))) {
+                                        textSb.append(child.get("text"));
+                                    }
+                                }
+                            }
+                            String paragraphText = textSb.toString().trim();
+                            // 跳过与上一个标题相同的段落（AI生成的重复标题）
+                            if (paragraphText.length() > 0 && !paragraphText.equals(lastHeadingTitle)) {
+                                // 跳过章节编号格式的段落（如 "1 概述"、"3.1 功能" 等）
+                                if (!paragraphText.matches("^\\d+(\\.\\d+)?\\s+.{2,20}$")) {
+                                    content.append(paragraphText).append("\n\n");
+                                }
+                            }
+                        } else {
+                            // 表格/列表/引用/代码块等：复用 AiDocumentService 已有的完整转换逻辑，
+                            // 避免本方法只认 heading/paragraph 而把其余内容静默丢弃
+                            aiDocService.walkContentMarkdown(java.util.List.of(node), content);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to extract content from contentJson: {}", e.getMessage());
+            }
+        }
+        
+        // 如果 contentJson 提取失败或内容太短，从 sections 提取
+        if (content.length() < 100) {
+            List<AiDocumentSection> sections = sectionService.getByDocumentId(documentId);
+            content.setLength(0);
+            for (AiDocumentSection sec : sections) {
+                content.append("#".repeat(sec.getLevel())).append(" ").append(sec.getTitle()).append("\n\n");
+                if (sec.getContent() != null) content.append(sec.getContent()).append("\n\n");
+            }
+        }
+
+        // 保存内容到台账
+        String finalContent = content.toString().trim();
+        ledger.setDocContent(finalContent);
+        ledger.setContentSize((long) finalContent.length());
         ledger.setLifecycleStatus("DRAFTING");
         ledger.setUpdatedBy(userId);
         ledgerService.updateById(ledger);
+
+        log.info("saveToDocLedger: documentId={}, ledgerId={}, contentSize={}", documentId, ledgerId, finalContent.length());
     }
 
     // ──────────────── 获取项目文档清单（用于前端选择） ────────────────

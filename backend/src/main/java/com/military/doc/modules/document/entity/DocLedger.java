@@ -30,6 +30,7 @@ public class DocLedger {
     private String lifecycleStatus;
     private String fileObjectId;
     private Long contentSize;
+    private String docContent;  // AI生成的文档内容(Markdown格式)
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

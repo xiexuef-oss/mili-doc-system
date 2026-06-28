@@ -18,7 +18,6 @@
       <el-tab-pane label="阶段管理" name="stages" />
       <el-tab-pane label="文档台账" name="doc-ledger" />
       <el-tab-pane label="AI对话" name="ai-chat" />
-      <el-tab-pane label="AI生成" name="ai-generate" />
       <el-tab-pane label="主数据" name="master-data" />
       <el-tab-pane label="评审管理" name="reviews" />
       <el-tab-pane label="完整性检查" name="completeness" />
@@ -75,7 +74,6 @@ function handleTabChange(name: string) {
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :
     name === 'doc-ledger' ? 'ProjectDocLedger' :
-    name === 'ai-generate' ? 'BatchGeneratePage' :
     name === 'ai-chat' ? 'ChatPage' :
     name === 'master-data' ? 'ProjectMasterData' :
     name === 'reviews' ? 'ProjectReviews' :
@@ -91,7 +89,6 @@ watch(() => route.name, (name) => {
     ProjectOverview: 'overview',
     ProjectStages: 'stages',
     ProjectDocLedger: 'doc-ledger',
-    BatchGeneratePage: 'ai-generate',
     ChatPage: 'ai-chat',
     ProjectMasterData: 'master-data',
     ProjectReviews: 'reviews',

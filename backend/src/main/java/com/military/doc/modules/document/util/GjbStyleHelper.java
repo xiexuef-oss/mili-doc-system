@@ -118,13 +118,20 @@ public class GjbStyleHelper {
         return para;
     }
 
-    // === Markdown-to-DOCX rendering (skipHeadings mode) ===
+    // === Markdown-to-DOCX rendering ===
+
+    /**
+     * SKIP: heading lines are dropped (title already rendered separately via addHeading()).
+     * BOLD_TEXT: heading lines are flattened to bold body text (no real Word heading style).
+     * REAL_HEADING: heading lines become real Word headings via addHeading(), level = '#' count.
+     */
+    public enum HeadingMode { SKIP, BOLD_TEXT, REAL_HEADING }
 
     public static void writeMarkdownContent(XWPFDocument doc, String markdown, int baseLevel) {
-        writeMarkdownContent(doc, markdown, baseLevel, false);
+        writeMarkdownContent(doc, markdown, baseLevel, HeadingMode.BOLD_TEXT);
     }
 
-    public static void writeMarkdownContent(XWPFDocument doc, String markdown, int baseLevel, boolean skipHeadings) {
+    public static void writeMarkdownContent(XWPFDocument doc, String markdown, int baseLevel, HeadingMode headingMode) {
         if (markdown == null || markdown.isBlank()) return;
         String[] lines = markdown.split("\\R");
         java.util.List<String> pendingTableLines = new java.util.ArrayList<>();
@@ -143,9 +150,15 @@ public class GjbStyleHelper {
                 flushPendingTable(doc, pendingTableLines); pendingTableLines.clear();
             }
             if (trimmed.startsWith("#")) {
-                if (skipHeadings) continue; // title already rendered by addHeading(), skip entirely
-                String headingText = trimmed.replaceAll("^#{1,5}\\s*", "");
-                addBodyTextWithBold(doc, "**" + headingText + "**");
+                if (headingMode == HeadingMode.SKIP) continue; // title already rendered by addHeading(), skip entirely
+                int hashCount = 0;
+                while (hashCount < trimmed.length() && trimmed.charAt(hashCount) == '#') hashCount++;
+                String headingText = trimmed.substring(hashCount).trim();
+                if (headingMode == HeadingMode.REAL_HEADING) {
+                    addHeading(doc, headingText, Math.min(Math.max(hashCount, 1), 5));
+                } else {
+                    addBodyTextWithBold(doc, "**" + headingText + "**");
+                }
             } else if ((trimmed.startsWith("- ") || trimmed.startsWith("* ")) && !trimmed.startsWith("**")) {
                 addBulletPoint(doc, trimmed.substring(2).trim());
             } else {

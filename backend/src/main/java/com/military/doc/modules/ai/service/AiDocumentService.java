@@ -16,12 +16,11 @@ public class AiDocumentService extends com.baomidou.mybatisplus.extension.servic
     private final AiDocumentVersionMapper versionMapper;
     private final ObjectMapper objectMapper;
 
-    public AiDocumentService(AiDocumentMapper docMapper, AiDocumentSectionMapper sectionMapper,
+    public AiDocumentService(AiDocumentSectionMapper sectionMapper,
                               AiDocumentVersionMapper versionMapper, ObjectMapper objectMapper) {
         this.sectionMapper = sectionMapper;
         this.versionMapper = versionMapper;
         this.objectMapper = objectMapper;
-        // Note: MyBatis-Plus ServiceImpl uses @Autowired on baseMapper — no super(mapper) call needed
     }
 
     @Transactional public AiDocument create(Long userId, Long projectId, String title, String docType, String prompt) {
@@ -206,8 +205,8 @@ public class AiDocumentService extends com.baomidou.mybatisplus.extension.servic
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    
-    private void walkContentMarkdown(List<Map<String, Object>> nodes, StringBuilder sb) {
+    /** Package-private (not private): reused by AiDocumentWorkflowService.saveToDocLedger for node types it doesn't special-case itself. */
+    void walkContentMarkdown(List<Map<String, Object>> nodes, StringBuilder sb) {
         for (Map<String, Object> node : nodes) {
             String type = (String) node.get("type");
             if ("paragraph".equals(type)) {
@@ -245,6 +244,22 @@ public class AiDocumentService extends com.baomidou.mybatisplus.extension.servic
                 sb.append("```\n");
                 walkContentMarkdown(getChildren(node), sb);
                 sb.append("\n```\n\n");
+            } else if ("table".equals(type)) {
+                for (Map<String, Object> row : getChildren(node)) {
+                    List<Map<String, Object>> cells = getChildren(row);
+                    boolean isHeaderRow = !cells.isEmpty() && "tableHeader".equals(cells.get(0).get("type"));
+                    sb.append("|");
+                    for (Map<String, Object> cell : cells) {
+                        StringBuilder cellSb = new StringBuilder();
+                        walkContentMarkdown(getChildren(cell), cellSb);
+                        sb.append(" ").append(cellSb.toString().trim().replaceAll("\\s*\\n+\\s*", " ")).append(" |");
+                    }
+                    sb.append("\n");
+                    if (isHeaderRow) {
+                        sb.append("|").append(" --- |".repeat(cells.size())).append("\n");
+                    }
+                }
+                sb.append("\n");
             } else if ("hardBreak".equals(type)) {
                 sb.append("\n");
             } else {

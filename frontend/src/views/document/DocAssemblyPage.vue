@@ -413,7 +413,10 @@ async function loadLedger() {
   try {
     const res = await getDocLedger(docLedgerId)
     ledger.value = res.data.data
-  } catch { /* ignore */ }
+  } catch (e: any) {
+    console.error('[DocAssemblyPage] loadLedger failed:', e)
+    ElMessage.error('加载文档台账失败: ' + (e?.response?.data?.message || e?.message || '未知错误'))
+  }
 }
 
 async function loadChapters() {

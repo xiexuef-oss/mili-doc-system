@@ -62,12 +62,6 @@ const router = createRouter({
               meta: { title: 'AI 文档画布' }
             },
             {
-              path: 'ai-generate',
-              name: 'BatchGeneratePage',
-              component: () => import('@/views/project/BatchGeneratePage.vue'),
-              meta: { title: 'AI批量生成' }
-            },
-            {
               path: 'reliability',
               name: 'ReliabilityWorkbench',
               component: () => import('@/views/project/ReliabilityWorkbench.vue'),

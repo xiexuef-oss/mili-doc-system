@@ -47,6 +47,9 @@ export function getProjectDocChecklist(projectId: number) {
 export function startDocumentFromCatalog(projectId: number, catalogId: number, docName?: string, docType?: string, ledgerId?: number) {
   return api.post('/ai-documents/from-catalog', { projectId, catalogId, docName, docType, ledgerId })
 }
+export function initializeDocument(params: { projectId: number; docName: string; docType?: string; templateId?: number; ledgerId?: number }) {
+  return api.post('/ai-documents/initialize', params)
+}
 export function loadOutlineFromTemplate(docId: number, templateId: number) {
   return api.post(`/ai-documents/${docId}/load-template`, { templateId })
 }

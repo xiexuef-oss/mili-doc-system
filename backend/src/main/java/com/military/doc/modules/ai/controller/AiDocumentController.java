@@ -299,6 +299,24 @@ public class AiDocumentController {
         return Result.success(workflowService.startDocumentFromCatalog(projectId, catalogId, docName, docType, ledgerId, userId(auth)));
     }
 
+    @PostMapping("/initialize")
+    public Result<Map<String, Object>> initializeDocument(@RequestBody Map<String, Object> body, Authentication auth) {
+        Long projectId = toLong(body.get("projectId"));
+        String docName = (String) body.get("docName");
+        String docType = (String) body.get("docType");
+        Long templateId = toLong(body.get("templateId"));
+        Long ledgerId = toLong(body.get("ledgerId"));
+        
+        log.info("initializeDocument: projectId={}, docName={}, docType={}, templateId={}, ledgerId={}, userId={}", 
+            projectId, docName, docType, templateId, ledgerId, userId(auth));
+        
+        if (projectId == null || projectId <= 0) {
+            return Result.error("PARAM_ERROR", "项目ID不能为空");
+        }
+        
+        return Result.success(workflowService.initializeDocumentWithTemplate(projectId, docName, docType, templateId, ledgerId, userId(auth)));
+    }
+
     @PostMapping("/{id}/load-template")
     public Result<Map<String, Object>> loadOutlineFromTemplate(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication auth) {
         requireOwnership(id, auth);

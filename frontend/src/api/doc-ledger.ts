@@ -20,6 +20,7 @@ export interface DocLedgerItem {
   lifecycleStatus?: string
   fileObjectId?: string
   contentSize?: number
+  docContent?: string
   createdBy?: number
   createdAt?: string
   updatedBy?: number
