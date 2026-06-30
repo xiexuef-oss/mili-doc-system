@@ -124,6 +124,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getReviewMeetings, createReviewMeeting, updateReviewMeeting, updateMeetingStatus, deleteReviewMeeting, type ReviewMeetingItem } from '@/api/review-meeting'
 import { getProjects, type ProjectItem } from '@/api/project'
+import { meetingTypeLabel } from '@/utils/labels'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,14 +161,6 @@ const form = reactive<ReviewMeetingItem>(emptyForm())
 const formRules = {
   projectId: [{ required: true, message: '请选择项目', trigger: 'change' }],
   meetingName: [{ required: true, message: '请输入会议名称', trigger: 'blur' }]
-}
-
-function meetingTypeLabel(type: string) {
-  const map: Record<string, string> = {
-    DESIGN_REVIEW: '设计评审', TECH_REVIEW: '技术评审', QUALITY_REVIEW: '质量评审',
-    STAGE_REVIEW: '阶段评审', FINAL_REVIEW: '最终评审'
-  }
-  return map[type] || type
 }
 
 function statusTag(status: string) {

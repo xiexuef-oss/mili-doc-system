@@ -12,7 +12,7 @@
       <el-table-column prop="baselineCode" label="基线编号" width="140" />
       <el-table-column prop="baselineName" label="基线名称" min-width="180" />
       <el-table-column prop="baselineType" label="类型" width="120">
-        <template #default="{ row }"><el-tag size="small">{{ typeLabel(row.baselineType) }}</el-tag></template>
+        <template #default="{ row }"><el-tag size="small">{{ baselineTypeLabel(row.baselineType) }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="baselineVersion" label="版本" width="80" />
       <el-table-column prop="baselineStatus" label="状态" width="100">
@@ -63,6 +63,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { createBaseline, getBaselines, getBaselineItems, approveBaseline, setBaselineEffective, type ConfigurationBaselineVO, type ConfigurationBaselineItemVO } from '@/api/configuration-management'
+import { baselineTypeLabel } from '@/utils/labels'
 
 const route = useRoute()
 const projectId = Number(route.params.projectId)
@@ -75,7 +76,6 @@ const baselineItems = ref<ConfigurationBaselineItemVO[]>([])
 
 const form = reactive({ baselineType: 'FUNCTIONAL_BASELINE' })
 
-const typeLabel = (t: string) => ({ FUNCTIONAL_BASELINE: '功能基线', ALLOCATED_BASELINE: '分配基线', PRODUCT_BASELINE: '产品基线' }[t] || t)
 const statusType = (s: string) => ({ DRAFT: 'info', REVIEWING: 'warning', APPROVED: 'primary', EFFECTIVE: 'success', SUPERSEDED: '', ARCHIVED: 'info' }[s] || 'info')
 
 async function fetch() {

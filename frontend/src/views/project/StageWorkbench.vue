@@ -4,7 +4,7 @@
       <div>
         <el-button link @click="$router.back()"><el-icon><ArrowLeft /></el-icon>返回阶段列表</el-button>
         <h3 style="display:inline;margin-left:16px">阶段工作台</h3>
-        <el-tag v-if="stage" :type="statusType(stage.status)" size="small" style="margin-left:12px">{{ statusLabel(stage.status) }}</el-tag>
+        <el-tag v-if="stage" :type="stageStatusTagType(stage.status)" size="small" style="margin-left:12px">{{ stageStatusLabel(stage.status) }}</el-tag>
       </div>
       <div class="header-actions">
         <el-button v-if="canTransition" type="primary" @click="handleRequestTransition" :loading="acting">申请转阶段</el-button>
@@ -74,7 +74,7 @@
             <el-table-column prop="baselineName" label="基线名称" min-width="160" />
             <el-table-column prop="baselineType" label="类型" width="120">
               <template #default="{ row }">
-                <el-tag size="small">{{ basetypeLabel(row.baselineType) }}</el-tag>
+                <el-tag size="small">{{ baselineTypeLabel(row.baselineType) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="baselineVersion" label="版本" width="80" />
@@ -147,6 +147,7 @@ import { createBaseline, getBaselines, getBaselineItems, approveBaseline, setBas
 import { stageReadiness } from '@/api/ai'
 import { getNavigatorData } from '@/api/project-master-data'
 import { getKnowledgeCards, type KnowledgeCard } from '@/api/knowledge-card'
+import { stageStatusLabel, stageStatusTagType, baselineTypeLabel } from '@/utils/labels'
 import ProcessPipeline from '@/components/ProcessPipeline.vue'
 import KnowledgeCardPopover from '@/components/KnowledgeCardPopover.vue'
 
@@ -172,15 +173,6 @@ const baselineForm = ref({ baselineType: 'FUNCTIONAL_BASELINE' })
 
 const canTransition = computed(() => stage.value && stage.value.isCurrent && (stage.value.status === 'IN_PROGRESS' || stage.value.status === 'REVIEWING' || stage.value.status === 'RECTIFYING' || stage.value.status === 'BASELINING' || stage.value.status === 'GATE_CHECKING'))
 
-const statusType = (s: string) => {
-  const map: Record<string, string> = { NOT_STARTED: 'info', PLANNING: '', IN_PROGRESS: 'warning', REVIEWING: '', RECTIFYING: 'danger', BASELINING: '', GATE_CHECKING: 'warning', COMPLETED: 'success', SUSPENDED: 'warning', TERMINATED: 'danger' }
-  return map[s] || 'info'
-}
-const statusLabel = (s: string) => {
-  const map: Record<string, string> = { NOT_STARTED: '未开始', PLANNING: '规划中', IN_PROGRESS: '进行中', REVIEWING: '评审中', RECTIFYING: '整改中', BASELINING: '基线建立中', GATE_CHECKING: '转阶段检查中', COMPLETED: '已完成', SUSPENDED: '已暂停', TERMINATED: '已终止' }
-  return map[s] || s
-}
-const basetypeLabel = (t: string) => ({ FUNCTIONAL_BASELINE: '功能基线', ALLOCATED_BASELINE: '分配基线', PRODUCT_BASELINE: '产品基线' }[t] || t)
 const baselineStatusType = (s: string) => ({ DRAFT: 'info', REVIEWING: 'warning', APPROVED: 'primary', EFFECTIVE: 'success', SUPERSEDED: '', ARCHIVED: 'info' }[s] || 'info')
 const progressColor = (p: number) => p >= 100 ? '#67c23a' : p >= 60 ? '#409eff' : '#e6a23c'
 

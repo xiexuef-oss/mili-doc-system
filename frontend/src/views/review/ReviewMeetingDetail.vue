@@ -202,6 +202,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, MagicStick } from '@element-plus/icons-vue'
 import { getReviewMeeting, updateReviewMeeting, updateMeetingStatus, type ReviewMeetingItem } from '@/api/review-meeting'
+import { meetingTypeLabel } from '@/utils/labels'
 import {
   getReviewMeetingDocuments, createReviewMeetingDocument,
   updateReviewMeetingDocument, deleteReviewMeetingDocument,
@@ -222,13 +223,6 @@ const meeting = ref<ReviewMeetingItem | null>(null)
 const activeTab = ref('docs')
 
 // Meeting status
-function meetingTypeLabel(t?: string) {
-  const map: Record<string, string> = {
-    DESIGN_REVIEW: '设计评审', TECH_REVIEW: '技术评审', QUALITY_REVIEW: '质量评审',
-    STAGE_REVIEW: '阶段评审', FINAL_REVIEW: '最终评审'
-  }
-  return t ? map[t] || t : ''
-}
 function statusTag(s?: string) {
   const map: Record<string, string> = { DRAFT: 'info', SCHEDULED: 'primary', IN_PROGRESS: 'warning', COMPLETED: 'success', CANCELLED: '' }
   return s ? map[s] || 'info' : 'info'

@@ -59,7 +59,6 @@ const statusTagType = computed(() => projectStatusTagType(project.value?.status)
 const statusLabel = computed(() => projectStatusLabel(project.value?.status))
 
 function handleTabChange(name: string) {
-  const t0 = performance.now()
   console.log('[TabSwitch] start:', name)
   const routeName = name === 'overview' ? 'ProjectOverview' :
     name === 'stages' ? 'ProjectStages' :

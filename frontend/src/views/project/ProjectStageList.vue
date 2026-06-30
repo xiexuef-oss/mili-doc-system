@@ -15,7 +15,7 @@
         <div class="stage-card" :class="'status-' + (stage.status || 'NOT_STARTED').toLowerCase()">
           <div class="stage-header">
             <span class="stage-order">{{ String(idx + 1).padStart(2, '0') }}</span>
-            <el-tag :type="statusType(stage.status)" size="small" effect="dark">{{ statusLabel(stage.status) }}</el-tag>
+            <el-tag :type="stageStatusTagType(stage.status)" size="small" effect="dark">{{ stageStatusLabel(stage.status) }}</el-tag>
             <el-tag v-if="stage.isCurrent" type="primary" size="small" effect="plain">当前</el-tag>
           </div>
           <div class="stage-body">
@@ -123,6 +123,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getProjectStages, updateProjectStage, requestTransition, suspendStage, terminateStage, gateCheck, type ProjectStageItem } from '@/api/project-stage'
 import { checkAiHealth } from '@/api/ai'
+import { stageStatusLabel, stageStatusTagType } from '@/utils/labels'
 import StageDocChecklist from '@/views/project/StageDocChecklist.vue'
 
 const route = useRoute()
@@ -140,25 +141,6 @@ const form = reactive<ProjectStageItem>({} as ProjectStageItem)
 // AI health
 const aiOnline = ref(false)
 const aiModel = ref('')
-
-const statusType = (s: string) => {
-  const map: Record<string, string> = {
-    NOT_STARTED: 'info', PLANNING: '', IN_PROGRESS: 'warning',
-    REVIEWING: '', RECTIFYING: 'danger', BASELINING: '',
-    GATE_CHECKING: 'warning', COMPLETED: 'success',
-    SUSPENDED: 'warning', TERMINATED: 'danger'
-  }
-  return map[s] || 'info'
-}
-const statusLabel = (s: string) => {
-  const map: Record<string, string> = {
-    NOT_STARTED: '未开始', PLANNING: '规划中', IN_PROGRESS: '进行中',
-    REVIEWING: '评审中', RECTIFYING: '整改中', BASELINING: '基线建立中',
-    GATE_CHECKING: '转阶段检查中', COMPLETED: '已完成',
-    SUSPENDED: '已暂停', TERMINATED: '已终止'
-  }
-  return map[s] || s
-}
 
 const canTransition = (stage: ProjectStageItem) =>
   stage.isCurrent && (stage.status === 'IN_PROGRESS' || stage.status === 'REVIEWING' || stage.status === 'RECTIFYING' || stage.status === 'BASELINING' || stage.status === 'GATE_CHECKING')
