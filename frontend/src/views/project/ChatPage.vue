@@ -62,7 +62,7 @@
    <div class="chat-messages" ref="msgRef">
       <div v-for="(msg, i) in messages" :key="i" :class="['msg', msg.role]">
         <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
-        <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
+        <div class="msg-content" v-html="renderChatMarkdown(msg.content)"></div>
       </div>
       <div v-if="loading" class="msg assistant">
         <div class="msg-avatar">🤖</div>
@@ -89,6 +89,7 @@ import { sendMessage, pollTask } from '@/api/chat'
 import { generateReliabilityOutline, generateDeratingReport } from '@/api/reliability'
 import { useProjectStore } from '@/stores/project'
 import { sanitizeHtml } from '@/utils/sanitize'
+import { renderChatMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -101,11 +102,6 @@ const pollCount = ref(0)
 const sessionId = ref('')
 const msgRef = ref<HTMLElement>()
 const helpOpen = ref<string[]>([])
-
-function renderMarkdown(text: string): string {
-  const html = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
-  return sanitizeHtml(html)
-}
 
 async function send() {
   const msg = input.value.trim()

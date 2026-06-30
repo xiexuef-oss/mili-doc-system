@@ -40,6 +40,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useProjectStore } from '@/stores/project'
+import { projectStatusLabel, projectStatusTagType } from '@/utils/labels'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,19 +55,8 @@ onMounted(async () => {
   store.loadStages()
 })
 
-const statusTagType = computed(() => {
-  const map: Record<string, string> = {
-    DRAFT: 'info', IN_PROGRESS: 'warning', COMPLETED: 'success', ARCHIVED: ''
-  }
-  return map[project.value?.status || ''] || 'info'
-})
-
-const statusLabel = computed(() => {
-  const map: Record<string, string> = {
-    DRAFT: '草稿', IN_PROGRESS: '进行中', COMPLETED: '已完成', ARCHIVED: '已归档'
-  }
-  return map[project.value?.status || ''] || project.value?.status || ''
-})
+const statusTagType = computed(() => projectStatusTagType(project.value?.status))
+const statusLabel = computed(() => projectStatusLabel(project.value?.status))
 
 function handleTabChange(name: string) {
   const t0 = performance.now()

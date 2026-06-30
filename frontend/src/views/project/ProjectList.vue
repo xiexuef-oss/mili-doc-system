@@ -31,7 +31,7 @@
       </el-table-column>
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusTag(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <el-tag :type="projectStatusTagType(row.status)" size="small">{{ projectStatusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="startDate" label="开始日期" width="120" />
@@ -145,6 +145,7 @@ import { ElMessage } from 'element-plus'
 import { getProjects, createProject, updateProject, type ProjectItem } from '@/api/project'
 import { getDictItems, type DictItem } from '@/api/dict'
 import { getStageDefinitions, initializeStages, type StageDefinitionItem } from '@/api/project-stage'
+import { securityLabel, projectStatusLabel, projectStatusTagType } from '@/utils/labels'
 
 
 const loading = ref(false)
@@ -183,13 +184,6 @@ const formRules = {
   initialStageCode: [{ required: true, message: '请选择初始阶段', trigger: 'change' }]
 }
 
-function statusTag(status: string) {
-  const map: Record<string, string> = {
-    DRAFT: 'info', IN_PROGRESS: 'primary', COMPLETED: 'success', ARCHIVED: 'warning'
-  }
-  return map[status] || 'info'
-}
-
 function typeLabel(type: string) {
   const found = projectTypes.value.find(t => t.dictCode === type)
   return found?.dictName || type
@@ -200,20 +194,6 @@ async function fetchProjectTypes() {
     const res = await getDictItems('PROJECT_TYPE')
     projectTypes.value = res.data.data
   } catch { /* handled */ }
-}
-
-function securityLabel(level: string) {
-  const map: Record<string, string> = {
-    PUBLIC: '公开', INTERNAL: '内部', SECRET: '秘密', CONFIDENTIAL: '机密', TOP_SECRET: '绝密'
-  }
-  return map[level] || level
-}
-
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    DRAFT: '草稿', IN_PROGRESS: '进行中', COMPLETED: '已完成', ARCHIVED: '已归档'
-  }
-  return map[status] || status
 }
 
 async function fetchData() {

@@ -247,6 +247,7 @@ import {
 } from '@/api/ai'
 import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
 import { sanitizeHtml } from '@/utils/sanitize'
+import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const projectId = computed(() => Number(route.params.projectId))
@@ -282,34 +283,6 @@ function docTypeLabel(type: string) {
     REVIEW_DOC: '评审文档'
   }
   return map[type] || type
-}
-
-// Lightweight Markdown to HTML renderer
-function renderMarkdown(text: string): string {
-  if (!text) return ''
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  // Headers
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-  // Bold and italic
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  // Lists
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-  // Paragraphs (double newlines)
-  html = html.replace(/\n\n+/g, '</p><p>')
-  html = '<p>' + html + '</p>'
-  // Inline breaks
-  html = html.replace(/\n/g, '<br>')
-  // Clean up empty paragraphs
-  html = html.replace(/<p><\/p>/g, '')
-  return sanitizeHtml(html)
 }
 
 async function loadData() {

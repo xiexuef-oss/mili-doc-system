@@ -105,6 +105,7 @@ import { ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { createProject } from '@/api/project'
 import { saveMasterData } from '@/api/project-master-data'
 import { getDictItems, type DictItem } from '@/api/dict'
+import { securityLabel } from '@/utils/labels'
 import MasterDataFormSection from '@/components/MasterDataFormSection.vue'
 
 const router = useRouter()
@@ -180,11 +181,6 @@ const rules1 = {
 function typeLabel(t: string) {
   const map: Record<string, string> = { MODEL: '型号项目', PRE_RESEARCH: '预研项目', TECH_IMPROVE: '技改项目' }
   return map[t] || t
-}
-
-function securityLabel(s: string) {
-  const map: Record<string, string> = { PUBLIC: '公开', INTERNAL: '内部', SECRET: '秘密', CONFIDENTIAL: '机密', TOP_SECRET: '绝密' }
-  return map[s] || s
 }
 
 async function nextStep() {

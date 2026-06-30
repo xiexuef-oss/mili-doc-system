@@ -58,7 +58,7 @@
                 <span class="tree-doc-code">{{ data.docCode || '—' }}</span>
                 <span class="tree-doc-name">{{ data.docName }}</span>
                 <el-tag v-if="data.docType" size="small" type="info" style="margin-left:4px">{{ docTypeLabel(data.docType) }}</el-tag>
-                <el-tag size="small" :type="statusTagType(data.lifecycleStatus)" style="margin-left:4px">{{ statusLabel(data.lifecycleStatus) }}</el-tag>
+                <el-tag size="small" :type="docLifecycleTagType(data.lifecycleStatus)" style="margin-left:4px">{{ docLifecycleStatusLabel(data.lifecycleStatus) }}</el-tag>
                 <el-tag v-if="data.securityLevel" size="small" :type="data.securityLevel === 'TOP_SECRET' || data.securityLevel === 'SECRET' ? 'danger' : 'warning'" style="margin-left:4px">
                   {{ securityLabel(data.securityLevel) }}
                 </el-tag>
@@ -77,7 +77,7 @@
                     style="width:80px;margin-left:4px"
                     @change="(val: string) => doTransition(data.id!, val)"
                   >
-                    <el-option v-for="t in allowedTransitions(data.lifecycleStatus)" :key="t" :label="statusLabel(t)" :value="t" />
+                    <el-option v-for="t in allowedTransitions(data.lifecycleStatus)" :key="t" :label="docLifecycleStatusLabel(t)" :value="t" />
                   </el-select>
                 </span>
               </template>
@@ -429,6 +429,7 @@ import {
   type GenerationProgress
 } from '@/api/ai'
 import { getDictItems, type DictItem } from '@/api/dict'
+import { securityLabel, docLifecycleStatusLabel, docLifecycleTagType } from '@/utils/labels'
 
 const route = useRoute()
 const router = useRouter()
@@ -655,12 +656,6 @@ function handleTreeNodeClick(data: TreeNode) {
   }
 }
 
-function securityLabel(s: string) {
-  const map: Record<string, string> = {
-    PUBLIC:'公开',INTERNAL:'内部',SECRET:'秘密',CONFIDENTIAL:'机密',TOP_SECRET:'绝密'
-  }
-  return map[s] || s
-}
 const typeNameMap = ref<Record<string, string>>({})
 const categoryNameMap = ref<Record<string, string>>({})
 function categoryLabel(c?: string) {
@@ -670,20 +665,6 @@ function categoryLabel(c?: string) {
 function docTypeLabel(t?: string) {
   if (!t) return '-'
   return typeNameMap.value[t] || t
-}
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    PLANNED:'策划',DRAFTING:'起草',CHECKING:'校对',REVIEWING:'评审',
-    APPROVING:'批准',RELEASED:'已发布',ARCHIVED:'已归档'
-  }
-  return map[s] || s
-}
-function statusTagType(s: string) {
-  const map: Record<string, string> = {
-    PLANNED:'info',DRAFTING:'info',CHECKING:'warning',REVIEWING:'warning',
-    APPROVING:'warning',RELEASED:'success',ARCHIVED:'info'
-  }
-  return map[s] || 'info'
 }
 function allowedTransitions(current: string) { return TRANSITIONS[current] || [] }
 function canTransitionFrom(key: string) { return !!(TRANSITIONS[key] && TRANSITIONS[key].length > 0) }
