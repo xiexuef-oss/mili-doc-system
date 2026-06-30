@@ -19,6 +19,7 @@ import com.military.doc.modules.reliability.entity.RelRequirement;
 import com.military.doc.modules.reliability.mapper.RelRequirementMapper;
 import com.military.doc.modules.template.entity.DocTemplateChapter;
 import com.military.doc.modules.template.mapper.DocTemplateChapterMapper;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.common.util.Str;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
@@ -305,7 +306,7 @@ public class ReliabilityGenerationService {
         log.info("Reliability one-shot: promptName={}, chars={}", promptName, userPrompt.length());
         String result = llmClient.chat(systemPrompt, userPrompt);
         if (result != null && !result.isEmpty() && result.startsWith("null")) {
-            String cleaned = result.replaceFirst("^(null)+", "");
+            String cleaned = LlmOutputCleaner.stripLeadingNull(result);
             log.info("Stripped {} leading null chars from reliability AI response", result.length() - cleaned.length());
             return cleaned;
         }

@@ -5,6 +5,7 @@ import com.military.doc.ai.context.ChapterWritingContextService;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.ai.service.AiChapterStructureService;
 import com.military.doc.modules.document.entity.DocCatalog;
 import com.military.doc.modules.document.entity.DocChapter;
@@ -96,7 +97,7 @@ public class DraftGenerationService {
         log.info("Draft generation: catalogId={}, docLedgerId={}, prompt {} chars", catalogId, docLedgerId, userPrompt.length());
         String result = llmClient.chat(systemPrompt, userPrompt);
         if (result != null && !result.isEmpty()) {
-            String cleaned = result.replaceFirst("^(null)+", "");
+            String cleaned = LlmOutputCleaner.stripLeadingNull(result);
             if (cleaned.length() < result.length()) {
                 log.info("Stripped {} leading null chars from AI response", result.length() - cleaned.length());
             }
@@ -407,7 +408,7 @@ public class DraftGenerationService {
         log.debug("Generating chapter {} {} (context {} chars)", ch.getChapterNumber(), ch.getChapterTitle(), ctx.length());
         String result = llmClient.chat(systemPrompt, ctx.toString());
         if (result != null && result.startsWith("null")) {
-            result = result.replaceFirst("^(null)+", "");
+            result = LlmOutputCleaner.stripLeadingNull(result);
         }
         return result;
     }

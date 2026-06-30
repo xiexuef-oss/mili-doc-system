@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.DelegatingLlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.common.exception.BusinessException;
 import com.military.doc.modules.ai.entity.AiDocument;
 import com.military.doc.modules.ai.entity.AiDocumentSection;
@@ -665,12 +666,6 @@ public class AiDocumentWorkflowService {
     }
 
     private String cleanLlmOutput(String raw) {
-        if (raw == null) return "";
-        String result = raw.trim();
-        // Remove ALL markdown heading lines (LLM sometimes generates full doc instead of single section)
-        result = result.replaceAll("(?m)^#{1,4}\\s+[^\\n]*\\n?", "").trim();
-        // Strip leading "null" strings
-        result = result.replaceFirst("^(null)+", "").trim();
-        return result;
+        return LlmOutputCleaner.clean(raw);
     }
 }

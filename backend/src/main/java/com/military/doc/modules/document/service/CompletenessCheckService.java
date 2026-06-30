@@ -60,6 +60,35 @@ public class CompletenessCheckService {
             }
         }
 
+        // Pre-fetch all required elements for all template chapters (batch to avoid N+1)
+        Set<Long> allChapterIds = new HashSet<>();
+        for (DocTemplateChapter tc : templateChapters) {
+            allChapterIds.add(tc.getId());
+        }
+        Map<Long, List<DocTemplateChapterElement>> relsByChapter = new HashMap<>();
+        if (!allChapterIds.isEmpty()) {
+            List<DocTemplateChapterElement> allRels = chapterElementMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocTemplateChapterElement>()
+                            .in(DocTemplateChapterElement::getChapterId, allChapterIds)
+                            .eq(DocTemplateChapterElement::getIsRequired, true));
+            for (DocTemplateChapterElement rel : allRels) {
+                relsByChapter.computeIfAbsent(rel.getChapterId(), k -> new ArrayList<>()).add(rel);
+            }
+        }
+        Set<Long> allElementIds = new HashSet<>();
+        for (List<DocTemplateChapterElement> relList : relsByChapter.values()) {
+            for (DocTemplateChapterElement rel : relList) {
+                allElementIds.add(rel.getElementId());
+            }
+        }
+        Map<Long, DocTemplateElement> elementMap = new HashMap<>();
+        if (!allElementIds.isEmpty()) {
+            List<DocTemplateElement> allElements = elementMapper.selectBatchIds(allElementIds);
+            for (DocTemplateElement e : allElements) {
+                if (e != null) elementMap.put(e.getId(), e);
+            }
+        }
+
         List<Map<String, Object>> details = new ArrayList<>();
         int totalItems = 0, passedItems = 0, warningItems = 0, errorItems = 0;
 
@@ -99,14 +128,11 @@ public class CompletenessCheckService {
             }
 
             // Check required elements
-            List<DocTemplateChapterElement> rels = chapterElementMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DocTemplateChapterElement>()
-                            .eq(DocTemplateChapterElement::getChapterId, tc.getId())
-                            .eq(DocTemplateChapterElement::getIsRequired, true));
+            List<DocTemplateChapterElement> rels = relsByChapter.getOrDefault(tc.getId(), Collections.emptyList());
 
             for (DocTemplateChapterElement rel : rels) {
                 totalItems++;
-                DocTemplateElement element = elementMapper.selectById(rel.getElementId());
+                DocTemplateElement element = elementMap.get(rel.getElementId());
                 if (element != null) {
                     boolean found = dc != null && dc.getContent() != null &&
                             dc.getContent().contains(element.getElementName());

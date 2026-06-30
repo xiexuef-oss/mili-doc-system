@@ -231,11 +231,23 @@ public class DocChapterServiceImpl extends ServiceImpl<DocChapterMapper, DocChap
 
     private Long findTemplateForLedger(DocLedger ledger) {
         if (ledger == null) return null;
-        // Find the first chapter that has a templateChapterId
         List<DocChapter> chapters = listByDocLedger(ledger.getId());
+        // Batch: collect all template chapter IDs
+        Set<Long> tplChapterIds = new HashSet<>();
         for (DocChapter ch : chapters) {
             if (ch.getTemplateChapterId() != null) {
-                DocTemplateChapter tplCh = templateChapterMapper.selectById(ch.getTemplateChapterId());
+                tplChapterIds.add(ch.getTemplateChapterId());
+            }
+        }
+        if (tplChapterIds.isEmpty()) return null;
+        Map<Long, DocTemplateChapter> tplMap = new HashMap<>();
+        List<DocTemplateChapter> tplChapters = templateChapterMapper.selectBatchIds(tplChapterIds);
+        for (DocTemplateChapter tc : tplChapters) {
+            if (tc != null) tplMap.put(tc.getId(), tc);
+        }
+        for (DocChapter ch : chapters) {
+            if (ch.getTemplateChapterId() != null) {
+                DocTemplateChapter tplCh = tplMap.get(ch.getTemplateChapterId());
                 if (tplCh != null) return tplCh.getTemplateId();
             }
         }
@@ -285,6 +297,7 @@ public class DocChapterServiceImpl extends ServiceImpl<DocChapterMapper, DocChap
             tplToNewId.put(entry.getValue().getId(), entry.getKey());
         }
 
+        List<DocChapter> toUpdate = new ArrayList<>();
         for (var entry : matchMap.entrySet()) {
             DocChapter ch = oldById.get(entry.getKey());
             DocTemplateChapter tc = entry.getValue();
@@ -307,7 +320,10 @@ public class DocChapterServiceImpl extends ServiceImpl<DocChapterMapper, DocChap
                 ch.setParentId(0L);
             }
 
-            baseMapper.updateById(ch);
+            toUpdate.add(ch);
+        }
+        if (!toUpdate.isEmpty()) {
+            updateBatchById(toUpdate);
         }
 
         log.info("Fixed {} chapters by template {} for ledger {}",

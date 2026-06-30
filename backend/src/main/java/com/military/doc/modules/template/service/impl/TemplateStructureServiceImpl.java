@@ -67,12 +67,19 @@ public class TemplateStructureServiceImpl implements TemplateStructureService {
     @Override
     @Transactional
     public void deleteChapter(Long chapterId) {
+        Set<Long> allIds = new HashSet<>();
+        allIds.add(chapterId);
+        collectDescendantIds(chapterId, allIds);
+        chapterMapper.deleteBatchIds(allIds);
+    }
+
+    private void collectDescendantIds(Long parentId, Set<Long> ids) {
         List<DocTemplateChapter> children = chapterMapper.selectList(
-                new LambdaQueryWrapper<DocTemplateChapter>().eq(DocTemplateChapter::getParentId, chapterId));
+                new LambdaQueryWrapper<DocTemplateChapter>().eq(DocTemplateChapter::getParentId, parentId));
         for (DocTemplateChapter child : children) {
-            deleteChapter(child.getId());
+            ids.add(child.getId());
+            collectDescendantIds(child.getId(), ids);
         }
-        chapterMapper.deleteById(chapterId);
     }
 
     @Override

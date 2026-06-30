@@ -229,8 +229,23 @@ public class ChatAgentService {
         result.put("generating", priority.size());
         List<Map<String, Object>> generated = new ArrayList<>();
 
+        // Batch: collect all template IDs
+        Set<Long> tplIds = new HashSet<>();
         for (var item : priority) {
-            var sct = checklistTplMapper.selectById(item.getTemplateId());
+            if (item.getTemplateId() != null) {
+                tplIds.add(item.getTemplateId());
+            }
+        }
+        Map<Long, StageDocChecklistTemplate> tplMap = new HashMap<>();
+        if (!tplIds.isEmpty()) {
+            List<StageDocChecklistTemplate> allTmpls = checklistTplMapper.selectBatchIds(tplIds);
+            for (StageDocChecklistTemplate tmpl : allTmpls) {
+                if (tmpl != null) tplMap.put(tmpl.getId(), tmpl);
+            }
+        }
+
+        for (var item : priority) {
+            var sct = tplMap.get(item.getTemplateId());
             if (sct == null || sct.getTemplateId() == null) continue;
             // Find or create ledger
             DocLedger ledger = findOrCreateLedger(projectId, stageId, item, userId);

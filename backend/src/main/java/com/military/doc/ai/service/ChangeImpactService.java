@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
 import com.military.doc.modules.project.entity.ConfigurationBaseline;
@@ -124,7 +126,7 @@ public class ChangeImpactService {
             return result;
         } catch (RuntimeException e) {
             log.error("Change impact analysis failed: {}", e.getMessage());
-            return Map.of("error", "AI 变更影响分析服务不可用: " + e.getMessage());
+            throw BusinessException.serverError("AI 变更影响分析服务不可用: " + e.getMessage());
         }
     }
 
@@ -159,22 +161,14 @@ public class ChangeImpactService {
 
     private Map<String, Object> parseResponse(String response) {
         if (response == null || response.isBlank()) {
-            return Map.of("error", "AI 返回为空");
+            throw BusinessException.serverError("AI 返回为空");
         }
         try {
-            return objectMapper.readValue(extractJson(response), LinkedHashMap.class);
+            return objectMapper.readValue(LlmOutputCleaner.extractJsonObject(response, false), LinkedHashMap.class);
         } catch (Exception e) {
             log.warn("Failed to parse change impact response as JSON: {}", e.getMessage());
-            return Map.of("raw", response);
+            throw BusinessException.serverError("AI 变更影响分析结果格式解析失败，请重试");
         }
     }
 
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
-        }
-        return response;
-    }
 }

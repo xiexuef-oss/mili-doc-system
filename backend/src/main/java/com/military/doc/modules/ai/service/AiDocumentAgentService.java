@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.DelegatingLlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.modules.ai.entity.AiDocument;
 import com.military.doc.modules.ai.entity.AiDocumentSection;
 import lombok.RequiredArgsConstructor;
@@ -413,13 +414,13 @@ public class AiDocumentAgentService {
         if (raw == null || raw.isBlank()) return null;
         try {
             // Strategy 1: Try direct parse if it's already clean JSON
-            String json = extractJson(raw, '[', ']');
+            String json = LlmOutputCleaner.extractBetween(raw, '[', ']', true);
             return objectMapper.readValue(json,
                 objectMapper.getTypeFactory().constructCollectionType(List.class, itemClass));
         } catch (Exception e1) {
             try {
                 // Strategy 2: Try as a JSON object with "sections" or "outline" key
-                String json = extractJson(raw, '{', '}');
+                String json = LlmOutputCleaner.extractBetween(raw, '{', '}', true);
                 Map<String, Object> map = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
                 Object list = map.getOrDefault("sections", map.getOrDefault("outline", map.get("chapters")));
                 if (list instanceof List<?> l) {
@@ -436,7 +437,7 @@ public class AiDocumentAgentService {
     private Map<String, Object> parseJsonObject(String raw) {
         if (raw == null || raw.isBlank()) return null;
         try {
-            String json = extractJson(raw, '{', '}');
+            String json = LlmOutputCleaner.extractBetween(raw, '{', '}', true);
             return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             log.warn("JSON object parse failed: {}", e.getMessage());
@@ -444,29 +445,8 @@ public class AiDocumentAgentService {
         }
     }
 
-    /** Extract JSON between given delimiters, stripping markdown fences. */
-    private String extractJson(String raw, char open, char close) {
-        String cleaned = raw.trim()
-            .replaceAll("```json\\s*", "")
-            .replaceAll("```\\s*", "")
-            .trim();
-        // If it starts with a different bracket, try to find the right one
-        int s = cleaned.indexOf(open);
-        int e = cleaned.lastIndexOf(close);
-        if (s >= 0 && e > s) {
-            return cleaned.substring(s, e + 1);
-        }
-        return cleaned;
-    }
-
-    /** Clean common LLM output artifacts. */
     private String cleanLlmOutput(String raw) {
-        if (raw == null) return "";
-        String result = raw.trim();
-        // Remove ALL markdown heading lines (LLM sometimes generates full doc instead of single section)
-        result = result.replaceAll("(?m)^#{1,4}\\s+[^\\n]*\\n?", "").trim();
-        result = result.replaceFirst("^(null)+", "").trim();
-        return result;
+        return LlmOutputCleaner.clean(raw);
     }
 
     private CanvasPatch.Patch patch(String type, Object payload) {

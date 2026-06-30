@@ -21,8 +21,8 @@ import com.military.doc.modules.template.mapper.TemplateChapterFieldMappingMappe
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Map;
 
@@ -107,9 +107,23 @@ public class ChapterWritingContextService {
         );
         if (links.isEmpty()) return Collections.emptyList();
 
+        // Batch load clauses
+        Set<Long> clauseIds = links.stream().map(TemplateChapterClauseLink::getStandardClauseId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, StandardClause> clauseMap = clauseIds.isEmpty() ? Map.of() :
+            standardClauseMapper.selectBatchIds(clauseIds).stream()
+                .collect(Collectors.toMap(StandardClause::getId, c -> c));
+
+        // Batch load standards
+        Set<Long> standardIds = clauseMap.values().stream().map(StandardClause::getStandardId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Standard> standardMap = standardIds.isEmpty() ? Map.of() :
+            standardMapper.selectBatchIds(standardIds).stream()
+                .collect(Collectors.toMap(Standard::getId, s -> s));
+
         List<ChapterWritingContext.StandardClauseRef> refs = new ArrayList<>();
         for (TemplateChapterClauseLink link : links) {
-            StandardClause clause = standardClauseMapper.selectById(link.getStandardClauseId());
+            StandardClause clause = clauseMap.get(link.getStandardClauseId());
             if (clause == null) continue;
 
             ChapterWritingContext.StandardClauseRef ref = new ChapterWritingContext.StandardClauseRef();
@@ -119,7 +133,7 @@ public class ChapterWritingContextService {
             ref.setClauseContent(clause.getClauseContent());
             ref.setLinkType(link.getLinkType());
 
-            Standard standard = standardMapper.selectById(clause.getStandardId());
+            Standard standard = standardMap.get(clause.getStandardId());
             if (standard != null) {
                 ref.setStandardCode(standard.getStandardCode());
                 ref.setStandardName(standard.getStandardName());
@@ -139,9 +153,16 @@ public class ChapterWritingContextService {
         );
         if (links.isEmpty()) return Collections.emptyList();
 
+        // Batch load cards
+        Set<Long> cardIds = links.stream().map(ChapterKnowledgeCardLink::getKnowledgeCardId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, KnowledgeCard> cardMap = cardIds.isEmpty() ? Map.of() :
+            knowledgeCardMapper.selectBatchIds(cardIds).stream()
+                .collect(Collectors.toMap(KnowledgeCard::getId, c -> c));
+
         List<ChapterWritingContext.KnowledgeCardRef> refs = new ArrayList<>();
         for (ChapterKnowledgeCardLink link : links) {
-            KnowledgeCard card = knowledgeCardMapper.selectById(link.getKnowledgeCardId());
+            KnowledgeCard card = cardMap.get(link.getKnowledgeCardId());
             if (card == null) continue;
 
             ChapterWritingContext.KnowledgeCardRef ref = new ChapterWritingContext.KnowledgeCardRef();

@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
 import com.military.doc.modules.project.entity.ConfigurationAudit;
@@ -55,7 +57,7 @@ public class StageReadinessService {
     public Map<String, Object> assess(Long projectId, Long stageId) {
         ProjectStage stage = stageMapper.selectById(stageId);
         if (stage == null) {
-            return Map.of("error", "阶段不存在: " + stageId);
+            throw BusinessException.notFound("阶段不存在: " + stageId);
         }
 
         // Collect metrics
@@ -114,10 +116,7 @@ public class StageReadinessService {
             return result;
         } catch (RuntimeException e) {
             log.error("Stage readiness assessment failed: {}", e.getMessage());
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("metrics", metrics);
-            result.put("aiAssessment", Map.of("error", "AI 评估服务不可用: " + e.getMessage()));
-            return result;
+            throw BusinessException.serverError("AI 评估服务不可用: " + e.getMessage());
         }
     }
 
@@ -140,22 +139,14 @@ public class StageReadinessService {
 
     private Map<String, Object> parseResponse(String response) {
         if (response == null || response.isBlank()) {
-            return Map.of("error", "AI 返回为空");
+            throw BusinessException.serverError("AI 返回为空");
         }
         try {
-            return objectMapper.readValue(extractJson(response), LinkedHashMap.class);
+            return objectMapper.readValue(LlmOutputCleaner.extractJsonObject(response, false), LinkedHashMap.class);
         } catch (Exception e) {
             log.warn("Failed to parse readiness response as JSON: {}", e.getMessage());
-            return Map.of("raw", response);
+            throw BusinessException.serverError("AI 转阶段评估结果格式解析失败，请重试");
         }
     }
 
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
-        }
-        return response;
-    }
 }

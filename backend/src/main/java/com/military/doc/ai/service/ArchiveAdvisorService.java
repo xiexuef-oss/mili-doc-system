@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
@@ -40,7 +42,7 @@ public class ArchiveAdvisorService {
     public Map<String, Object> advise(Long docLedgerId) {
         DocLedger doc = docLedgerMapper.selectById(docLedgerId);
         if (doc == null) {
-            return Map.of("error", "文档不存在: " + docLedgerId);
+            throw BusinessException.notFound("文档不存在: " + docLedgerId);
         }
 
         String content = readDocContent(doc);
@@ -62,7 +64,7 @@ public class ArchiveAdvisorService {
             return parseResponse(response);
         } catch (RuntimeException e) {
             log.error("Archive advice failed: {}", e.getMessage());
-            return Map.of("error", "AI 归档建议服务不可用: " + e.getMessage());
+            throw BusinessException.serverError("AI 归档建议服务不可用: " + e.getMessage());
         }
     }
 
@@ -99,22 +101,14 @@ public class ArchiveAdvisorService {
 
     private Map<String, Object> parseResponse(String response) {
         if (response == null || response.isBlank()) {
-            return Map.of("error", "AI 返回为空");
+            throw BusinessException.serverError("AI 返回为空");
         }
         try {
-            return objectMapper.readValue(extractJson(response), LinkedHashMap.class);
+            return objectMapper.readValue(LlmOutputCleaner.extractJsonObject(response, false), LinkedHashMap.class);
         } catch (Exception e) {
             log.warn("Failed to parse archive advice response as JSON: {}", e.getMessage());
-            return Map.of("raw", response);
+            throw BusinessException.serverError("AI 归档建议结果格式解析失败，请重试");
         }
     }
 
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
-        }
-        return response;
-    }
 }

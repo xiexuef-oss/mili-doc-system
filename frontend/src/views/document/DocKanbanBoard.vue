@@ -414,6 +414,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, RefreshRight, FolderOpened, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/sanitize'
+import { renderMarkdown } from '@/utils/markdown'
 import {
   getKanbanData, createDocLedger, transitionStatus, getDocLedger, getDocLedgerLogs, syncFromChecklist, deleteDocLedger,
   type DocLedgerItem, type DocLedgerLogItem
@@ -1042,25 +1043,7 @@ async function checkHealth() {
   } catch { healthOk.value = false }
 }
 
-// Lightweight Markdown to HTML (same as ProjectAiAssistant)
-function renderMarkdown(text: string): string {
-  if (!text) return ''
-  let html = text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-  html = html.replace(/\n\n+/g, '</p><p>')
-  html = '<p>' + html + '</p>'
-  html = html.replace(/\n/g, '<br>')
-  html = html.replace(/<p><\/p>/g, '')
-  return sanitizeHtml(html)
-}
+// renderMarkdown imported from @/utils/markdown
 
 async function loadDocDicts() {
   try {

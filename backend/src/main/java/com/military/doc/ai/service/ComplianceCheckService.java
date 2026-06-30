@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
+import com.military.doc.common.exception.BusinessException;
 import com.military.doc.common.storage.FileStorageService;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocLedgerMapper;
@@ -52,17 +54,32 @@ public class ComplianceCheckService {
     public Map<String, Object> check(Long projectId, Long baselineId) {
         ConfigurationBaseline baseline = baselineMapper.selectById(baselineId);
         if (baseline == null) {
-            return Map.of("error", "基线不存在: " + baselineId);
+            throw BusinessException.notFound("基线不存在: " + baselineId);
         }
 
         // Collect baseline item documents
         List<ConfigurationBaselineItem> items = baselineItemMapper.selectList(
             new LambdaQueryWrapper<ConfigurationBaselineItem>()
                 .eq(ConfigurationBaselineItem::getBaselineId, baselineId));
+
+        // Batch: collect all doc ledger IDs
+        Set<Long> docIds = new HashSet<>();
+        for (ConfigurationBaselineItem item : items) {
+            if ("DOCUMENT".equals(item.getItemType()) && item.getItemId() != null) {
+                docIds.add(item.getItemId());
+            }
+        }
+        Map<Long, DocLedger> docMap = new HashMap<>();
+        if (!docIds.isEmpty()) {
+            List<DocLedger> docs = docLedgerMapper.selectBatchIds(docIds);
+            for (DocLedger d : docs) {
+                if (d != null) docMap.put(d.getId(), d);
+            }
+        }
         List<Map<String, String>> docContents = new ArrayList<>();
         for (ConfigurationBaselineItem item : items) {
             if ("DOCUMENT".equals(item.getItemType()) && item.getItemId() != null) {
-                DocLedger doc = docLedgerMapper.selectById(item.getItemId());
+                DocLedger doc = docMap.get(item.getItemId());
                 if (doc != null) {
                     String content = readDocContent(doc);
                     docContents.add(Map.of(
@@ -92,7 +109,7 @@ public class ComplianceCheckService {
             return parseResponse(response);
         } catch (RuntimeException e) {
             log.error("Compliance check failed: {}", e.getMessage());
-            return Map.of("error", "AI 合规检查服务不可用: " + e.getMessage());
+            throw BusinessException.serverError("AI 合规检查服务不可用: " + e.getMessage());
         }
     }
 
@@ -127,22 +144,14 @@ public class ComplianceCheckService {
 
     private Map<String, Object> parseResponse(String response) {
         if (response == null || response.isBlank()) {
-            return Map.of("error", "AI 返回为空");
+            throw BusinessException.serverError("AI 返回为空");
         }
         try {
-            return objectMapper.readValue(extractJson(response), LinkedHashMap.class);
+            return objectMapper.readValue(LlmOutputCleaner.extractJsonObject(response, false), LinkedHashMap.class);
         } catch (Exception e) {
             log.warn("Failed to parse compliance check response as JSON: {}", e.getMessage());
-            return Map.of("raw", response);
+            throw BusinessException.serverError("AI 合规检查结果格式解析失败，请重试");
         }
     }
 
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
-        }
-        return response;
-    }
 }

@@ -2,6 +2,7 @@ package com.military.doc.ai.service;
 
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.modules.document.entity.DocChapter;
 import com.military.doc.modules.document.entity.DocLedger;
 import com.military.doc.modules.document.mapper.DocChapterMapper;
@@ -60,7 +61,7 @@ public class ChapterEditService {
 
         log.info("Chapter edit: chapterId={}, action={}, instruction={}", chapterId, action, instruction);
         String result = llmClient.chat("你是一位军工文档编辑专家。", prompt);
-        if (result != null && result.startsWith("null")) result = result.replaceFirst("^(null)+", "");
+        if (result != null && result.startsWith("null")) result = LlmOutputCleaner.stripLeadingNull(result);
         return result;
     }
 }

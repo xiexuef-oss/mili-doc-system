@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.common.exception.BusinessException;
 import com.military.doc.config.LlmProperties;
 import com.military.doc.modules.document.entity.DocChapter;
@@ -269,7 +270,7 @@ public class AiChapterStructureService {
         log.info("Parsing AI response ({} chars): {}", response.length(), preview);
 
         String json = extractJson(response);
-        if (json == null) {
+        if (json == null || json.equals(response)) {
             log.error("No JSON array found in AI response. Raw: {}", preview);
             throw BusinessException.serverError("AI 未返回有效的章节结构数据，请重试并确认文档类型描述准确");
         }
@@ -302,15 +303,7 @@ public class AiChapterStructureService {
     }
 
     private String extractJson(String response) {
-        // Remove markdown code fences
-        String cleaned = response.replaceAll("```json\\s*|```\\s*", "").trim();
-        // Find outermost JSON array
-        int start = cleaned.indexOf('[');
-        int end = cleaned.lastIndexOf(']');
-        if (start >= 0 && end > start) {
-            return cleaned.substring(start, end + 1);
-        }
-        return null;
+        return LlmOutputCleaner.extractJsonArray(response, true);
     }
 
     private void sanitizeNode(AiChapterNode node) {

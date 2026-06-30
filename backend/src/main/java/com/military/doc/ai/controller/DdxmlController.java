@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.military.doc.ai.context.ContextAssemblyService;
 import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
+import com.military.doc.ai.util.LlmOutputCleaner;
 import com.military.doc.ai.service.BlockCommandEngine;
 import com.military.doc.common.result.Result;
 import com.military.doc.modules.document.entity.DocChapter;
@@ -59,7 +60,7 @@ public class DdxmlController {
 
         log.info("DDXML generation: chapterId={}, projectId={}", chapterId, projectId);
         String response = llmClient.chat(systemPrompt, userPrompt);
-        if (response != null && response.startsWith("null")) response = response.replaceFirst("^(null)+", "");
+        if (response != null && response.startsWith("null")) response = LlmOutputCleaner.stripLeadingNull(response);
 
         BlockCommandEngine.BlockResult result = blockEngine.createDocument(chapterId, response);
         return Result.success(Map.of("blocks", result.blocks(), "plainText", result.plainText(), "blockCount", result.blockCount()));

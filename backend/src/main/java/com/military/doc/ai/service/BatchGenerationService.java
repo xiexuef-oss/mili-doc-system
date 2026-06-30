@@ -167,10 +167,24 @@ public class BatchGenerationService {
         emitPhase(onEvent, Phase.BUILDING_CONTEXT, 0, total, estimateEta(startTime, 0, total));
 
         // 2. Build doc_code → checklist_template_id mapping
+        // Batch: collect all template IDs and selectBatchIds
+        Set<Long> tplIdSet = new HashSet<>();
+        for (ProjectDocChecklist item : checklistItems) {
+            if (item.getTemplateId() != null) {
+                tplIdSet.add(item.getTemplateId());
+            }
+        }
+        Map<Long, StageDocChecklistTemplate> tplMap = new HashMap<>();
+        if (!tplIdSet.isEmpty()) {
+            List<StageDocChecklistTemplate> allTmpls = checklistTemplateMapper.selectBatchIds(tplIdSet);
+            for (StageDocChecklistTemplate tmpl : allTmpls) {
+                if (tmpl != null) tplMap.put(tmpl.getId(), tmpl);
+            }
+        }
         Map<Long, String> templateDocCodes = new HashMap<>(); // templateId → docCode
         for (ProjectDocChecklist item : checklistItems) {
             if (item.getTemplateId() != null) {
-                StageDocChecklistTemplate tmpl = checklistTemplateMapper.selectById(item.getTemplateId());
+                StageDocChecklistTemplate tmpl = tplMap.get(item.getTemplateId());
                 if (tmpl != null && tmpl.getDocCode() != null) {
                     templateDocCodes.put(item.getTemplateId(), tmpl.getDocCode());
                 }

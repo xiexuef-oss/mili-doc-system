@@ -160,9 +160,23 @@ public class DocInputReferenceService {
         List<DocInputReference> cards = refs.getOrDefault("KNOWLEDGE_CARD", Collections.emptyList());
         if (!cards.isEmpty()) {
             ctx.append("## 相关知识卡片\n");
+            // Batch: collect all knowledge card IDs
+            Set<Long> cardIds = new HashSet<>();
             for (DocInputReference ref : cards) {
                 if (ref.getRefId() != null) {
-                    KnowledgeCard card = knowledgeCardMapper.selectById(ref.getRefId());
+                    cardIds.add(ref.getRefId());
+                }
+            }
+            Map<Long, KnowledgeCard> cardMap = new HashMap<>();
+            if (!cardIds.isEmpty()) {
+                List<KnowledgeCard> allCards = knowledgeCardMapper.selectBatchIds(cardIds);
+                for (KnowledgeCard c : allCards) {
+                    if (c != null) cardMap.put(c.getId(), c);
+                }
+            }
+            for (DocInputReference ref : cards) {
+                if (ref.getRefId() != null) {
+                    KnowledgeCard card = cardMap.get(ref.getRefId());
                     if (card != null) {
                         ctx.append("- **").append(card.getTitle()).append("**\n");
                         if (card.getPlainLanguage() != null) {

@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -262,6 +264,21 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
             .filter(cid -> cid != null)
             .collect(Collectors.toSet());
 
+        // Batch: collect all template IDs
+        Set<Long> tplIdSet = new HashSet<>();
+        for (ProjectDocChecklist item : items) {
+            if (item.getTemplateId() != null) {
+                tplIdSet.add(item.getTemplateId());
+            }
+        }
+        Map<Long, StageDocChecklistTemplate> tplMap = new HashMap<>();
+        if (!tplIdSet.isEmpty()) {
+            List<StageDocChecklistTemplate> allTmpls = checklistTemplateMapper.selectBatchIds(tplIdSet);
+            for (StageDocChecklistTemplate tmpl : allTmpls) {
+                if (tmpl != null) tplMap.put(tmpl.getId(), tmpl);
+            }
+        }
+
         List<DocLedger> newLedgers = new ArrayList<>();
         for (ProjectDocChecklist item : items) {
             if (existingItemIds.contains(item.getId())) {
@@ -280,7 +297,7 @@ public class DocLedgerServiceImpl extends ServiceImpl<DocLedgerMapper, DocLedger
 
             // 从模板同步specType
             if (item.getTemplateId() != null) {
-                StageDocChecklistTemplate tmpl = checklistTemplateMapper.selectById(item.getTemplateId());
+                StageDocChecklistTemplate tmpl = tplMap.get(item.getTemplateId());
                 if (tmpl != null && tmpl.getSpecType() != null) {
                     ledger.setSpecType(tmpl.getSpecType());
                 }

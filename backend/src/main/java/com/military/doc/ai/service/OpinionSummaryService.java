@@ -6,6 +6,8 @@ import com.military.doc.ai.llm.LlmClient;
 import com.military.doc.ai.prompt.PromptTemplateService;
 import com.military.doc.modules.review.entity.ReviewExpertOpinionFile;
 import com.military.doc.modules.review.mapper.ReviewExpertOpinionFileMapper;
+import com.military.doc.ai.util.LlmOutputCleaner;
+import com.military.doc.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -59,7 +61,7 @@ public class OpinionSummaryService {
             return parseResponse(response);
         } catch (RuntimeException e) {
             log.error("Opinion summary failed: {}", e.getMessage());
-            return Map.of("error", "AI 意见汇总服务不可用: " + e.getMessage());
+            throw BusinessException.serverError("AI 意见汇总服务不可用: " + e.getMessage());
         }
     }
 
@@ -79,22 +81,14 @@ public class OpinionSummaryService {
 
     private Map<String, Object> parseResponse(String response) {
         if (response == null || response.isBlank()) {
-            return Map.of("error", "AI 返回为空");
+            throw BusinessException.serverError("AI 返回为空");
         }
         try {
-            return objectMapper.readValue(extractJson(response), LinkedHashMap.class);
+            return objectMapper.readValue(LlmOutputCleaner.extractJsonObject(response, false), LinkedHashMap.class);
         } catch (Exception e) {
             log.warn("Failed to parse opinion summary response as JSON: {}", e.getMessage());
-            return Map.of("raw", response);
+            throw BusinessException.serverError("AI 意见汇总结果格式解析失败，请重试");
         }
     }
 
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
-        }
-        return response;
-    }
 }
