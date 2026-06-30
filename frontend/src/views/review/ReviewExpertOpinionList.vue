@@ -63,7 +63,7 @@ const form = reactive<ReviewExpertOpinionItem>(empty())
 
 const levelType = (l: string) => ({ CRITICAL: 'danger', MAJOR: 'warning', MINOR: 'info', SUGGESTION: 'success' }[l] || 'info')
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getReviewExpertOpinions(meetingId); items.value = res.data.data } finally { loading.value = false }
 }
@@ -74,14 +74,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateReviewExpertOpinion(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createReviewExpertOpinion({ ...form }); ElMessage.success('添加成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: ReviewExpertOpinionItem) {
   await ElMessageBox.confirm('确定删除此意见吗？', '确认', { type: 'warning' })
-  try { await deleteReviewExpertOpinion(row.id!); ElMessage.success('已删除'); fetch() } catch { /* cancelled */ }
+  try { await deleteReviewExpertOpinion(row.id!); ElMessage.success('已删除'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

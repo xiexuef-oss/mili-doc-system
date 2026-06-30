@@ -68,7 +68,7 @@ const dialogVisible = ref(false); const editingId = ref<number | null>(null)
 const empty = (): DocVersionItem => ({ docFileId, versionNo: '', sourceType: 'MODIFY', baseVersionId: 0, fileObjectId: 0, versionStatus: 'DRAFT', optimisticVersion: 1, submitUserId: 0, submitTime: '', changeSummary: '' })
 const form = reactive<DocVersionItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getDocVersions(docFileId); items.value = res.data.data } finally { loading.value = false }
 }
@@ -79,14 +79,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateDocVersion(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createDocVersion({ ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: DocVersionItem) {
   await ElMessageBox.confirm('确定删除此版本吗？', '确认', { type: 'warning' })
-  try { await updateDocVersion(row.id!, { ...row, versionStatus: 'DELETED' }); ElMessage.success('已标记删除'); fetch() } catch { /* cancelled */ }
+  try { await updateDocVersion(row.id!, { ...row, versionStatus: 'DELETED' }); ElMessage.success('已标记删除'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

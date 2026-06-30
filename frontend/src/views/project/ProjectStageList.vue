@@ -148,7 +148,7 @@ const canTransition = (stage: ProjectStageItem) =>
 const canSuspend = (stage: ProjectStageItem) =>
   stage.status === 'IN_PROGRESS' || stage.status === 'REVIEWING' || stage.status === 'RECTIFYING' || stage.status === 'BASELINING' || stage.status === 'GATE_CHECKING'
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try {
     const res = await getProjectStages(projectId); items.value = res.data.data || []
@@ -171,7 +171,7 @@ async function handleConfirmTransition() {
     const res = await requestTransition(projectId, transitioningStage.value!.id!)
     ElMessage.success(res.data.data.message || '转阶段成功')
     transitionVisible.value = false
-    fetch()
+    loadItems()
   } catch { /* handled */ } finally { saving.value = false }
 }
 
@@ -181,7 +181,7 @@ async function handleSave() {
   try {
     await updateProjectStage(projectId, editingId.value!, { ...form })
     ElMessage.success('更新成功')
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } catch { /* handled */ } finally { saving.value = false }
 }
 
@@ -190,7 +190,7 @@ async function handleSuspend(stage: ProjectStageItem) {
     await ElMessageBox.confirm('确定暂停阶段"' + stage.stageName + '"吗？', '确认暂停', { type: 'warning' })
     await suspendStage(projectId, stage.id!)
     ElMessage.success('阶段已暂停')
-    fetch()
+    loadItems()
   } catch { /* cancelled */ }
 }
 
@@ -199,7 +199,7 @@ async function handleTerminate(stage: ProjectStageItem) {
     await ElMessageBox.confirm('确定终止阶段"' + stage.stageName + '"吗？此操作不可逆。', '确认终止', { type: 'warning' })
     await terminateStage(projectId, stage.id!)
     ElMessage.success('阶段已终止')
-    fetch()
+    loadItems()
   } catch { /* cancelled */ }
 }
 
@@ -222,7 +222,7 @@ async function handleCheckHealth() {
   }
 }
 
-onMounted(() => { fetch(); handleCheckHealth() })
+onMounted(() => { loadItems(); handleCheckHealth() })
 </script>
 
 <style scoped>

@@ -86,20 +86,20 @@ const changeLevelLabel = (l: string) => ({ CRITICAL: '重大', MAJOR: '较大', 
 const levelType = (l: string) => ({ CRITICAL: 'danger', MAJOR: 'warning', MINOR: 'info' }[l] || 'info')
 const statusType = (s: string) => ({ SUBMITTED: 'info', ANALYZING: 'warning', REVIEWING: 'warning', APPROVED: 'primary', REJECTED: 'danger', IMPLEMENTED: 'success', CLOSED: 'info' }[s] || 'info')
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getChangeRequests(projectId, stageId); items.value = res.data.data || [] } finally { loading.value = false }
 }
 function showCreateDialog() { Object.assign(form, empty()); dialogVisible.value = true }
 async function handleCreate() {
   saving.value = true
-  try { await createChangeRequest(projectId, { ...form }); ElMessage.success('更改申请已提交'); dialogVisible.value = false; fetch() }
+  try { await createChangeRequest(projectId, { ...form }); ElMessage.success('更改申请已提交'); dialogVisible.value = false; loadItems() }
   catch { /* handled */ } finally { saving.value = false }
 }
 async function processChange(row: ConfigurationChangeRequestVO, action: string) {
-  try { await processChangeRequest(row.id!, action); ElMessage.success('操作成功'); fetch() } catch { /* handled */ }
+  try { await processChangeRequest(row.id!, action); ElMessage.success('操作成功'); loadItems() } catch { /* handled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

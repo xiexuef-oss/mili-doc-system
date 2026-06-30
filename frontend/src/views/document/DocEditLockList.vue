@@ -3,7 +3,7 @@
     <div class="page-header">
       <h3>文档编辑锁定管理</h3>
       <div>
-        <el-input v-model="filterDocFileId" placeholder="文档ID筛选" style="width:150px;margin-right:12px" clearable @change="fetch" />
+        <el-input v-model="filterDocFileId" placeholder="文档ID筛选" style="width:150px;margin-right:12px" clearable @change="loadItems" />
         <el-button type="primary" @click="showCreateDialog">创建锁定</el-button>
       </div>
     </div>
@@ -61,7 +61,7 @@ const filterDocFileId = ref<number>()
 const empty = (): DocEditLockItem => ({ docFileId: 0, lockedVersionId: 0, lockedBy: 0, lockType: 'EDIT', lockStatus: 'ACTIVE', expireAt: '' })
 const form = reactive<DocEditLockItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getDocEditLocks(filterDocFileId.value); items.value = res.data.data.records || res.data.data } finally { loading.value = false }
 }
@@ -72,14 +72,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateDocEditLock(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createDocEditLock({ ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: DocEditLockItem) {
   await ElMessageBox.confirm('确定解锁吗？', '确认', { type: 'warning' })
-  try { await deleteDocEditLock(row.id!); ElMessage.success('已解锁'); fetch() } catch { /* cancelled */ }
+  try { await deleteDocEditLock(row.id!); ElMessage.success('已解锁'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

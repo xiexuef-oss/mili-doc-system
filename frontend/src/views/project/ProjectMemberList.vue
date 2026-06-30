@@ -214,7 +214,7 @@ function onUserSelected(userId: number) {
   }
 }
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getProjectMembers(projectId); items.value = res.data.data || [] } finally { loading.value = false }
 }
@@ -227,13 +227,13 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateProjectMember(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createProjectMember({ ...form }); ElMessage.success('添加成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 
 async function handleDelete(row: ProjectMemberItem) {
   await ElMessageBox.confirm('确定移除此成员吗？', '确认', { type: 'warning' })
-  try { await deleteProjectMember(row.id!); ElMessage.success('已移除'); fetch() } catch { /* cancelled */ }
+  try { await deleteProjectMember(row.id!); ElMessage.success('已移除'); loadItems() } catch { /* cancelled */ }
 }
 
 function lineLabel(line: string) {
@@ -265,7 +265,7 @@ function supervisorName(supervisorId?: number) {
   return sup ? (sup.userName || `用户${sup.userId}`) : '-'
 }
 
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

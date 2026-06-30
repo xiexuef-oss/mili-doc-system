@@ -63,11 +63,11 @@ const eventColor = (type: string) => {
   return 'info'
 }
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getStatusAccounting(projectId, stageId); items.value = res.data.data || [] } finally { loading.value = false }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

@@ -69,7 +69,7 @@ const form = reactive<StageTransitionItem>(empty())
 
 const statusType = (s: string) => ({ PENDING: 'warning', PASSED: 'success', FAILED: 'danger', WAIVED: 'info' }[s] || 'info')
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getStageTransitions(projectId); items.value = res.data.data } finally { loading.value = false }
 }
@@ -100,14 +100,14 @@ async function handleSave() {
 
     if (editingId.value) { await updateStageTransition(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createStageTransition({ ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: StageTransitionItem) {
   await ElMessageBox.confirm('确定删除此检查吗？', '确认', { type: 'warning' })
-  try { await deleteStageTransition(row.id!); ElMessage.success('删除成功'); fetch() } catch { /* cancelled */ }
+  try { await deleteStageTransition(row.id!); ElMessage.success('删除成功'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

@@ -90,14 +90,14 @@ const auditTypeLabel = (t: string) => ({ FCA: '功能审核', PCA: '物理审核
 const statusType = (s: string) => ({ PLANNED: 'info', IN_PROGRESS: 'warning', COMPLETED: 'success', CLOSED: 'info' }[s] || 'info')
 const resultType = (r: string) => ({ PASSED: 'success', FAILED: 'danger', CONDITIONAL: 'warning' }[r] || 'info')
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getAudits(projectId, stageId); items.value = res.data.data || [] } finally { loading.value = false }
 }
 function showCreateDialog() { form.auditType = 'FCA'; dialogVisible.value = true }
 async function handleCreate() {
   saving.value = true
-  try { await createAudit(projectId, stageId, form.auditType); ElMessage.success('审核创建成功'); dialogVisible.value = false; fetch() }
+  try { await createAudit(projectId, stageId, form.auditType); ElMessage.success('审核创建成功'); dialogVisible.value = false; loadItems() }
   catch { /* handled */ } finally { saving.value = false }
 }
 function showCompleteDialog(row: ConfigurationAuditVO) {
@@ -110,14 +110,14 @@ async function handleComplete() {
   saving.value = true
   try {
     await completeAudit(auditingId.value!, completeForm.auditResult, completeForm.auditOpinion)
-    ElMessage.success('审核已提交'); completeVisible.value = false; fetch()
+    ElMessage.success('审核已提交'); completeVisible.value = false; loadItems()
   } catch { /* handled */ } finally { saving.value = false }
 }
 async function handleDelete(row: ConfigurationAuditVO) {
   await ElMessageBox.confirm('确定删除此审核吗？', '确认', { type: 'warning' })
-  try { await completeAudit(row.id!, 'FAILED', '已删除'); ElMessage.success('已处理'); fetch() } catch { /* cancelled */ }
+  try { await completeAudit(row.id!, 'FAILED', '已删除'); ElMessage.success('已处理'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

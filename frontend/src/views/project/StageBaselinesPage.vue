@@ -78,30 +78,30 @@ const form = reactive({ baselineType: 'FUNCTIONAL_BASELINE' })
 
 const statusType = (s: string) => ({ DRAFT: 'info', REVIEWING: 'warning', APPROVED: 'primary', EFFECTIVE: 'success', SUPERSEDED: '', ARCHIVED: 'info' }[s] || 'info')
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getBaselines(projectId, stageId); items.value = res.data.data || [] } finally { loading.value = false }
 }
 function showCreateDialog() { form.baselineType = 'FUNCTIONAL_BASELINE'; dialogVisible.value = true }
 async function handleCreate() {
   saving.value = true
-  try { await createBaseline(projectId, stageId, form.baselineType); ElMessage.success('基线创建成功'); dialogVisible.value = false; fetch() }
+  try { await createBaseline(projectId, stageId, form.baselineType); ElMessage.success('基线创建成功'); dialogVisible.value = false; loadItems() }
   catch { /* handled */ } finally { saving.value = false }
 }
 async function handleApprove(row: ConfigurationBaselineVO) {
-  try { await approveBaseline(row.id!); ElMessage.success('基线已批准'); fetch() } catch { /* handled */ }
+  try { await approveBaseline(row.id!); ElMessage.success('基线已批准'); loadItems() } catch { /* handled */ }
 }
 async function handleEffective(row: ConfigurationBaselineVO) {
-  try { await setBaselineEffective(row.id!); ElMessage.success('基线已生效'); fetch() } catch { /* handled */ }
+  try { await setBaselineEffective(row.id!); ElMessage.success('基线已生效'); loadItems() } catch { /* handled */ }
 }
 async function viewItems(row: ConfigurationBaselineVO) {
   try { const res = await getBaselineItems(row.id!); baselineItems.value = res.data.data || []; itemsVisible.value = true } catch { /* handled */ }
 }
 async function handleDelete(row: ConfigurationBaselineVO) {
   await ElMessageBox.confirm('确定删除此基线吗？', '确认', { type: 'warning' })
-  try { await setBaselineEffective(row.id!); ElMessage.success('已归档'); fetch() } catch { /* cancelled */ }
+  try { await setBaselineEffective(row.id!); ElMessage.success('已归档'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

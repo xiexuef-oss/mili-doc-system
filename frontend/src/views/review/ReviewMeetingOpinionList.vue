@@ -69,7 +69,7 @@ const dialogVisible = ref(false); const editingId = ref<number | null>(null)
 const empty = (): ReviewMeetingOpinionItem => ({ meetingId, docFileId: 0, opinionType: 'TECHNICAL', fileObjectId: 0, status: 'DRAFT', uploadedBy: 0, uploadedAt: '' })
 const form = reactive<ReviewMeetingOpinionItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getReviewMeetingOpinions(meetingId); items.value = res.data.data } finally { loading.value = false }
 }
@@ -80,14 +80,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateReviewMeetingOpinion(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createReviewMeetingOpinion({ ...form }); ElMessage.success('添加成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: ReviewMeetingOpinionItem) {
   await ElMessageBox.confirm('确定删除吗？', '确认', { type: 'warning' })
-  try { await deleteReviewMeetingOpinion(row.id!); ElMessage.success('已删除'); fetch() } catch { /* cancelled */ }
+  try { await deleteReviewMeetingOpinion(row.id!); ElMessage.success('已删除'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

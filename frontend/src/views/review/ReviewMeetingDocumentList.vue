@@ -66,7 +66,7 @@ const dialogVisible = ref(false); const editingId = ref<number | null>(null)
 const empty = (): ReviewMeetingDocumentItem => ({ meetingId, docFileId: 0, docVersionId: 0, reviewResult: '', materialCompleteFlag: false, closedFlag: false })
 const form = reactive<ReviewMeetingDocumentItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getReviewMeetingDocuments(meetingId); items.value = res.data.data } finally { loading.value = false }
 }
@@ -77,14 +77,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateReviewMeetingDocument(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createReviewMeetingDocument({ ...form }); ElMessage.success('添加成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: ReviewMeetingDocumentItem) {
   await ElMessageBox.confirm('确定移除此文档吗？', '确认', { type: 'warning' })
-  try { await deleteReviewMeetingDocument(row.id!); ElMessage.success('已移除'); fetch() } catch { /* cancelled */ }
+  try { await deleteReviewMeetingDocument(row.id!); ElMessage.success('已移除'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

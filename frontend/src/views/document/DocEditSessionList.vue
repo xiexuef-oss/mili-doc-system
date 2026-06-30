@@ -3,7 +3,7 @@
     <div class="page-header">
       <h3>文档编辑会话管理</h3>
       <div>
-        <el-input v-model="filterDocFileId" placeholder="文档ID筛选" style="width:150px;margin-right:12px" clearable @change="fetch" />
+        <el-input v-model="filterDocFileId" placeholder="文档ID筛选" style="width:150px;margin-right:12px" clearable @change="loadItems" />
         <el-button type="primary" @click="showCreateDialog">创建会话</el-button>
       </div>
     </div>
@@ -62,7 +62,7 @@ const filterDocFileId = ref<number>()
 const empty = (): DocEditSessionItem => ({ docFileId: 0, baseVersionId: 0, draftVersionId: 0, editorUserId: 0, sessionStatus: 'OPEN', openedAt: '', submittedAt: '' })
 const form = reactive<DocEditSessionItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getDocEditSessions(filterDocFileId.value); items.value = res.data.data.records || res.data.data } finally { loading.value = false }
 }
@@ -73,14 +73,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await submitDocEditSession(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createDocEditSession({ ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: DocEditSessionItem) {
   await ElMessageBox.confirm('确定删除吗？', '确认', { type: 'warning' })
-  try { await closeDocEditSession(row.id!); ElMessage.success('已关闭'); fetch() } catch { /* cancelled */ }
+  try { await closeDocEditSession(row.id!); ElMessage.success('已关闭'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

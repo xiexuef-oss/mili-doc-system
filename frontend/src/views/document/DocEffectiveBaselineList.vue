@@ -3,7 +3,7 @@
     <div class="page-header">
       <h3>文档生效基线管理</h3>
       <div>
-        <el-input v-model="filterProjectId" placeholder="项目ID筛选" style="width:150px;margin-right:12px" clearable @change="fetch" />
+        <el-input v-model="filterProjectId" placeholder="项目ID筛选" style="width:150px;margin-right:12px" clearable @change="loadItems" />
         <el-button type="primary" @click="showCreateDialog">创建基线</el-button>
       </div>
     </div>
@@ -65,7 +65,7 @@ const filterProjectId = ref<number>()
 const empty = (): DocEffectiveBaselineItem => ({ projectId: 0, stageId: 0, docFileId: 0, effectiveVersionId: 0, finalVersionId: 0, confirmedBy: 0, confirmedAt: '', baselineStatus: 'DRAFT' })
 const form = reactive<DocEffectiveBaselineItem>(empty())
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getDocEffectiveBaselines(filterProjectId.value); items.value = res.data.data.records || res.data.data } finally { loading.value = false }
 }
@@ -76,14 +76,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateDocEffectiveBaseline(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createDocEffectiveBaseline({ ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } finally { saving.value = false }
 }
 async function handleDelete(row: DocEffectiveBaselineItem) {
   await ElMessageBox.confirm('确定删除此基线吗？', '确认', { type: 'warning' })
-  try { await deleteDocEffectiveBaseline(row.id!); ElMessage.success('已删除'); fetch() } catch { /* cancelled */ }
+  try { await deleteDocEffectiveBaseline(row.id!); ElMessage.success('已删除'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>

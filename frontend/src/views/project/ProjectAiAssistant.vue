@@ -246,7 +246,6 @@ import {
   type CatalogPreviewResult
 } from '@/api/ai'
 import PrerequisitesCheck from '@/components/PrerequisitesCheck.vue'
-import { sanitizeHtml } from '@/utils/sanitize'
 import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()

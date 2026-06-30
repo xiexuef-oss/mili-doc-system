@@ -85,7 +85,7 @@ const form = reactive<ConfigurationItemVO>(empty())
 
 const ciTypeLabel = (t: string) => ({ PRODUCT: '产品', SOFTWARE: '软件', DOCUMENT: '文档', INTERFACE: '接口', TEST_ITEM: '试验件', PROCESS: '工艺' }[t] || t)
 
-async function fetch() {
+async function loadItems() {
   loading.value = true
   try { const res = await getConfigurationItems(projectId, stageId); items.value = res.data.data || [] } finally { loading.value = false }
 }
@@ -96,14 +96,14 @@ async function handleSave() {
   try {
     if (editingId.value) { await updateConfigurationItem(editingId.value, { ...form }); ElMessage.success('更新成功') }
     else { await createConfigurationItem(projectId, { ...form }); ElMessage.success('创建成功') }
-    dialogVisible.value = false; fetch()
+    dialogVisible.value = false; loadItems()
   } catch { /* handled */ } finally { saving.value = false }
 }
 async function handleDelete(row: ConfigurationItemVO) {
   await ElMessageBox.confirm('确定删除此技术状态项吗？', '确认', { type: 'warning' })
-  try { await updateConfigurationItem(row.id!, { ...row, status: 'OBSOLETE' }); ElMessage.success('已作废'); fetch() } catch { /* cancelled */ }
+  try { await updateConfigurationItem(row.id!, { ...row, status: 'OBSOLETE' }); ElMessage.success('已作废'); loadItems() } catch { /* cancelled */ }
 }
-onMounted(fetch)
+onMounted(loadItems)
 </script>
 
 <style scoped>
