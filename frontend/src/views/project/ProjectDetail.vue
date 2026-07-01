@@ -80,6 +80,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { CircleCheck } from '@element-plus/icons-vue'
 import { getProject, type ProjectItem } from '@/api/project'
 import { getProjectStages, type ProjectStageItem } from '@/api/project-stage'
 import { getStageDefinitions, type StageDefinitionItem } from '@/api/project-stage'
